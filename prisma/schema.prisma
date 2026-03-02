@@ -1,0 +1,807 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ProductCategory {
+  WINDOW
+  FLOOR
+  MIRROR
+  DOOR
+  WAREHOUSE_SUPPLY
+  OTHER
+}
+
+enum ProductUnit {
+  SQM
+  SET
+  PIECE
+  SHEET
+}
+
+enum StockAction {
+  IN
+  OUT
+  ADJUST
+}
+
+enum OrderStatus {
+  PENDING_PRODUCTION
+  IN_PRODUCTION
+  READY_DELIVERY
+  SETTLED
+}
+
+enum Role {
+  ADMIN
+  SALES
+  WAREHOUSE
+}
+
+enum AfterSalesStatus {
+  PENDING
+  IN_PROGRESS
+  RESOLVED
+  FOLLOW_UP
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum SalesOrderStatus {
+  DRAFT
+  QUOTED
+  CONFIRMED
+  READY
+  PARTIALLY_FULFILLED
+  FULFILLED
+  CANCELLED
+}
+
+enum SalesPaymentMethod {
+  CASH
+  CHECK
+  CARD
+  BANK
+  OTHER
+}
+
+enum SalesPaymentStatus {
+  POSTED
+  VOIDED
+}
+
+enum SalesPaymentType {
+  DEPOSIT
+  FINAL
+  REFUND
+}
+
+enum SalesDocType {
+  QUOTE
+  SALES_ORDER
+}
+
+enum SalesFulfillmentType {
+  PICKUP
+  DELIVERY
+}
+
+enum SalesFulfillmentStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum GlassType {
+  TEMPERED_LOW_E_5MM
+  TEMPERED_LOW_E_5MM_FROSTED
+  TEMPERED_CLEAR_5MM
+  OTHER
+}
+
+enum GlassFinish {
+  CLEAR
+  FROSTED
+}
+
+model Product {
+  id           String          @id @default(cuid())
+  companyId    String?
+  categoryId   String?
+  name         String
+  barcode      String?         @unique
+  galleryImageUrl String?
+  specification String?
+  category     ProductCategory
+  customCategoryName String?
+  brand        String?
+  collection   String?
+  model        String?
+  material     String?
+  type         String?
+  style        String?
+  screenType   String?         @map("screen_type")
+  color        String?
+  finish       String?
+  sizeW        Decimal?
+  sizeH        Decimal?
+  thicknessMm  Decimal?
+  glass        String?
+  glassTypeDefault GlassType? @map("glass_type_default")
+  glassFinishDefault GlassFinish? @map("glass_finish_default")
+  screenDefault String? @map("screen_default")
+  openingTypeDefault String? @map("opening_type_default")
+  rating       String?
+  swing        String?
+  handing      String?
+  uom          String?
+  price        Decimal?
+  cost         Decimal?
+  sku          String?
+  title        String?
+  titleOverride Boolean        @default(false)
+  skuOverride  Boolean         @default(false)
+  defaultDescription String?   @map("default_description")
+  status       String          @default("active")
+  notes        String?
+  unit         ProductUnit
+  costPrice    Decimal        
+  salePrice    Decimal        
+  currentStock Decimal         @default(0)
+  minStock     Decimal         @default(10)
+  reorderLevel Decimal         @default(0) @map("reorder_level")
+  reorderQty   Decimal         @default(0) @map("reorder_qty")
+  warehouseId  String
+  supplierId   String?
+  groupId      String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  warehouse    Warehouse       @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  supplier     Supplier?       @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  group        InventoryGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  stockLogs    StockLog[]
+  orderItems   OrderItem[]
+  attachments  Attachment[]
+  reorderBatchItems ReorderBatchItem[]
+
+  @@index([name])
+  @@index([category])
+  @@index([categoryId])
+  @@index([sku])
+  @@index([groupId])
+}
+
+model ProductCategoryTemplate {
+  id             String   @id @default(cuid())
+  categoryId     String   @unique
+  categoryKey    String   @unique
+  categoryLabel  String
+  titleTemplate  String
+  skuTemplate    String
+  requiredFields Json
+  fieldOrder     Json
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([categoryKey])
+  @@map("product_category_templates")
+}
+
+model ProductAttributeDictionary {
+  id         String   @id @default(cuid())
+  attribute  String
+  value      String
+  code       String
+  categoryId String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([attribute, value])
+  @@index([categoryId])
+  @@map("product_attributes_dictionary")
+}
+
+model InventoryGroup {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+
+  @@index([name])
+  @@map("inventory_groups")
+}
+
+model Warehouse {
+  id          String    @id @default(cuid())
+  name        String
+  address     String
+  managerName String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products    Product[]
+  stockLogs   StockLog[]
+
+  @@index([name])
+}
+
+model Supplier {
+  id           String    @id @default(cuid())
+  name         String
+  contactName  String
+  phone        String
+  category     String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  products     Product[]
+  specialSalesOrders SalesOrder[] @relation("SalesOrderSpecialSupplier")
+  purchaseOrders PurchaseOrder[]
+  reorderBatches ReorderBatch[]
+
+  @@index([name])
+  @@index([category])
+}
+
+model StockLog {
+  id           String      @id @default(cuid())
+  action       StockAction
+  quantity     Decimal    
+  note         String?
+  createdAt    DateTime    @default(now())
+
+  productId    String
+  warehouseId  String
+  customerId   String?
+
+  product      Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
+  warehouse    Warehouse   @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  customer     Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([productId, createdAt])
+  @@index([warehouseId, createdAt])
+}
+
+model Customer {
+  id              String     @id @default(cuid())
+  name            String
+  phone           String
+  installAddress  String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  stockLogs       StockLog[]
+  orders          Order[]
+  afterSalesTickets AfterSalesTicket[]
+
+  @@index([name])
+  @@index([phone])
+}
+
+model Order {
+  id           String       @id @default(cuid())
+  orderNo      String       @unique
+  status       OrderStatus  @default(PENDING_PRODUCTION)
+  totalAmount  Decimal     
+  paidAmount   Decimal      @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  completedAt  DateTime?
+  archivedAt   DateTime?
+
+  customerId   String
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items        OrderItem[]
+  activities   OrderActivity[]
+  attachments  Attachment[]
+  afterSalesTickets AfterSalesTicket[]
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+}
+
+model OrderItem {
+  id                String   @id @default(cuid())
+  quantity          Decimal 
+  unitPrice         Decimal 
+  lengthMm          Int?
+  widthMm           Int?
+  areaSqm           Decimal?
+  subtotal          Decimal 
+  stockDeductionQty Decimal 
+  warrantyExpiry    DateTime?
+
+  orderId           String
+  productId         String
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model OrderActivity {
+  id          String      @id @default(cuid())
+  fromStatus  OrderStatus?
+  toStatus    OrderStatus
+  operatorId  String?
+  operator    String
+  note        String?
+  createdAt   DateTime    @default(now())
+
+  orderId     String
+  order       Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+}
+
+model AppUser {
+  id          String    @id @default(cuid())
+  name        String
+  email       String    @unique
+  role        Role      @default(SALES)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model AfterSalesTicket {
+  id                String           @id @default(cuid())
+  description       String
+  priority          TicketPriority   @default(MEDIUM)
+  appointmentAt     DateTime?
+  assignedTechnician String?
+  status            AfterSalesStatus @default(PENDING)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  orderId           String
+  customerId        String
+  order             Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  customer          Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  maintenanceRecords MaintenanceRecord[]
+
+  @@index([status, createdAt])
+  @@index([priority, createdAt])
+}
+
+model MaintenanceRecord {
+  id          String   @id @default(cuid())
+  notes       String
+  cost        Decimal  @default(0)
+  createdAt   DateTime @default(now())
+
+  ticketId    String
+  ticket      AfterSalesTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+model Attachment {
+  id          String    @id @default(cuid())
+  fileUrl     String
+  fileType    String
+  description String?
+  uploadedBy  String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  orderId     String?
+  productId   String?
+  order       Order?    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@index([productId, createdAt])
+}
+
+model SalesCustomer {
+  id         String      @id @default(uuid())
+  name       String
+  phone      String?
+  email      String?
+  address    String?
+  notes      String?
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  salesOrders SalesOrder[]
+  invoices   Invoice[]
+  customerNotes CustomerNote[]
+
+  @@index([name])
+  @@map("customers")
+}
+
+model CustomerNote {
+  id         String   @id @default(uuid())
+  customerId String   @map("customer_id")
+  note       String
+  createdBy  String?  @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  customer   SalesCustomer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId, createdAt])
+  @@map("customer_notes")
+}
+
+model SalesProduct {
+  id        String   @id @default(uuid())
+  name      String
+  title     String?
+  defaultDescription String? @map("default_description")
+  glassTypeDefault GlassType? @map("glass_type_default")
+  glassFinishDefault GlassFinish? @map("glass_finish_default")
+  screenDefault String? @map("screen_default")
+  openingTypeDefault String? @map("opening_type_default")
+  brand     String?
+  collection String?
+  skuPrefix String?  @map("sku_prefix")
+  availableStock Decimal @default(0) @map("available_stock")
+  unit      String
+  price     Decimal  @default(0)
+  cost      Decimal?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  salesOrderItems SalesOrderItem[]
+  variants  ProductVariant[]
+
+  @@index([name])
+  @@map("products")
+}
+
+model ProductVariant {
+  id           String   @id @default(uuid())
+  productId    String   @map("product_id")
+  sku          String   @unique
+  description  String?
+  width        Decimal?
+  height       Decimal?
+  color        String?
+  glassType    String?  @map("glass_type")
+  glassTypeOverride GlassType? @map("glass_type_override")
+  glassFinishOverride GlassFinish? @map("glass_finish_override")
+  screenOverride String? @map("screen_override")
+  openingTypeOverride String? @map("opening_type_override")
+  screenType   String?  @map("screen_type")
+  slideDirection String? @map("slide_direction")
+  variantType  String?  @map("variant_type")
+  thicknessMm  Decimal? @map("thickness_mm")
+  boxSqft      Decimal? @map("box_sqft")
+  cost         Decimal?
+  price        Decimal?
+  reorderLevel Decimal  @default(0) @map("reorder_level")
+  reorderQty   Decimal  @default(0) @map("reorder_qty")
+  isStockItem  Boolean  @default(true) @map("is_stock_item")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  product      SalesProduct   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventoryStock InventoryStock?
+  salesOrderItems SalesOrderItem[]
+  invoiceItems InvoiceItem[]
+
+  @@index([productId])
+  @@index([isStockItem])
+  @@map("product_variants")
+}
+
+model SalesOrderCounter {
+  year      Int      @id
+  lastValue Int      @default(0) @map("last_value")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sales_order_counters")
+}
+
+model SalesOrder {
+  id              String            @id @default(uuid())
+  orderNumber     String            @unique @map("order_number")
+  customerId      String            @map("customer_id")
+  docType         SalesDocType      @default(SALES_ORDER) @map("doc_type")
+  projectName     String?           @map("project_name")
+  status          SalesOrderStatus  @default(DRAFT)
+  specialOrder    Boolean           @default(false) @map("special_order")
+  supplierId      String?           @map("supplier_id")
+  etaDate         DateTime?         @map("eta_date")
+  specialOrderStatus String?        @map("special_order_status")
+  supplierNotes   String?           @map("supplier_notes")
+  hidePrices      Boolean           @default(false) @map("hide_prices")
+  depositRequired Decimal           @default(0) @map("deposit_required")
+  subtotal        Decimal           @default(0)
+  discount        Decimal           @default(0)
+  tax             Decimal           @default(0)
+  total           Decimal           @default(0)
+  paidAmount      Decimal           @default(0) @map("paid_amount")
+  balanceDue      Decimal           @default(0) @map("balance_due")
+  paymentStatus   String            @default("unpaid") @map("payment_status")
+  salespersonName String?           @map("salesperson_name")
+  commissionRate  Decimal           @default(0) @map("commission_rate")
+  commissionAmount Decimal          @default(0) @map("commission_amount")
+  notes           String?
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  customer  SalesCustomer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  supplier  Supplier?             @relation("SalesOrderSpecialSupplier", fields: [supplierId], references: [id], onDelete: SetNull)
+  items     SalesOrderItem[]
+  payments  SalesOrderPayment[]
+  invoices  Invoice[]
+  fulfillments SalesOrderFulfillment[]
+  outboundQueue SalesOutboundQueue?
+  tickets   SalesOrderTicket[]
+
+  @@index([customerId])
+  @@index([customerId, createdAt])
+  @@index([customerId, status])
+  @@index([supplierId])
+  @@index([etaDate])
+  @@index([createdAt])
+  @@map("sales_orders")
+}
+
+model SalesOrderItem {
+  id            String    @id @default(uuid())
+  salesOrderId  String    @map("sales_order_id")
+  productId     String?   @map("product_id")
+  variantId     String?   @map("variant_id")
+  productSku    String?   @map("product_sku")
+  productTitle  String?   @map("product_title")
+  skuSnapshot   String?   @map("sku_snapshot")
+  titleSnapshot String?   @map("title_snapshot")
+  uomSnapshot   String?   @map("uom_snapshot")
+  costSnapshot  Decimal?  @map("cost_snapshot")
+  discount      Decimal   @default(0)
+  notes         String?
+  description   String?   @map("description")
+  lineDescription String  @map("line_description")
+  quantity      Decimal
+  unitPrice     Decimal   @map("unit_price")
+  lineDiscount  Decimal   @default(0) @map("line_discount")
+  lineTotal     Decimal   @map("line_total")
+  fulfillQty    Decimal   @default(0) @map("fulfill_qty")
+  isSpecialOrder Boolean  @default(false) @map("is_special_order")
+  specialOrderStatus String? @map("special_order_status")
+  linkedPoId    String?   @map("linked_po_id")
+  specialFollowupDate DateTime? @map("special_followup_date")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  salesOrder   SalesOrder   @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  product      SalesProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variant      ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  linkedPo     PurchaseOrder? @relation(fields: [linkedPoId], references: [id], onDelete: SetNull)
+
+  @@index([salesOrderId])
+  @@index([productId])
+  @@index([variantId])
+  @@index([isSpecialOrder, specialOrderStatus])
+  @@index([linkedPoId])
+  @@map("sales_order_items")
+}
+
+model PurchaseOrder {
+  id              String   @id @default(uuid())
+  poNumber        String   @unique @map("po_number")
+  supplierId      String   @map("supplier_id")
+  status          String
+  orderDate       DateTime @map("order_date")
+  expectedArrival DateTime? @map("expected_arrival")
+  totalCost       Decimal  @default(0) @map("total_cost")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  supplier        Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  specialOrderItems SalesOrderItem[]
+
+  @@index([supplierId])
+  @@index([status, expectedArrival])
+  @@map("purchase_orders")
+}
+
+model SalesOrderPayment {
+  id              String             @id @default(uuid())
+  salesOrderId    String             @map("sales_order_id")
+  invoiceId       String?            @map("invoice_id")
+  amount          Decimal
+  method          SalesPaymentMethod
+  paymentType     SalesPaymentType   @default(FINAL) @map("type")
+  status          SalesPaymentStatus @default(POSTED)
+  referenceNumber String?            @map("reference_number")
+  receivedAt      DateTime           @default(now()) @map("received_at")
+  notes           String?
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  salesOrder      SalesOrder         @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  invoice         Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([salesOrderId])
+  @@index([status, salesOrderId])
+  @@index([invoiceId])
+  @@index([status, invoiceId])
+  @@index([receivedAt])
+  @@map("sales_order_payments")
+}
+
+model InvoiceCounter {
+  year      Int      @id
+  lastValue Int      @default(0) @map("last_value")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("invoice_counters")
+}
+
+model Invoice {
+  id             String    @id @default(uuid())
+  invoiceNumber  String    @unique @map("invoice_number")
+  salesOrderId   String    @map("sales_order_id")
+  customerId     String?   @map("customer_id")
+  issueDate      DateTime  @default(now()) @map("issue_date")
+  dueDate        DateTime? @map("due_date")
+  status         String    @default("draft")
+  subtotal       Decimal   @default(0)
+  taxAmount      Decimal   @default(0) @map("tax_amount")
+  total          Decimal   @default(0)
+  billingAddress String?   @map("billing_address")
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  salesOrder     SalesOrder          @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  customer       SalesCustomer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items          InvoiceItem[]
+  payments       SalesOrderPayment[]
+
+  @@index([salesOrderId])
+  @@index([customerId])
+  @@index([issueDate])
+  @@index([status])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id           String    @id @default(uuid())
+  invoiceId    String    @map("invoice_id")
+  variantId    String?   @map("variant_id")
+  skuSnapshot  String?   @map("sku_snapshot")
+  titleSnapshot String?  @map("title_snapshot")
+  description  String?   @map("description")
+  uomSnapshot  String?   @map("uom_snapshot")
+  unitPrice    Decimal   @map("unit_price")
+  qty          Decimal
+  discount     Decimal   @default(0)
+  lineTotal    Decimal   @map("line_total")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  invoice      Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  variant      ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId])
+  @@index([variantId])
+  @@map("invoice_items")
+}
+
+model SalesOrderFulfillment {
+  id            String                 @id @default(uuid())
+  salesOrderId  String                 @map("sales_order_id")
+  type          SalesFulfillmentType
+  scheduledDate DateTime               @map("scheduled_date")
+  status        SalesFulfillmentStatus @default(SCHEDULED)
+  address       String?
+  notes         String?
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  salesOrder    SalesOrder             @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  outboundQueue SalesOutboundQueue?
+  tickets       SalesOrderTicket[]
+
+  @@index([salesOrderId])
+  @@index([scheduledDate])
+  @@map("sales_order_fulfillments")
+}
+
+model SalesOutboundQueue {
+  id             String               @id @default(uuid())
+  salesOrderId   String               @unique @map("sales_order_id")
+  fulfillmentId  String?              @unique @map("fulfillment_id")
+  type           SalesFulfillmentType
+  status         SalesFulfillmentStatus
+  scheduledDate  DateTime             @map("scheduled_date")
+  address        String?
+  notes          String?
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+
+  salesOrder     SalesOrder           @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  fulfillment    SalesOrderFulfillment? @relation(fields: [fulfillmentId], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([scheduledDate])
+  @@map("sales_outbound_queue")
+}
+
+model InventoryStock {
+  id         String   @id @default(uuid())
+  variantId  String   @unique @map("variant_id")
+  onHand     Decimal  @default(0) @map("on_hand")
+  reserved   Decimal  @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  variant    ProductVariant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([reserved])
+  @@map("inventory_stock")
+}
+
+model SalesOrderTicket {
+  id             String   @id @default(uuid())
+  salesOrderId   String   @map("sales_order_id")
+  fulfillmentId  String?  @map("fulfillment_id")
+  ticketType     String   @map("ticket_type")
+  status         String   @default("open")
+  scheduledAt    DateTime? @map("scheduled_at")
+  completedAt    DateTime? @map("completed_at")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  salesOrder     SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  fulfillment    SalesOrderFulfillment? @relation(fields: [fulfillmentId], references: [id], onDelete: SetNull)
+
+  @@index([salesOrderId])
+  @@index([ticketType, status])
+  @@map("sales_order_tickets")
+}
+
+model ReorderBatch {
+  id         String   @id @default(uuid())
+  supplierId String?  @map("supplier_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  status     String   @default("Draft")
+
+  supplier   Supplier?        @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  items      ReorderBatchItem[]
+
+  @@index([supplierId, createdAt])
+  @@map("reorder_batch")
+}
+
+model ReorderBatchItem {
+  id             String   @id @default(uuid())
+  reorderBatchId String   @map("reorder_batch_id")
+  productId      String   @map("product_id")
+  qty            Decimal  @default(0)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  reorderBatch   ReorderBatch @relation(fields: [reorderBatchId], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([reorderBatchId])
+  @@index([productId])
+  @@map("reorder_batch_items")
+}
+
+model DescriptionTemplate {
+  id           String   @id @default(uuid())
+  category     String   @unique
+  templateJson String   @map("template_json")
+  enabled      Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("description_templates")
+}

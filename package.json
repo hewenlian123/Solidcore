@@ -1,0 +1,45 @@
+{
+  "name": "solidcore",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "WATCHPACK_POLLING=true next dev --webpack -H 127.0.0.1 -p 3001",
+    "dev:turbo": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@prisma/client": "^6.19.2",
+    "@radix-ui/react-popover": "^1.1.15",
+    "@supabase/supabase-js": "^2.98.0",
+    "@tanstack/query-sync-storage-persister": "^5.90.23",
+    "@tanstack/react-query": "^5.90.21",
+    "@tanstack/react-query-persist-client": "^5.90.23",
+    "html5-qrcode": "^2.3.8",
+    "jspdf": "^4.2.0",
+    "jspdf-autotable": "^5.0.7",
+    "lucide-react": "latest",
+    "next": "latest",
+    "pdf-lib": "^1.17.1",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-dropzone": "^15.0.0",
+    "recharts": "^3.7.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.6",
+    "prisma": "^6.19.2",
+    "tailwindcss": "^3.4.19",
+    "typescript": "latest"
+  }
+}
