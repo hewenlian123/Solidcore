@@ -18,8 +18,11 @@ yarn-error.log*
 
 # local sqlite/prisma db
 prisma/dev.db
+prisma/prisma/dev.db
 prisma/*.db
 prisma/*.db-journal
+**/*.db
+**/*.db-journal
 *.sqlite
 *.sqlite3
 
