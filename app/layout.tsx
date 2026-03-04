@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { DashboardShell } from "@/components/layout/dashboard-shell";
+import { AppShell } from "@/components/layout/AppShell";
 import { RoleProvider } from "@/components/layout/role-provider";
 import { PWARegister } from "@/components/pwa/pwa-register";
 import { AppQueryProvider } from "@/components/providers/query-provider";
+import NextTopLoader from "nextjs-toploader";
 
 export const metadata: Metadata = {
   title: "Solidcore Building Materials Management",
@@ -22,11 +23,20 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en-US">
-      <body className="bg-slate-50 text-slate-900 antialiased [font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]">
+      <body className="bg-[var(--bg)] text-[var(--text)] antialiased [font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]">
         <AppQueryProvider>
           <RoleProvider>
+            <NextTopLoader
+              color="#0F172A"
+              height={2}
+              showSpinner={false}
+              crawl={true}
+              crawlSpeed={220}
+              speed={280}
+              shadow="0 0 10px rgba(15, 23, 42, 0.3)"
+            />
             <PWARegister />
-            <DashboardShell>{children}</DashboardShell>
+            <AppShell>{children}</AppShell>
           </RoleProvider>
         </AppQueryProvider>
       </body>

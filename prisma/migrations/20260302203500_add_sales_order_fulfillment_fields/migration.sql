@@ -1,0 +1,10 @@
+ALTER TABLE "sales_orders" ADD COLUMN "fulfillment_method" TEXT NOT NULL DEFAULT 'PICKUP';
+ALTER TABLE "sales_orders" ADD COLUMN "delivery_name" TEXT;
+ALTER TABLE "sales_orders" ADD COLUMN "delivery_phone" TEXT;
+ALTER TABLE "sales_orders" ADD COLUMN "delivery_address1" TEXT;
+ALTER TABLE "sales_orders" ADD COLUMN "delivery_address2" TEXT;
+ALTER TABLE "sales_orders" ADD COLUMN "delivery_city" TEXT;
+ALTER TABLE "sales_orders" ADD COLUMN "delivery_state" TEXT;
+ALTER TABLE "sales_orders" ADD COLUMN "delivery_zip" TEXT;
+ALTER TABLE "sales_orders" ADD COLUMN "delivery_notes" TEXT;
+ALTER TABLE "sales_orders" ADD COLUMN "requested_delivery_at" DATETIME;

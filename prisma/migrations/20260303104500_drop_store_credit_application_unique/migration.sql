@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS "store_credit_applications_store_credit_id_invoice_id_key";

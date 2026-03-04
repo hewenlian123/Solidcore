@@ -8,6 +8,11 @@ export async function GET(request: NextRequest) {
     if (!hasOneOf(role, ["ADMIN", "WAREHOUSE", "SALES"])) return deny();
 
     const data = await prisma.salesOutboundQueue.findMany({
+      where: {
+        status: {
+          notIn: ["COMPLETED", "CANCELLED"],
+        },
+      },
       include: {
         salesOrder: {
           select: {

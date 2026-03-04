@@ -1,4 +1,4 @@
-import { GlassFinish } from "@/lib/specs/glass";
+import { isFrostedFinish } from "@/lib/specs/effective";
 
 function normalizeSkuValue(value: string) {
   return String(value ?? "").toUpperCase().replace(/\s+/g, "").trim();
@@ -22,7 +22,7 @@ export function generateVariantSku(input: {
   width: number;
   height: number;
   color?: string | null;
-  glassFinish?: GlassFinish | null;
+  glassFinish?: string | null;
   manualSkuOverride?: string | null;
 }) {
   const manualSku = normalizeSkuValue(String(input.manualSkuOverride ?? ""));
@@ -39,8 +39,7 @@ export function generateVariantSku(input: {
   const width = Number.isFinite(input.width) ? Math.trunc(input.width) : 0;
   const height = Number.isFinite(input.height) ? Math.trunc(input.height) : 0;
   const colorCode = colorCodeFromColor(String(input.color ?? ""));
-  const finish = input.glassFinish ?? "CLEAR";
-  const suffix = finish === "FROSTED" ? "F" : "";
+  const suffix = isFrostedFinish(input.glassFinish) ? "F" : "";
   const baseAutoSku = prefix && width > 0 && height > 0 ? `${prefix}${width}${height}${colorCode}` : "";
   return {
     effectiveSku: normalizeSkuValue(`${baseAutoSku}${suffix}`),

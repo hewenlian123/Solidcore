@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type PDFPreviewModalProps = {
   open: boolean;
@@ -11,6 +11,7 @@ type PDFPreviewModalProps = {
 
 export function PDFPreviewModal({ open, title = "PDF Preview", src, onClose }: PDFPreviewModalProps) {
   const [loading, setLoading] = useState(true);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -27,6 +28,13 @@ export function PDFPreviewModal({ open, title = "PDF Preview", src, onClose }: P
         <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
           <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => iframeRef.current?.contentWindow?.print()}
+              className="ios-secondary-btn h-9 px-3 text-xs"
+            >
+              Print
+            </button>
             <a
               href={downloadHref}
               className="ios-secondary-btn h-9 px-3 text-xs"
@@ -50,6 +58,7 @@ export function PDFPreviewModal({ open, title = "PDF Preview", src, onClose }: P
             </div>
           ) : null}
           <iframe
+            ref={iframeRef}
             title={title}
             src={src}
             className="h-full w-full rounded-b-2xl"

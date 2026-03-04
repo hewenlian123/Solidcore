@@ -4,6 +4,7 @@ import { renderDescription } from "@/lib/description/renderDescription";
 import { ensureDescriptionTemplateSeeds } from "@/lib/description/templates";
 import {
   computeLineTotal,
+  FlooringAllocationError,
   recalculateSalesOrder,
   syncInventoryReservationForSalesOrder,
   syncSalesOutboundQueue,
@@ -15,6 +16,8 @@ import {
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { formatLineItemTitle } from "@/lib/display";
 import { getEffectiveSpecs, getInternalSpecLine } from "@/lib/specs/glass";
+import { formatFlooringSubtitle } from "@/lib/specs/effective";
+import { resolveSellingUnit } from "@/lib/selling-unit";
 
 type Params = {
   params: Promise<{ id: string; itemId: string }>;
@@ -31,6 +34,15 @@ function toDateOrNull(value: unknown) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function getFlooringShipmentPlan(quantitySqft: number, sqftPerBox: number) {
+  if (!Number.isFinite(quantitySqft) || quantitySqft <= 0) return null;
+  if (!Number.isFinite(sqftPerBox) || sqftPerBox <= 0) return null;
+  const requiredBoxes = Math.ceil(quantitySqft / sqftPerBox);
+  const coversSqft = requiredBoxes * sqftPerBox;
+  const overageSqft = coversSqft - quantitySqft;
+  return { requiredBoxes, coversSqft, overageSqft };
+}
+
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
     const role = getRequestRole(request);
@@ -44,7 +56,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       if (!existing || existing.salesOrderId !== id) {
         throw new Error("ITEM_NOT_FOUND");
       }
-      const quantity = payload.quantity !== undefined ? toNumber(payload.quantity, Number(existing.quantity)) : Number(existing.quantity);
+      let quantity = payload.quantity !== undefined ? toNumber(payload.quantity, Number(existing.quantity)) : Number(existing.quantity);
       const unitPrice = payload.unitPrice !== undefined ? toNumber(payload.unitPrice, Number(existing.unitPrice)) : Number(existing.unitPrice);
       const lineDiscount =
         payload.lineDiscount !== undefined
@@ -75,12 +87,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
                 product: {
                   select: { id: true, name: true, title: true, defaultDescription: true, unit: true },
                 },
+                inventoryStock: {
+                  select: { onHand: true, reserved: true },
+                },
               },
             })
           : null;
       if (!variant) {
         throw new Error("VARIANT_REQUIRED");
       }
+      const selectedProductUnit = variant.product?.unit ?? null;
       const productMeta = await tx.product.findUnique({
         where: { id: variant.productId },
         select: {
@@ -91,9 +107,24 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           sizeH: true,
           glass: true,
           glassTypeDefault: true,
+          glassCoatingDefault: true,
+          glassThicknessMmDefault: true,
           glassFinishDefault: true,
           screenDefault: true,
           openingTypeDefault: true,
+          frameMaterialDefault: true,
+          slidingConfigDefault: true,
+          flooringMaterial: true,
+          flooringWearLayer: true,
+          flooringThicknessMm: true,
+          flooringPlankLengthIn: true,
+          flooringPlankWidthIn: true,
+          flooringCoreThicknessMm: true,
+          flooringInstallation: true,
+          flooringUnderlayment: true,
+          flooringUnderlaymentType: true,
+          flooringUnderlaymentMm: true,
+          flooringBoxCoverageSqft: true,
           type: true,
           style: true,
           rating: true,
@@ -132,6 +163,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           ? getInternalSpecLine(
               getEffectiveSpecs(productMeta, {
                 glassTypeOverride: variant.glassTypeOverride,
+                slidingConfigOverride: variant.slidingConfigOverride,
+                glassCoatingOverride: variant.glassCoatingOverride,
+                glassThicknessMmOverride: variant.glassThicknessMmOverride,
                 glassFinishOverride: variant.glassFinishOverride,
                 screenOverride: variant.screenOverride,
                 openingTypeOverride: variant.openingTypeOverride,
@@ -140,7 +174,60 @@ export async function PATCH(request: NextRequest, { params }: Params) {
                 slideDirection: variant.slideDirection,
               }),
             )
-          : generatedDescription;
+          : formatFlooringSubtitle({
+              flooringMaterial: productMeta?.flooringMaterial,
+              flooringWearLayer: productMeta?.flooringWearLayer,
+              flooringThicknessMm:
+                productMeta?.flooringThicknessMm != null ? Number(productMeta.flooringThicknessMm) : null,
+              flooringPlankLengthIn:
+                productMeta?.flooringPlankLengthIn != null ? Number(productMeta.flooringPlankLengthIn) : null,
+              flooringPlankWidthIn:
+                productMeta?.flooringPlankWidthIn != null ? Number(productMeta.flooringPlankWidthIn) : null,
+              flooringCoreThicknessMm:
+                productMeta?.flooringCoreThicknessMm != null
+                  ? Number(productMeta.flooringCoreThicknessMm)
+                  : null,
+              flooringInstallation: productMeta?.flooringInstallation,
+              flooringUnderlayment: productMeta?.flooringUnderlayment,
+              flooringUnderlaymentType: productMeta?.flooringUnderlaymentType,
+              flooringUnderlaymentMm:
+                productMeta?.flooringUnderlaymentMm != null
+                  ? Number(productMeta.flooringUnderlaymentMm)
+                  : null,
+              flooringBoxCoverageSqft:
+                productMeta?.flooringBoxCoverageSqft != null
+                  ? Number(productMeta.flooringBoxCoverageSqft)
+                  : null,
+            }) || generatedDescription;
+      const isFlooringProduct =
+        String(productMeta?.category ?? "").toUpperCase() === "FLOOR" ||
+        Number(productMeta?.flooringBoxCoverageSqft ?? 0) > 0;
+      const sellingUnit = resolveSellingUnit(isFlooringProduct ? "FLOOR" : null, selectedProductUnit);
+      const incomingUnit =
+        payload.uomSnapshot !== undefined
+          ? String(payload.uomSnapshot ?? "").trim().toUpperCase()
+          : "";
+      if (incomingUnit && incomingUnit !== sellingUnit) {
+        throw new Error(`UNIT_MISMATCH:${sellingUnit}`);
+      }
+      if (isFlooringProduct) {
+        const sqftPerBox = Number(productMeta?.flooringBoxCoverageSqft ?? 0);
+        const plan = getFlooringShipmentPlan(quantity * sqftPerBox, sqftPerBox);
+        if (plan) {
+          const baseAvailable =
+            Number(variant?.inventoryStock?.onHand ?? 0) - Number(variant?.inventoryStock?.reserved ?? 0);
+          const currentPlan =
+            existing.variantId === nextVariantId
+              ? getFlooringShipmentPlan(Number(existing.quantity), sqftPerBox)
+              : null;
+          const effectiveAvailable = baseAvailable + Number(currentPlan?.requiredBoxes ?? 0);
+          if (plan.requiredBoxes > effectiveAvailable) {
+            throw new Error(
+              `FLOORING_OVRSELL:${plan.requiredBoxes}:${Math.max(0, Math.floor(effectiveAvailable))}`,
+            );
+          }
+        }
+      }
       const fulfillIncrease = Math.max(fulfillQty - Number(existing.fulfillQty), 0);
       if (fulfillIncrease > 0 && nextVariantId) {
         await assertSufficientVariantInventory(tx, {
@@ -164,17 +251,19 @@ export async function PATCH(request: NextRequest, { params }: Params) {
               : existing.description;
       const lineItemTitle =
         payload.productId !== undefined || payload.variantId !== undefined
-          ? formatLineItemTitle({
-              productName: variant?.product?.name ?? null,
-              variant: {
-                width: variant?.width != null ? Number(variant.width) : null,
-                height: variant?.height != null ? Number(variant.height) : null,
-                color: variant?.color,
-                title: variant?.description ?? null,
-                sku: variant?.sku ?? null,
-                detailText: normalizedDescription || "",
-              },
-            })
+          ? productMeta?.category === "FLOOR"
+            ? String(variant?.displayName ?? variant?.description ?? variant?.product?.name ?? "").trim() || null
+            : formatLineItemTitle({
+                productName: variant?.product?.name ?? null,
+                variant: {
+                  width: variant?.width != null ? Number(variant.width) : null,
+                  height: variant?.height != null ? Number(variant.height) : null,
+                  color: variant?.color,
+                  title: variant?.description ?? null,
+                  sku: variant?.sku ?? null,
+                  detailText: normalizedDescription || "",
+                },
+              })
           : undefined;
       await tx.salesOrderItem.update({
         where: { id: itemId },
@@ -217,12 +306,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
                 ? lineItemTitle ?? null
                 : undefined,
           uomSnapshot:
-            payload.uomSnapshot !== undefined
-              ? payload.uomSnapshot
-                ? String(payload.uomSnapshot)
-                : null
-              : payload.productId !== undefined || payload.variantId !== undefined
-                ? variant?.product.unit ?? null
+            payload.productId !== undefined || payload.variantId !== undefined
+              ? sellingUnit
+              : payload.uomSnapshot !== undefined
+                ? payload.uomSnapshot
+                  ? String(payload.uomSnapshot)
+                  : null
                 : undefined,
           costSnapshot:
             payload.costSnapshot !== undefined
@@ -341,6 +430,28 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
     if (error instanceof Error && error.message === "VARIANT_REQUIRED") {
       return NextResponse.json({ error: "Variant is required." }, { status: 400 });
+    }
+    if (error instanceof Error && error.message.startsWith("FLOORING_OVRSELL:")) {
+      const [, need, available] = error.message.split(":");
+      return NextResponse.json(
+        { error: `Insufficient stock: need ${need} boxes, available ${available} boxes.` },
+        { status: 400 },
+      );
+    }
+    if (error instanceof Error && error.message.startsWith("UNIT_MISMATCH:")) {
+      const expected = error.message.split(":")[1] ?? "PIECE";
+      return NextResponse.json(
+        { error: `Unit mismatch. Expected ${expected} for this product.` },
+        { status: 400 },
+      );
+    }
+    if (error instanceof FlooringAllocationError) {
+      return NextResponse.json(
+        {
+          error: `Insufficient stock for ${error.variantName}: need ${error.requiredBoxes} boxes, available ${error.availableBoxes} boxes.`,
+        },
+        { status: 400 },
+      );
     }
     if (error instanceof InsufficientInventoryError) {
       return NextResponse.json(

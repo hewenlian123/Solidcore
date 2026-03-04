@@ -37,6 +37,9 @@ export default function SettingsPage() {
   const [templateValidationByCategory, setTemplateValidationByCategory] = useState<
     Record<string, TemplateValidation>
   >({});
+  const [defaultTaxRate, setDefaultTaxRate] = useState("0");
+  const [savingDefaultTaxRate, setSavingDefaultTaxRate] = useState(false);
+  const [defaultTaxRateMessage, setDefaultTaxRateMessage] = useState("");
 
   useEffect(() => {
     setYear(String(new Date().getFullYear()));
@@ -64,6 +67,43 @@ export default function SettingsPage() {
     void loadTemplates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
+
+  useEffect(() => {
+    const loadCompanySettings = async () => {
+      try {
+        const res = await fetch("/api/settings/company", {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error ?? "Failed to load company settings");
+        setDefaultTaxRate(String(Number(payload.data?.defaultTaxRate ?? 0)));
+      } catch (err) {
+        setDefaultTaxRateMessage(err instanceof Error ? err.message : "Failed to load default tax rate");
+      }
+    };
+    void loadCompanySettings();
+  }, [role]);
+
+  const saveDefaultTaxRate = async () => {
+    setSavingDefaultTaxRate(true);
+    setDefaultTaxRateMessage("");
+    try {
+      const res = await fetch("/api/settings/company", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-user-role": role },
+        body: JSON.stringify({ defaultTaxRate: Number(defaultTaxRate || 0) }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to save default tax rate");
+      setDefaultTaxRate(String(Number(payload.data?.defaultTaxRate ?? 0)));
+      setDefaultTaxRateMessage("Default tax rate saved.");
+    } catch (err) {
+      setDefaultTaxRateMessage(err instanceof Error ? err.message : "Failed to save default tax rate");
+    } finally {
+      setSavingDefaultTaxRate(false);
+    }
+  };
 
   const downloadBackup = (format: "json" | "xlsx") => {
     window.open(`/api/backup/export?format=${format}`, "_blank");
@@ -225,6 +265,35 @@ export default function SettingsPage() {
             Export Excel
           </button>
         </div>
+      </div>
+
+      <div className="linear-card p-8">
+        <h2 className="text-base font-semibold text-slate-900">Tax Settings</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Default tax rate applied to new customers and sales documents.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="block">
+            <span className="mb-1 block text-xs text-slate-500">Default Tax Rate (%)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.001"
+              value={defaultTaxRate}
+              onChange={(event) => setDefaultTaxRate(event.target.value)}
+              className="ios-input h-12 w-44 px-3"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={saveDefaultTaxRate}
+            disabled={savingDefaultTaxRate}
+            className="ios-primary-btn h-12 disabled:opacity-60"
+          >
+            {savingDefaultTaxRate ? "Saving..." : "Save Default Tax Rate"}
+          </button>
+        </div>
+        {defaultTaxRateMessage ? <p className="mt-2 text-sm text-slate-600">{defaultTaxRateMessage}</p> : null}
       </div>
 
       <div className="linear-card p-8">

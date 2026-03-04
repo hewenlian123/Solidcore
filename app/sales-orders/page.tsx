@@ -30,6 +30,7 @@ export default function SalesOrdersPage() {
   const [rows, setRows] = useState<SalesOrderRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
@@ -69,6 +70,11 @@ export default function SalesOrdersPage() {
 
   const statuses = useMemo(() => ["ALL", ...SALES_ORDER_STATUSES], []);
 
+  const openNewSalesOrder = () => {
+    setCreating(true);
+    router.push("/sales-orders/new?docType=SALES_ORDER");
+  };
+
   return (
     <section className="space-y-8">
       <div className="linear-card p-8">
@@ -79,13 +85,15 @@ export default function SalesOrdersPage() {
               Manage building-supply sales orders, payments, and balances.
             </p>
           </div>
-          <Link
-            href="/sales-orders/new"
+          <button
+            type="button"
+            onClick={openNewSalesOrder}
+            disabled={creating}
             className="ios-primary-btn inline-flex h-12 items-center gap-2 px-4"
           >
             <Plus className="h-4 w-4" />
-            New Sales Order
-          </Link>
+            {creating ? "Creating..." : "New Sales Order"}
+          </button>
         </div>
       </div>
 

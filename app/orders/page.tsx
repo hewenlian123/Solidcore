@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Plus, Search, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useRole } from "@/components/layout/role-provider";
 import {
   SALES_ORDER_STATUSES,
@@ -52,55 +53,76 @@ type SnapshotPayload = {
   };
 };
 
+type InventoryAlertsPayload = {
+  lowStockCount: number;
+};
+
 export default function OrdersPage() {
   const router = useRouter();
   const { role } = useRole();
-  const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
   const [specialOnly, setSpecialOnly] = useState(false);
   const [docTypeFilter, setDocTypeFilter] = useState<"QUOTE" | "SALES_ORDER">("SALES_ORDER");
-  const [snapshot, setSnapshot] = useState<SnapshotPayload | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [creatingDocType, setCreatingDocType] = useState<"QUOTE" | "SALES_ORDER" | null>(null);
 
-  const load = async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const ordersQuery = useQuery({
+    queryKey: ["sales-orders", role, docTypeFilter, statusFilter, specialOnly, debouncedQuery],
+    placeholderData: keepPreviousData,
+    queryFn: async () => {
       const params = new URLSearchParams();
       params.set("doc_type", docTypeFilter);
-      if (query.trim()) params.set("q", query.trim());
+      if (debouncedQuery) params.set("q", debouncedQuery);
       if (statusFilter !== "ALL") params.set("status", statusFilter);
       if (specialOnly) params.set("special_order", "true");
       const res = await fetch(`/api/sales-orders?${params.toString()}`, {
-        cache: "no-store",
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? "Failed to fetch orders");
-      setRows(payload.data ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch orders");
-    } finally {
-      setLoading(false);
-    }
-  };
+      return (payload.data ?? []) as Row[];
+    },
+  });
 
-  const loadSnapshot = async () => {
-    try {
+  const snapshotQuery = useQuery({
+    queryKey: ["orders-snapshot", role],
+    queryFn: async () => {
       const res = await fetch("/api/orders/snapshot", {
-        cache: "no-store",
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? "Failed to load snapshot");
-      setSnapshot(payload);
-    } catch {
-      setSnapshot(null);
-    }
-  };
+      return payload as SnapshotPayload;
+    },
+  });
+
+  const alertsQuery = useQuery({
+    queryKey: ["inventory-alerts", role],
+    queryFn: async () => {
+      const res = await fetch("/api/inventory/alerts", {
+        headers: { "x-user-role": role },
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to load alerts");
+      return {
+        lowStockCount: Number(payload?.data?.lowStockCount ?? 0),
+      } as InventoryAlertsPayload;
+    },
+  });
+
+  const rows = ordersQuery.data ?? [];
+  const snapshot = snapshotQuery.data ?? null;
+  const alerts = alertsQuery.data ?? { lowStockCount: 0 };
+  const loading = ordersQuery.isLoading && !ordersQuery.data;
+  const resolvedError = error ?? (ordersQuery.error instanceof Error ? ordersQuery.error.message : null);
 
   const deleteSalesOrder = async (row: Row) => {
     const ok = window.confirm(`Delete ${row.orderNumber}? This action cannot be undone.`);
@@ -114,8 +136,7 @@ export default function OrdersPage() {
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? "Failed to delete sales order");
-      await load();
-      await loadSnapshot();
+      await Promise.all([ordersQuery.refetch(), snapshotQuery.refetch()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete sales order");
     } finally {
@@ -123,19 +144,10 @@ export default function OrdersPage() {
     }
   };
 
-  useEffect(() => {
-    load();
-    loadSnapshot();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, docTypeFilter, specialOnly, role]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      load();
-    }, 250);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
+  const openCreateOrder = (docType: "QUOTE" | "SALES_ORDER") => {
+    setCreatingDocType(docType);
+    router.push(`/sales-orders/new?docType=${docType}`);
+  };
 
   const statusOptions = useMemo(() => ["ALL", ...SALES_ORDER_STATUSES], []);
   const hasMonthData = Number(snapshot?.monthOrders ?? 0) > 0;
@@ -166,25 +178,29 @@ export default function OrdersPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href="/orders/new"
+            <button
+              type="button"
+              onClick={() => openCreateOrder("SALES_ORDER")}
+              disabled={creatingDocType !== null}
               className="ios-primary-btn inline-flex h-12 items-center gap-2 px-4"
             >
               <Plus className="h-4 w-4" />
-              New Sales Order
-            </Link>
-            <Link
-              href="/sales-orders/new?docType=QUOTE"
+              {creatingDocType === "SALES_ORDER" ? "Creating..." : "New Sales Order"}
+            </button>
+            <button
+              type="button"
+              onClick={() => openCreateOrder("QUOTE")}
+              disabled={creatingDocType !== null}
               className="ios-secondary-btn inline-flex h-12 items-center gap-2 px-4"
             >
               <Plus className="h-4 w-4" />
-              New Quote
-            </Link>
+              {creatingDocType === "QUOTE" ? "Creating..." : "New Quote"}
+            </button>
           </div>
         </div>
         <div
           className={`mt-3 grid grid-cols-1 gap-2 border-t border-slate-100 pt-3 text-sm sm:grid-cols-2 ${
-            hasMonthData ? "xl:grid-cols-4" : "xl:grid-cols-2"
+            hasMonthData ? "xl:grid-cols-5" : "xl:grid-cols-3"
           }`}
         >
           <div className="rounded-md bg-white px-3 py-2">
@@ -195,6 +211,15 @@ export default function OrdersPage() {
             <p className="text-[11px] uppercase tracking-wide text-slate-500">Orders Count</p>
             <p className="text-lg font-semibold text-slate-900">{snapshot?.monthOrders ?? 0}</p>
           </div>
+          <button
+            type="button"
+            onClick={() => router.push("/products?filter=low&lowStockOnly=true")}
+            className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-left transition hover:bg-rose-100"
+          >
+            <p className="text-[11px] uppercase tracking-wide text-rose-700">Low Stock Items</p>
+            <p className="text-lg font-semibold text-rose-800">{alerts.lowStockCount}</p>
+            <p className="text-xs text-rose-600">Based on available boxes</p>
+          </button>
           {hasMonthData ? (
             <div className="rounded-md bg-white px-3 py-2">
               <p className="text-[11px] uppercase tracking-wide text-slate-500">Top Product</p>
@@ -292,9 +317,9 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      {error ? (
+      {resolvedError ? (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {error}
+          {resolvedError}
         </div>
       ) : null}
 
@@ -413,7 +438,7 @@ export default function OrdersPage() {
                               setError(payload.error ?? "Failed to convert quote");
                               return;
                             }
-                            load();
+                            void ordersQuery.refetch();
                           }}
                           className="ios-secondary-btn h-9 px-3 py-2 text-xs"
                         >

@@ -5,7 +5,19 @@ import { useEffect, useMemo, useState } from "react";
 import { useRole } from "@/components/layout/role-provider";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-type FulfillmentStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+type FulfillmentStatus =
+  | "DRAFT"
+  | "SCHEDULED"
+  | "PACKING"
+  | "READY"
+  | "OUT_FOR_DELIVERY"
+  | "DELIVERED"
+  | "PICKED_UP"
+  | "OUT"
+  | "PARTIAL"
+  | "IN_PROGRESS"
+  | "COMPLETED"
+  | "CANCELLED";
 
 type FulfillmentRow = {
   id: string;
@@ -42,14 +54,24 @@ type DashboardPayload = {
 
 function statusBadge(status: FulfillmentStatus) {
   if (status === "COMPLETED") return "bg-emerald-100 text-emerald-700";
-  if (status === "IN_PROGRESS") return "bg-blue-100 text-blue-700";
+  if (status === "OUT_FOR_DELIVERY" || status === "OUT" || status === "IN_PROGRESS") return "bg-blue-100 text-blue-700";
+  if (status === "DELIVERED" || status === "PICKED_UP") return "bg-emerald-100 text-emerald-700";
+  if (status === "READY") return "bg-cyan-100 text-cyan-700";
+  if (status === "PACKING") return "bg-violet-100 text-violet-700";
+  if (status === "PARTIAL") return "bg-amber-100 text-amber-700";
   if (status === "CANCELLED") return "bg-slate-200 text-slate-600";
   return "bg-amber-100 text-amber-700";
 }
 
 function statusLabel(status: FulfillmentStatus) {
   if (status === "SCHEDULED") return "Scheduled";
-  if (status === "IN_PROGRESS") return "Out for Delivery";
+  if (status === "DRAFT") return "Draft";
+  if (status === "PACKING") return "Packing";
+  if (status === "READY") return "Ready";
+  if (status === "OUT_FOR_DELIVERY" || status === "OUT" || status === "IN_PROGRESS") return "Out for Delivery";
+  if (status === "DELIVERED") return "Delivered";
+  if (status === "PICKED_UP") return "Picked Up";
+  if (status === "PARTIAL") return "Partial";
   if (status === "COMPLETED") return "Delivered";
   return "Canceled";
 }
@@ -92,14 +114,13 @@ export default function FulfillmentDashboardPage() {
   );
 
   const updateFulfillmentStatus = async (
-    salesOrderId: string,
     fulfillmentId: string,
-    status: "READY" | "COMPLETED",
+    status: "out_for_delivery" | "delivered" | "picked_up" | "completed",
   ) => {
     try {
       setBusyId(fulfillmentId);
       setError(null);
-      const res = await fetch(`/api/sales-orders/${salesOrderId}/fulfillments/${fulfillmentId}`, {
+      const res = await fetch(`/api/fulfillments/${fulfillmentId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "x-user-role": role },
         body: JSON.stringify({ status }),
@@ -117,8 +138,15 @@ export default function FulfillmentDashboardPage() {
   return (
     <section className="space-y-8">
       <div className="linear-card p-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Fulfillment Dashboard</h1>
-        <p className="mt-2 text-sm text-slate-500">Operational snapshot for today deliveries, pickups, and overdue tasks.</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Fulfillment Dashboard</h1>
+            <p className="mt-2 text-sm text-slate-500">Operational snapshot for today deliveries, pickups, and overdue tasks.</p>
+          </div>
+          <Link href="/fulfillment/outbound" className="ios-secondary-btn h-10 px-3 text-sm">
+            Fulfillment Outbound Queue
+          </Link>
+        </div>
       </div>
 
       {error ? (
@@ -206,13 +234,16 @@ export default function FulfillmentDashboardPage() {
                   <TableCell>{row.driver || "-"}</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
-                      <Link href={`/orders/${row.salesOrderId}`} className="ios-secondary-btn h-8 px-2 text-xs">
+                      <Link href={`/sales-orders/${row.salesOrderId}`} className="ios-secondary-btn h-8 px-2 text-xs">
                         View Order
+                      </Link>
+                      <Link href={`/fulfillment/${row.id}`} className="ios-secondary-btn h-8 px-2 text-xs">
+                        View Fulfillment
                       </Link>
                       <button
                         type="button"
-                        disabled={busyId === row.id || row.status === "IN_PROGRESS" || row.status === "COMPLETED"}
-                        onClick={() => updateFulfillmentStatus(row.salesOrderId, row.id, "READY")}
+                        disabled={busyId === row.id || row.status === "OUT_FOR_DELIVERY" || row.status === "OUT" || row.status === "COMPLETED"}
+                        onClick={() => updateFulfillmentStatus(row.id, "out_for_delivery")}
                         className="ios-secondary-btn h-8 px-2 text-xs disabled:opacity-60"
                       >
                         Mark Out
@@ -220,7 +251,7 @@ export default function FulfillmentDashboardPage() {
                       <button
                         type="button"
                         disabled={busyId === row.id || row.status === "COMPLETED" || row.status === "CANCELLED"}
-                        onClick={() => updateFulfillmentStatus(row.salesOrderId, row.id, "COMPLETED")}
+                        onClick={() => updateFulfillmentStatus(row.id, "delivered")}
                         className="ios-primary-btn h-8 px-2 text-xs disabled:opacity-60"
                       >
                         Mark Delivered
@@ -274,9 +305,22 @@ export default function FulfillmentDashboardPage() {
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Link href={`/orders/${row.salesOrderId}`} className="ios-secondary-btn h-8 px-2 text-xs">
-                        View Order
-                      </Link>
+                      <div className="flex justify-end gap-2">
+                        <Link href={`/sales-orders/${row.salesOrderId}`} className="ios-secondary-btn h-8 px-2 text-xs">
+                          View Order
+                        </Link>
+                        <Link href={`/fulfillment/${row.id}`} className="ios-secondary-btn h-8 px-2 text-xs">
+                          View Fulfillment
+                        </Link>
+                        <button
+                          type="button"
+                          disabled={busyId === row.id || row.status === "PICKED_UP" || row.status === "COMPLETED"}
+                          onClick={() => updateFulfillmentStatus(row.id, "picked_up")}
+                          className="ios-primary-btn h-8 px-2 text-xs disabled:opacity-60"
+                        >
+                          Mark Picked Up
+                        </button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

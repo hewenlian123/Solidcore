@@ -1,11 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import * as XLSX from "xlsx";
 import { useRole } from "@/components/layout/role-provider";
+import { FlooringSpecs } from "@/components/product/templates/FlooringSpecs";
+import { WindowSpecs } from "@/components/product/templates/WindowSpecs";
 import { renderTemplateSku } from "@/lib/product-template-engine";
+import { formatQuantityWithUnit } from "@/lib/quantity-format";
 import {
   CATEGORY_LABEL_MAP,
   CATEGORY_OPTIONS,
@@ -53,12 +57,16 @@ type InventoryGroup = {
 type ProductVariantStock = {
   id: string;
   sku: string;
+  displayName?: string | null;
+  skuSuffix?: string | null;
   description?: string | null;
   cost?: number | null;
   price?: number | null;
   width?: number | null;
   height?: number | null;
   color?: string | null;
+  reorderLevel?: number;
+  reorderQty?: number;
   onHand: number;
   reserved: number;
   available: number;
@@ -86,10 +94,35 @@ type Product = {
   sizeH?: string | null;
   thicknessMm?: string | null;
   glass?: string | null;
+  frameMaterialDefault?: string | null;
+  slidingConfigDefault?: string | null;
   glassTypeDefault?: string | null;
+  glassCoatingDefault?: string | null;
+  glassThicknessMmDefault?: number | null;
   glassFinishDefault?: string | null;
   screenDefault?: string | null;
   openingTypeDefault?: string | null;
+  flooringBrand?: string | null;
+  flooringSeries?: string | null;
+  flooringMaterial?: string | null;
+  flooringWearLayer?: string | null;
+  flooringThicknessMm?: number | null;
+  flooringPlankLengthIn?: number | null;
+  flooringPlankWidthIn?: number | null;
+  flooringCoreThicknessMm?: number | null;
+  flooringFinish?: string | null;
+  flooringEdge?: string | null;
+  flooringInstallation?: string | null;
+  flooringUnderlayment?: string | null;
+  flooringUnderlaymentType?: string | null;
+  flooringUnderlaymentMm?: number | null;
+  flooringWaterproof?: boolean | null;
+  flooringWaterResistance?: string | null;
+  flooringWarrantyResidentialYr?: number | null;
+  flooringWarrantyCommercialYr?: number | null;
+  flooringPiecesPerBox?: number | null;
+  flooringBoxCoverageSqft?: number | null;
+  flooringLowStockThreshold?: number | null;
   rating?: string | null;
   swing?: string | null;
   handing?: string | null;
@@ -120,9 +153,74 @@ type Product = {
   priceMin?: number | null;
   priceMax?: number | null;
   totalAvailable?: number;
+  hasLowStock?: boolean;
+  lowStockVariantCount?: number;
 };
 
 type FilterCategory = "ALL" | (typeof CATEGORY_OPTIONS)[number]["value"];
+
+type ImportFieldKey =
+  | "sku"
+  | "name"
+  | "description"
+  | "category"
+  | "unit"
+  | "salePrice"
+  | "costPrice"
+  | "onHand"
+  | "reorderLevel"
+  | "width"
+  | "height"
+  | "color"
+  | "warehouseName"
+  | "supplierName";
+
+const IMPORT_FIELDS: Array<{ key: ImportFieldKey; label: string; required?: boolean }> = [
+  { key: "sku", label: "SKU", required: true },
+  { key: "name", label: "Product Name", required: true },
+  { key: "description", label: "Description" },
+  { key: "category", label: "Category" },
+  { key: "unit", label: "Unit" },
+  { key: "salePrice", label: "Sale Price" },
+  { key: "costPrice", label: "Cost Price" },
+  { key: "onHand", label: "On Hand" },
+  { key: "reorderLevel", label: "Reorder Level" },
+  { key: "width", label: "Width" },
+  { key: "height", label: "Height" },
+  { key: "color", label: "Color" },
+  { key: "warehouseName", label: "Warehouse Name" },
+  { key: "supplierName", label: "Supplier Name" },
+];
+
+function guessImportMapping(columns: string[]) {
+  const normalizedEntries = columns.map((column) => ({
+    raw: column,
+    key: String(column).trim().toLowerCase().replace(/[\s_()-]+/g, ""),
+  }));
+  const aliases: Record<ImportFieldKey, string[]> = {
+    sku: ["sku", "productsku", "variantsku", "itemsku"],
+    name: ["name", "productname", "title"],
+    description: ["description", "desc", "defaultdescription"],
+    category: ["category", "productcategory"],
+    unit: ["unit", "uom", "sellingunit"],
+    salePrice: ["saleprice", "price", "unitprice"],
+    costPrice: ["costprice", "cost", "unitcost"],
+    onHand: ["onhand", "stock", "openingstock", "qty", "quantity"],
+    reorderLevel: ["reorderlevel", "minstock", "reorder"],
+    width: ["width", "w"],
+    height: ["height", "h"],
+    color: ["color", "colour"],
+    warehouseName: ["warehouse", "warehousename"],
+    supplierName: ["supplier", "suppliername"],
+  };
+  const mapping = {} as Record<ImportFieldKey, string>;
+  for (const field of IMPORT_FIELDS) {
+    const targetAliases = aliases[field.key];
+    const hit = normalizedEntries.find((entry) => targetAliases.includes(entry.key));
+    if (hit) mapping[field.key] = hit.raw;
+  }
+  return mapping;
+}
 
 const FILTERS: { label: string; value: FilterCategory }[] = [
   { label: "All", value: "ALL" },
@@ -132,6 +230,17 @@ const FILTERS: { label: string; value: FilterCategory }[] = [
   { label: "Doors", value: "DOOR" },
   { label: "Warehouse Supplies", value: "WAREHOUSE_SUPPLY" },
 ];
+const BULK_CATEGORY_OPTIONS = [
+  "Flooring",
+  "Floor Accessories",
+  "LED Mirror",
+  "Mirror",
+  "Tile Finish Edge",
+  "Bathroom Shower Glass Door",
+  "Windows",
+  "Shampoo Niche",
+  "Other",
+] as const;
 const ADD_NEW_CATEGORY_VALUE = "__ADD_NEW_CATEGORY__";
 const TEMPLATE_FIELD_META: Record<
   string,
@@ -201,6 +310,14 @@ function normalizeNullableString(value: unknown): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+function extractValidationWarnings(payload: any): string[] {
+  const warningsRaw = payload?.meta?.validationWarnings;
+  if (!Array.isArray(warningsRaw)) return [];
+  return warningsRaw
+    .map((value) => String(value ?? "").trim())
+    .filter((value) => value.length > 0);
+}
+
 const SKU_PREFIX_OPTIONS = ["VWW", "DOR", "FLR", "MIR", "WHS"] as const;
 const CUSTOM_SKU_PREFIX_VALUE = "__CUSTOM__";
 
@@ -224,10 +341,35 @@ const initialNewProductForm = {
   sizeH: "",
   thicknessMm: "",
   glass: "",
-  glassTypeDefault: "TEMPERED_LOW_E_5MM",
-  glassFinishDefault: "CLEAR",
-  screenDefault: "",
+  frameMaterialDefault: "",
   openingTypeDefault: "",
+  slidingConfigDefault: "",
+  glassTypeDefault: "",
+  glassCoatingDefault: "",
+  glassThicknessMmDefault: "",
+  glassFinishDefault: "",
+  screenDefault: "",
+  flooringBrand: "",
+  flooringSeries: "",
+  flooringMaterial: "LVP",
+  flooringWearLayer: "",
+  flooringThicknessMm: "",
+  flooringPlankLengthIn: "",
+  flooringPlankWidthIn: "",
+  flooringCoreThicknessMm: "",
+  flooringFinish: "",
+  flooringEdge: "",
+  flooringInstallation: "",
+  flooringUnderlayment: "",
+  flooringUnderlaymentType: "",
+  flooringUnderlaymentMm: "",
+  flooringWaterproof: "",
+  flooringWaterResistance: "",
+  flooringWarrantyResidentialYr: "",
+  flooringWarrantyCommercialYr: "",
+  flooringPiecesPerBox: "",
+  flooringBoxCoverageSqft: "",
+  flooringLowStockThreshold: "",
   rating: "",
   swing: "",
   handing: "",
@@ -249,9 +391,61 @@ const initialNewProductForm = {
   warehouseId: "",
 };
 
+const TEMPLATE_SPEC_KEYS = [
+  "frameMaterialDefault",
+  "openingTypeDefault",
+  "slidingConfigDefault",
+  "glassTypeDefault",
+  "glassCoatingDefault",
+  "glassThicknessMmDefault",
+  "glassFinishDefault",
+  "screenDefault",
+  "flooringBrand",
+  "flooringSeries",
+  "flooringMaterial",
+  "flooringWearLayer",
+  "flooringThicknessMm",
+  "flooringPlankLengthIn",
+  "flooringPlankWidthIn",
+  "flooringCoreThicknessMm",
+  "flooringFinish",
+  "flooringEdge",
+  "flooringInstallation",
+  "flooringUnderlayment",
+  "flooringUnderlaymentType",
+  "flooringUnderlaymentMm",
+  "flooringWaterproof",
+  "flooringWaterResistance",
+  "flooringWarrantyResidentialYr",
+  "flooringWarrantyCommercialYr",
+  "flooringPiecesPerBox",
+  "flooringBoxCoverageSqft",
+  "flooringLowStockThreshold",
+] as const;
+
+function hasTemplateSpecData(form: typeof initialNewProductForm) {
+  return TEMPLATE_SPEC_KEYS.some((key) => String(form[key] ?? "").trim().length > 0);
+}
+
+function clearTemplateSpecFields(form: typeof initialNewProductForm) {
+  const next = { ...form };
+  for (const key of TEMPLATE_SPEC_KEYS) {
+    next[key] = "";
+  }
+  return next;
+}
+
+function getTemplateKind(category: string) {
+  if (category === "WINDOW") return "WINDOW";
+  if (category === "FLOOR") return "FLOOR";
+  return null;
+}
+
 type NewVariantDraft = {
   id: string;
   variantId?: string;
+  displayName: string;
+  skuSuffix: string;
   width: string;
   height: string;
   color: string;
@@ -259,12 +453,16 @@ type NewVariantDraft = {
   salePrice: string;
   cost: string;
   openingStock: string;
+  reorderLevel: string;
+  reservedBoxes: number;
 };
 
 let newVariantDraftCounter = 0;
 
 const createEmptyVariantDraft = (): NewVariantDraft => ({
   id: `variant-draft-${++newVariantDraftCounter}`,
+  displayName: "",
+  skuSuffix: "",
   width: "",
   height: "",
   color: "",
@@ -272,15 +470,40 @@ const createEmptyVariantDraft = (): NewVariantDraft => ({
   salePrice: "",
   cost: "",
   openingStock: "0",
+  reorderLevel: "0",
+  reservedBoxes: 0,
 });
 
-export default function ProductsPage() {
+function getStockAlertState(available: number, reorderLevel: number) {
+  if (reorderLevel <= 0) return null;
+  if (available <= reorderLevel) return "LOW" as const;
+  if (available <= Math.ceil(reorderLevel * 1.5)) return "WARNING" as const;
+  return null;
+}
+
+function formatStockByProductUnit(value: number, unit: string | null | undefined) {
+  const rawUnit = UNIT_LABEL_MAP[String(unit ?? "").toUpperCase()] ?? unit;
+  return formatQuantityWithUnit(value, rawUnit);
+}
+
+function ProductsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { role } = useRole();
   const queryClient = useQueryClient();
   const [category, setCategory] = useState<FilterCategory>("ALL");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+  const [openImportDialog, setOpenImportDialog] = useState(false);
+  const [importFileName, setImportFileName] = useState("");
+  const [importParsing, setImportParsing] = useState(false);
+  const [importSubmitting, setImportSubmitting] = useState(false);
+  const [importColumns, setImportColumns] = useState<string[]>([]);
+  const [importRowsRaw, setImportRowsRaw] = useState<Array<Record<string, unknown>>>([]);
+  const [importMapping, setImportMapping] = useState<Partial<Record<ImportFieldKey, string>>>({});
+  const [importErrors, setImportErrors] = useState<Array<{ row: number; sku: string; error: string }>>([]);
+  const [importWarnings, setImportWarnings] = useState<Array<{ row: number; sku: string; warning: string }>>([]);
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const [openNewDialog, setOpenNewDialog] = useState(false);
@@ -289,6 +512,8 @@ export default function ProductsPage() {
   const [newProductVariants, setNewProductVariants] = useState<NewVariantDraft[]>([
     createEmptyVariantDraft(),
   ]);
+  const [removedVariantIds, setRemovedVariantIds] = useState<string[]>([]);
+  const [seriesSpecErrors, setSeriesSpecErrors] = useState<Record<string, string>>({});
   const [submittingNew, setSubmittingNew] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [skuPrefixCustomMode, setSkuPrefixCustomMode] = useState(false);
@@ -313,6 +538,7 @@ export default function ProductsPage() {
   const [groupFilter, setGroupFilter] = useState<string>("ALL");
   const [customCategoryFilter, setCustomCategoryFilter] = useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
+  const [openAdvancedFilters, setOpenAdvancedFilters] = useState(false);
   const [openColumnMenu, setOpenColumnMenu] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [showOptionalColumns, setShowOptionalColumns] = useState({
@@ -325,22 +551,98 @@ export default function ProductsPage() {
     gallery: false,
   });
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
-  const [bulkGroupId, setBulkGroupId] = useState<string>("UNASSIGNED");
+  const [bulkCategory, setBulkCategory] = useState<string>("Other");
   const [submittingBulkGroup, setSubmittingBulkGroup] = useState(false);
 
   const [uploadingImageId, setUploadingImageId] = useState<string | null>(null);
+  const variantsScrollRef = useRef<HTMLDivElement | null>(null);
+  const [showVariantsScrollHint, setShowVariantsScrollHint] = useState(false);
+  const [pendingCategoryChange, setPendingCategoryChange] = useState<{
+    category: string;
+    categoryId: string;
+    customCategoryName: string;
+    showNewCategoryInput: boolean;
+    resetNewCategoryDraft: boolean;
+  } | null>(null);
+  const lowStockOnly =
+    searchParams?.get("lowStockOnly") === "true" || searchParams?.get("filter") === "low";
+
+  const setLowStockFilter = (mode: "all" | "low") => {
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    if (mode === "low") {
+      params.set("lowStockOnly", "true");
+      params.set("filter", "low");
+    } else {
+      params.delete("lowStockOnly");
+      params.delete("filter");
+    }
+    const query = params.toString();
+    router.push(query ? `/products?${query}` : "/products");
+  };
+
+  useEffect(() => {
+    const raw = String(searchParams?.get("category") ?? "")
+      .trim()
+      .toUpperCase();
+    if (!raw) return;
+    const allowed = new Set(FILTERS.map((item) => item.value));
+    if (allowed.has(raw as FilterCategory)) {
+      setCategory(raw as FilterCategory);
+    }
+  }, [searchParams]);
+
+  const clearCategoryFilterParam = () => {
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.delete("category");
+    const query = params.toString();
+    setCategory("ALL");
+    router.push(query ? `/products?${query}` : "/products");
+  };
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const saved = window.localStorage.getItem("products:advanced-filters-open");
+    if (saved === "1") setOpenAdvancedFilters(true);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem("products:advanced-filters-open", openAdvancedFilters ? "1" : "0");
+  }, [openAdvancedFilters]);
+
+  useEffect(() => {
+    const container = variantsScrollRef.current;
+    if (!openNewDialog || addProductTab !== "VARIANTS" || !container) {
+      setShowVariantsScrollHint(false);
+      return;
+    }
+    const updateScrollHint = () => {
+      const canScrollX = container.scrollWidth - container.clientWidth > 8;
+      const atStart = container.scrollLeft <= 4;
+      setShowVariantsScrollHint(canScrollX && atStart);
+    };
+    updateScrollHint();
+    container.addEventListener("scroll", updateScrollHint, { passive: true });
+    window.addEventListener("resize", updateScrollHint);
+    return () => {
+      container.removeEventListener("scroll", updateScrollHint);
+      window.removeEventListener("resize", updateScrollHint);
+    };
+  }, [openNewDialog, addProductTab, newProductVariants.length]);
+
   const productsQuery = useQuery({
-    queryKey: ["products", role, category, groupFilter, customCategoryFilter],
+    queryKey: ["products", role, category, groupFilter, customCategoryFilter, lowStockOnly],
+    placeholderData: (previousData) => previousData,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (category !== "ALL") params.set("category", category);
       if (groupFilter !== "ALL") params.set("groupId", groupFilter);
       if (customCategoryFilter !== "ALL") params.set("customCategoryName", customCategoryFilter);
+      if (lowStockOnly) params.set("lowStockOnly", "true");
       const query = params.toString() ? `?${params.toString()}` : "";
       const res = await fetch(`/api/products${query}`, {
         cache: "no-store",
@@ -437,6 +739,22 @@ export default function ProductsPage() {
   });
 
   const displayRows = useMemo(() => productsQuery.data?.data ?? [], [productsQuery.data]);
+  const importRequiredMapped = useMemo(
+    () => IMPORT_FIELDS.filter((field) => field.required).every((field) => Boolean(importMapping[field.key])),
+    [importMapping],
+  );
+  const importMappedRows = useMemo(() => {
+    if (importRowsRaw.length === 0) return [];
+    return importRowsRaw.map((row) => {
+      const mapped = {} as Record<ImportFieldKey, unknown>;
+      for (const field of IMPORT_FIELDS) {
+        const column = importMapping[field.key];
+        mapped[field.key] = column ? row[column] : "";
+      }
+      return mapped;
+    });
+  }, [importMapping, importRowsRaw]);
+  const importPreviewRows = useMemo(() => importMappedRows.slice(0, 20), [importMappedRows]);
   const selectedTemplate = useMemo(
     () =>
       (templatesQuery.data ?? []).find(
@@ -460,10 +778,14 @@ export default function ProductsPage() {
       size_h: newProductForm.sizeH,
       thickness_mm: newProductForm.thicknessMm,
       glass: newProductForm.glass,
-      glassTypeDefault: newProductForm.glassTypeDefault,
-      glassFinishDefault: newProductForm.glassFinishDefault,
-      screenDefault: newProductForm.screenDefault,
-      openingTypeDefault: newProductForm.openingTypeDefault,
+      frame_material_default: newProductForm.frameMaterialDefault,
+      opening_type_default: newProductForm.openingTypeDefault,
+      sliding_config_default: newProductForm.slidingConfigDefault,
+      glass_type_default: newProductForm.glassTypeDefault,
+      glass_coating_default: newProductForm.glassCoatingDefault,
+      glass_thickness_mm_default: newProductForm.glassThicknessMmDefault,
+      glass_finish_default: newProductForm.glassFinishDefault,
+      screen_default: newProductForm.screenDefault,
       rating: newProductForm.rating,
       swing: newProductForm.swing,
       handing: newProductForm.handing,
@@ -487,8 +809,34 @@ export default function ProductsPage() {
     return normalizeSkuValue(raw);
   }, [newProductForm.skuPrefix, newProductForm.sizeW, newProductForm.sizeH, selectedTemplate, templateDataPreview]);
   const variantSkuOverrideValue = normalizeNullableString(newProductForm.variantSku);
+  const primaryVariant = newProductVariants[0];
+  const primaryVariantAutoSkuPreview = useMemo(() => {
+    if (!primaryVariant) return "";
+    if (newProductForm.category === "FLOOR") {
+      const prefix = normalizeSkuValue(newProductForm.skuPrefix);
+      const suffix = normalizeSkuValue(primaryVariant.skuSuffix);
+      return prefix && suffix ? `${prefix}${suffix}` : "";
+    }
+    return (
+      normalizeSkuValue(primaryVariant.sku) ||
+      buildVariantSkuPreview(
+        normalizeSkuValue(newProductForm.skuPrefix),
+        primaryVariant.width,
+        primaryVariant.height,
+        primaryVariant.color,
+        newProductForm.glassFinishDefault,
+      ) ||
+      autoSkuPreview
+    );
+  }, [
+    primaryVariant,
+    newProductForm.category,
+    newProductForm.skuPrefix,
+    newProductForm.glassFinishDefault,
+    autoSkuPreview,
+  ]);
   const hasVariantSkuOverride = Boolean(variantSkuOverrideValue);
-  const effectiveSkuValue = normalizeSkuValue((variantSkuOverrideValue ?? autoSkuPreview) || "");
+  const effectiveSkuValue = normalizeSkuValue((variantSkuOverrideValue ?? primaryVariantAutoSkuPreview) || "");
   const skuPrefixSelectValue = useMemo(() => {
     const value = normalizeSkuValue(newProductForm.skuPrefix);
     if (!value) return "";
@@ -523,10 +871,95 @@ export default function ProductsPage() {
       : newProductForm.category;
   const optionalColumnCount = Object.values(showOptionalColumns).filter(Boolean).length;
   const isWindowCategory = newProductForm.category === "WINDOW";
-  const isSlidingOpeningType =
-    String(newProductForm.openingTypeDefault ?? newProductForm.swing ?? "")
-      .trim()
-      .toUpperCase() === "SLIDING";
+
+  useEffect(() => {
+    const variantName = newProductForm.name.trim();
+    if (!variantName) return;
+    const currentDisplayName = newProductVariants[0]?.displayName?.trim() ?? "";
+    if (currentDisplayName) return;
+    setNewProductVariants((prev) => {
+      if (prev.length === 0) return prev;
+      const next = [...prev];
+      next[0] = { ...next[0], displayName: variantName };
+      return next;
+    });
+  }, [newProductForm.name, newProductVariants]);
+  const applyCategoryChange = (next: {
+    category: string;
+    categoryId: string;
+    customCategoryName: string;
+    showNewCategoryInput: boolean;
+    resetNewCategoryDraft: boolean;
+  }, resetTemplateFields: boolean) => {
+    setShowNewCategoryInput(next.showNewCategoryInput);
+    if (next.resetNewCategoryDraft) setNewCategoryDraft("");
+    setNewProductForm((prev) => {
+      const updatedBase = {
+        ...prev,
+        category: next.category,
+        categoryId: next.categoryId,
+        customCategoryName: next.customCategoryName,
+        flooringMaterial:
+          next.category === "FLOOR" && !String(prev.flooringMaterial ?? "").trim()
+            ? "LVP"
+            : prev.flooringMaterial,
+      };
+      if (!resetTemplateFields) return updatedBase;
+      const cleared = clearTemplateSpecFields(updatedBase);
+      if (next.category === "FLOOR") {
+        return { ...cleared, flooringMaterial: "LVP" };
+      }
+      return cleared;
+    });
+  };
+  const handleCategorySelectChange = (value: string) => {
+    let next = {
+      category: newProductForm.category,
+      categoryId: newProductForm.categoryId ?? "",
+      customCategoryName: newProductForm.customCategoryName ?? "",
+      showNewCategoryInput: false,
+      resetNewCategoryDraft: false,
+    };
+
+    if (value === ADD_NEW_CATEGORY_VALUE) {
+      next = {
+        category: "OTHER",
+        categoryId: "",
+        customCategoryName: "",
+        showNewCategoryInput: true,
+        resetNewCategoryDraft: true,
+      };
+    } else if (value.startsWith("CUSTOM:")) {
+      const customName = value.slice("CUSTOM:".length).trim();
+      next = {
+        category: "OTHER",
+        categoryId: "",
+        customCategoryName: customName,
+        showNewCategoryInput: false,
+        resetNewCategoryDraft: false,
+      };
+    } else {
+      const tpl = (templatesQuery.data ?? []).find((item) => item.categoryKey === value);
+      next = {
+        category: value,
+        categoryId: tpl?.id ?? "",
+        customCategoryName: "",
+        showNewCategoryInput: false,
+        resetNewCategoryDraft: false,
+      };
+    }
+
+    const currentKind = getTemplateKind(newProductForm.category);
+    const nextKind = getTemplateKind(next.category);
+    const isSwitchingCategory = next.category !== newProductForm.category;
+
+    if (isSwitchingCategory && hasTemplateSpecData(newProductForm) && currentKind !== nextKind) {
+      setPendingCategoryChange(next);
+      return;
+    }
+
+    applyCategoryChange(next, false);
+  };
   const filteredRows = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     if (!q) return displayRows;
@@ -555,8 +988,11 @@ export default function ProductsPage() {
     setNewProductVariants((prev) => {
       const target = prev.find((item) => item.id === variantId);
       if (target?.variantId) {
-        setError("Existing variants cannot be deleted in Edit mode. Set stock to 0 if needed.");
-        return prev;
+        setRemovedVariantIds((current) =>
+          current.includes(target.variantId as string)
+            ? current
+            : [...current, target.variantId as string],
+        );
       }
       const next = prev.filter((item) => item.id !== variantId);
       return next.length > 0 ? next : [createEmptyVariantDraft()];
@@ -589,10 +1025,80 @@ export default function ProductsPage() {
       setError("Product name and warehouse are required.");
       return;
     }
+    if (!newProductVariants[0]?.displayName?.trim()) {
+      setError("Display Name is required.");
+      return;
+    }
+    if (newProductForm.category === "WINDOW") {
+      const nextSpecErrors: Record<string, string> = {};
+      if (!newProductForm.openingTypeDefault.trim()) {
+        nextSpecErrors.openingTypeDefault = "Opening Type is required for Window.";
+      }
+      if (!newProductForm.glassTypeDefault.trim()) {
+        nextSpecErrors.glassTypeDefault = "Glass Type is required for Window.";
+      }
+      const thicknessValue = Number(newProductForm.glassThicknessMmDefault);
+      if (!newProductForm.glassThicknessMmDefault.trim() || !Number.isFinite(thicknessValue) || thicknessValue <= 0) {
+        nextSpecErrors.glassThicknessMmDefault = "Glass Thickness (mm) must be a positive number.";
+      }
+      if (!newProductForm.screenDefault.trim()) {
+        nextSpecErrors.screenDefault = "Screen is required for Window.";
+      }
+      setSeriesSpecErrors(nextSpecErrors);
+      if (Object.keys(nextSpecErrors).length > 0) {
+        setError("Please complete required Series Specifications defaults.");
+        return;
+      }
+    } else if (newProductForm.category === "FLOOR") {
+      const nextSpecErrors: Record<string, string> = {};
+      const requiredPositiveDecimal = (
+        key:
+          | "flooringPlankLengthIn"
+          | "flooringPlankWidthIn"
+          | "flooringThicknessMm"
+          | "flooringCoreThicknessMm"
+          | "flooringUnderlaymentMm"
+          | "flooringBoxCoverageSqft",
+        label: string,
+      ) => {
+        const raw = String(newProductForm[key] ?? "").trim();
+        const value = Number(raw);
+        if (!raw || !Number.isFinite(value) || value <= 0) {
+          nextSpecErrors[key] = `${label} must be a positive number.`;
+        }
+      };
+      if (!newProductForm.flooringMaterial.trim()) {
+        nextSpecErrors.flooringMaterial = "Type is required for Flooring.";
+      }
+      if (!newProductForm.flooringWearLayer.trim()) {
+        nextSpecErrors.flooringWearLayer = "Wear Layer is required for Flooring.";
+      }
+      if (!newProductForm.flooringUnderlaymentType.trim()) {
+        nextSpecErrors.flooringUnderlaymentType = "Underlayment Type is required for Flooring.";
+      }
+      requiredPositiveDecimal("flooringPlankLengthIn", "Plank Length (in)");
+      requiredPositiveDecimal("flooringPlankWidthIn", "Plank Width (in)");
+      requiredPositiveDecimal("flooringThicknessMm", "Total Thickness (mm)");
+      requiredPositiveDecimal("flooringCoreThicknessMm", "Core Thickness (mm)");
+      requiredPositiveDecimal("flooringUnderlaymentMm", "Underlayment Thickness (mm)");
+      requiredPositiveDecimal("flooringBoxCoverageSqft", "Sqft Per Box");
+      setSeriesSpecErrors(nextSpecErrors);
+      if (Object.keys(nextSpecErrors).length > 0) {
+        setError("Please complete required Flooring series defaults.");
+        return;
+      }
+    } else {
+      setSeriesSpecErrors({});
+    }
     const isSizeColorDriven = newProductForm.category === "WINDOW";
+    const isFlooringVariantMode = newProductForm.category === "FLOOR";
     const normalizedSkuPrefix = normalizeSkuValue(newProductForm.skuPrefix);
-    if (isSizeColorDriven && !normalizedSkuPrefix) {
-      setError("SKU Prefix is required for Window products.");
+    if ((isSizeColorDriven || isFlooringVariantMode) && !normalizedSkuPrefix) {
+      setError(
+        isFlooringVariantMode
+          ? "SKU Prefix is required for Flooring products."
+          : "SKU Prefix is required for Window products.",
+      );
       return;
     }
     const normalizedVariants = newProductVariants.map((item) => {
@@ -603,10 +1109,14 @@ export default function ProductsPage() {
         item.color,
         newProductForm.glassFinishDefault,
       );
+      const normalizedSuffix = normalizeSkuValue(item.skuSuffix);
+      const flooringSku = normalizedSkuPrefix && normalizedSuffix ? `${normalizedSkuPrefix}${normalizedSuffix}` : "";
       const rawSku = normalizeSkuValue(item.sku);
-      const finalSku = rawSku || skuPreview;
+      const finalSku = isFlooringVariantMode ? flooringSku || rawSku : rawSku || skuPreview;
       return {
         ...item,
+        displayName: item.displayName.trim(),
+        skuSuffix: normalizedSuffix,
         width: item.width.trim(),
         height: item.height.trim(),
         color: item.color.trim(),
@@ -620,6 +1130,11 @@ export default function ProductsPage() {
     const hasInvalid = normalizedVariants.some((item) => {
       if (!item.sku) return true;
       if (item.sku.includes("-")) return true;
+      if (isFlooringVariantMode) {
+        if (!item.displayName) return true;
+        const hasExistingSku = Boolean(item.variantId && item.sku);
+        if (!item.skuSuffix && !hasExistingSku) return true;
+      }
       if (isSizeColorDriven) {
         if (!item.width || !item.height) return true;
         if (!item.color) return true;
@@ -642,6 +1157,20 @@ export default function ProductsPage() {
       );
     });
     if (hasInvalid) {
+      if (isFlooringVariantMode && normalizedVariants.some((item) => !item.displayName)) {
+        setError("Display Name is required for Flooring variants.");
+        return;
+      }
+      if (
+        isFlooringVariantMode &&
+        normalizedVariants.some((item) => {
+          const hasExistingSku = Boolean(item.variantId && item.sku);
+          return !item.skuSuffix && !hasExistingSku;
+        })
+      ) {
+        setError("SKU Suffix is required for Flooring variants.");
+        return;
+      }
       if (isSizeColorDriven && normalizedVariants.some((item) => !item.width || !item.height)) {
         setError("Size is required.");
         return;
@@ -683,6 +1212,7 @@ export default function ProductsPage() {
     setSubmittingNew(true);
     setError(null);
     setNotice(null);
+    setValidationWarnings([]);
     try {
       const primaryVariant = newProductVariants[0];
       const nextCostPrice = primaryVariant?.cost?.trim() ? primaryVariant.cost : newProductForm.costPrice;
@@ -697,28 +1227,37 @@ export default function ProductsPage() {
           categoryId: isEdit ? newProductForm.categoryId : "",
           variantSku: variantSkuOverrideValue,
           skuOverride: null,
+          removedVariantIds,
           variants: newProductVariants.map((item) => ({
             id: item.variantId || undefined,
+            displayName: item.displayName?.trim() || null,
+            skuSuffix: normalizeSkuValue(item.skuSuffix),
             sku:
-              normalizeSkuValue(item.sku) ||
-              buildVariantSkuPreview(
-                normalizedSkuPrefix,
-                item.width,
-                item.height,
-                item.color,
-                newProductForm.glassFinishDefault,
-              ),
+              isFlooringVariantMode
+                ? normalizeSkuValue(item.sku) ||
+                  `${normalizedSkuPrefix}${normalizeSkuValue(item.skuSuffix)}`
+                : normalizeSkuValue(item.sku) ||
+                  buildVariantSkuPreview(
+                    normalizedSkuPrefix,
+                    item.width,
+                    item.height,
+                    item.color,
+                    newProductForm.glassFinishDefault,
+                  ),
             width: Number(item.width || 0),
             height: Number(item.height || 0),
             color: item.color?.trim() || null,
             salePrice: Number(item.salePrice || 0),
             cost: Number(item.cost || 0),
             openingStock: Number(item.openingStock || 0),
+            reorderLevel: Number(item.reorderLevel || 0),
           })),
         }),
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? (isEdit ? "Failed to update product" : "Failed to add product"));
+      const warnings = extractValidationWarnings(payload);
+      setValidationWarnings(warnings);
 
       setOpenNewDialog(false);
       setSkuPrefixCustomMode(false);
@@ -727,6 +1266,7 @@ export default function ProductsPage() {
       setEditingProductId(null);
       setAddProductTab("GENERAL");
       setNewProductVariants([createEmptyVariantDraft()]);
+      setRemovedVariantIds([]);
       setNewProductForm((prev) => ({
         ...initialNewProductForm,
         warehouseId: prev.warehouseId || warehousesQuery.data?.[0]?.id || "",
@@ -764,11 +1304,20 @@ export default function ProductsPage() {
   const startEditProduct = (product: Product) => {
     setEditingProductId(product.id);
     setAddProductTab("GENERAL");
+    setRemovedVariantIds([]);
     setNewProductVariants(
       (product.variants ?? []).length > 0
         ? (product.variants ?? []).map((variant) => ({
             id: `variant-${variant.id}`,
             variantId: variant.id,
+            displayName: variant.displayName ?? variant.description ?? "",
+            skuSuffix:
+              variant.skuSuffix ??
+              (product.category === "FLOOR" &&
+              product.skuPrefix &&
+              String(variant.sku ?? "").toUpperCase().startsWith(normalizeSkuValue(product.skuPrefix))
+                ? String(variant.sku ?? "").slice(normalizeSkuValue(product.skuPrefix).length)
+                : ""),
             width: variant.width != null ? String(variant.width) : "",
             height: variant.height != null ? String(variant.height) : "",
             color: variant.color ?? "",
@@ -776,12 +1325,15 @@ export default function ProductsPage() {
             salePrice: variant.price != null ? String(variant.price) : product.salePrice ?? "",
             cost: variant.cost != null ? String(variant.cost) : product.costPrice ?? "",
             openingStock: String(variant.onHand ?? 0),
+            reorderLevel: String(variant.reorderLevel ?? 0),
+            reservedBoxes: Number(variant.reserved ?? 0),
           }))
         : [createEmptyVariantDraft()],
     );
     setSkuPrefixCustomMode(
       Boolean(product.skuPrefix && !SKU_PREFIX_OPTIONS.includes(normalizeSkuValue(product.skuPrefix) as (typeof SKU_PREFIX_OPTIONS)[number])),
     );
+    setSeriesSpecErrors({});
     setShowNewCategoryInput(false);
     setNewCategoryDraft("");
     setNewProductForm({
@@ -804,10 +1356,46 @@ export default function ProductsPage() {
       sizeH: product.sizeH ? String(product.sizeH) : "",
       thicknessMm: product.thicknessMm ? String(product.thicknessMm) : "",
       glass: product.glass ?? "",
-      glassTypeDefault: product.glassTypeDefault ?? "TEMPERED_LOW_E_5MM",
-      glassFinishDefault: product.glassFinishDefault ?? "CLEAR",
-      screenDefault: product.screenDefault ?? "",
+      frameMaterialDefault: product.frameMaterialDefault ?? "",
       openingTypeDefault: product.openingTypeDefault ?? "",
+      slidingConfigDefault: product.slidingConfigDefault ?? "",
+      glassTypeDefault: product.glassTypeDefault ?? "",
+      glassCoatingDefault: product.glassCoatingDefault ?? "",
+      glassThicknessMmDefault:
+        product.glassThicknessMmDefault != null ? String(product.glassThicknessMmDefault) : "",
+      glassFinishDefault: product.glassFinishDefault ?? "",
+      screenDefault: product.screenDefault ?? "",
+      flooringBrand: product.flooringBrand ?? "",
+      flooringSeries: product.flooringSeries ?? "",
+      flooringMaterial: product.flooringMaterial ?? "",
+      flooringWearLayer: product.flooringWearLayer ?? "",
+      flooringThicknessMm: product.flooringThicknessMm != null ? String(product.flooringThicknessMm) : "",
+      flooringPlankLengthIn:
+        product.flooringPlankLengthIn != null ? String(product.flooringPlankLengthIn) : "",
+      flooringPlankWidthIn:
+        product.flooringPlankWidthIn != null ? String(product.flooringPlankWidthIn) : "",
+      flooringCoreThicknessMm:
+        product.flooringCoreThicknessMm != null ? String(product.flooringCoreThicknessMm) : "",
+      flooringFinish: product.flooringFinish ?? "",
+      flooringEdge: product.flooringEdge ?? "",
+      flooringInstallation: product.flooringInstallation ?? "",
+      flooringUnderlayment: product.flooringUnderlayment ?? "",
+      flooringUnderlaymentType: product.flooringUnderlaymentType ?? "",
+      flooringUnderlaymentMm:
+        product.flooringUnderlaymentMm != null ? String(product.flooringUnderlaymentMm) : "",
+      flooringWaterproof:
+        product.flooringWaterproof === true ? "true" : product.flooringWaterproof === false ? "false" : "",
+      flooringWaterResistance: product.flooringWaterResistance ?? "",
+      flooringWarrantyResidentialYr:
+        product.flooringWarrantyResidentialYr != null ? String(product.flooringWarrantyResidentialYr) : "",
+      flooringWarrantyCommercialYr:
+        product.flooringWarrantyCommercialYr != null ? String(product.flooringWarrantyCommercialYr) : "",
+      flooringPiecesPerBox:
+        product.flooringPiecesPerBox != null ? String(product.flooringPiecesPerBox) : "",
+      flooringBoxCoverageSqft:
+        product.flooringBoxCoverageSqft != null ? String(product.flooringBoxCoverageSqft) : "",
+      flooringLowStockThreshold:
+        product.flooringLowStockThreshold != null ? String(product.flooringLowStockThreshold) : "",
       rating: product.rating ?? "",
       swing: product.swing ?? "",
       handing: product.handing ?? "",
@@ -852,6 +1440,102 @@ export default function ProductsPage() {
       setError(err instanceof Error ? err.message : "Failed to batch generate SKU");
     } finally {
       setSubmittingBatchSku(false);
+    }
+  };
+
+  const resetImportState = () => {
+    setImportFileName("");
+    setImportColumns([]);
+    setImportRowsRaw([]);
+    setImportMapping({});
+    setImportErrors([]);
+    setImportWarnings([]);
+  };
+
+  const onImportFileChange = async (file: File | null) => {
+    if (!file) return;
+    setImportParsing(true);
+    setError(null);
+    setImportErrors([]);
+    setImportWarnings([]);
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const firstSheet = workbook.SheetNames[0];
+      if (!firstSheet) throw new Error("File has no sheet.");
+      const sheet = workbook.Sheets[firstSheet];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+        defval: "",
+        raw: false,
+      });
+      if (rows.length === 0) throw new Error("No data rows found in file.");
+      const columnSet = new Set<string>();
+      for (const row of rows) {
+        Object.keys(row).forEach((key) => columnSet.add(key));
+      }
+      const columns = Array.from(columnSet);
+      setImportFileName(file.name);
+      setImportRowsRaw(rows);
+      setImportColumns(columns);
+      setImportMapping(guessImportMapping(columns));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to parse import file.");
+    } finally {
+      setImportParsing(false);
+    }
+  };
+
+  const submitImport = async () => {
+    if (!importRequiredMapped) {
+      setError("Please map all required fields (SKU and Product Name).");
+      return;
+    }
+    if (importMappedRows.length === 0) {
+      setError("No import rows to submit.");
+      return;
+    }
+    setImportSubmitting(true);
+    setError(null);
+    setNotice(null);
+    setValidationWarnings([]);
+    setImportErrors([]);
+    setImportWarnings([]);
+    try {
+      const payloadRows = importMappedRows.map((row) => ({
+        sku: String(row.sku ?? "").trim(),
+        name: String(row.name ?? "").trim(),
+        description: String(row.description ?? "").trim(),
+        category: String(row.category ?? "").trim(),
+        unit: String(row.unit ?? "").trim(),
+        salePrice: row.salePrice,
+        costPrice: row.costPrice,
+        onHand: row.onHand,
+        reorderLevel: row.reorderLevel,
+        width: row.width,
+        height: row.height,
+        color: String(row.color ?? "").trim(),
+        warehouseName: String(row.warehouseName ?? "").trim(),
+        supplierName: String(row.supplierName ?? "").trim(),
+      }));
+      const res = await fetch("/api/products/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-role": role },
+        body: JSON.stringify({ rows: payloadRows }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to import products.");
+      const summary = payload?.data?.summary ?? {};
+      setImportErrors(payload?.data?.errors ?? []);
+      setImportWarnings(payload?.data?.warnings ?? []);
+      setNotice(
+        `Import done: total ${summary.totalRows ?? 0}, created ${summary.createdCount ?? 0}, updated ${summary.updatedCount ?? 0}, failed ${summary.failedCount ?? 0}.`,
+      );
+      setValidationWarnings((payload?.data?.warnings ?? []).slice(0, 6).map((row: any) => `Row ${row.row}: ${row.warning}`));
+      await queryClient.invalidateQueries({ queryKey: ["products"] });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to import products.");
+    } finally {
+      setImportSubmitting(false);
     }
   };
 
@@ -1059,29 +1743,32 @@ export default function ProductsPage() {
     );
   };
 
-  const bulkAssignGroup = async () => {
+  const bulkAssignCategory = async () => {
     if (selectedProductIds.length === 0) {
-      setError("Please select at least one product for bulk assign.");
+      setError("Please select at least one product for bulk update.");
       return;
     }
     setSubmittingBulkGroup(true);
     setError(null);
+    setNotice(null);
     try {
-      const res = await fetch("/api/products/bulk-group", {
+      const res = await fetch("/api/products/bulk-category", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-user-role": role },
         body: JSON.stringify({
           productIds: selectedProductIds,
-          groupId: bulkGroupId === "UNASSIGNED" ? null : bulkGroupId,
+          categoryName: bulkCategory,
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to bulk assign group");
+      if (!res.ok) throw new Error(payload.error ?? "Failed to bulk update category");
       setSelectedProductIds([]);
+      const updatedCount = Number(payload?.data?.updatedCount ?? 0);
+      setNotice(`${updatedCount} products updated to ${bulkCategory}`);
       await queryClient.invalidateQueries({ queryKey: ["products"] });
-      await queryClient.invalidateQueries({ queryKey: ["inventory-groups"] });
+      await queryClient.invalidateQueries({ queryKey: ["product-custom-categories"] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to bulk assign group");
+      setError(err instanceof Error ? err.message : "Failed to bulk update category");
     } finally {
       setSubmittingBulkGroup(false);
     }
@@ -1172,9 +1859,21 @@ export default function ProductsPage() {
           <button
             type="button"
             onClick={() => {
+              resetImportState();
+              setOpenImportDialog(true);
+            }}
+            className="ios-secondary-btn inline-flex h-10 items-center justify-center gap-2 px-3 text-sm"
+          >
+            Import CSV/XLSX
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               setEditingProductId(null);
               setAddProductTab("GENERAL");
               setNewProductVariants([createEmptyVariantDraft()]);
+              setRemovedVariantIds([]);
+              setSeriesSpecErrors({});
               setSkuPrefixCustomMode(false);
               setShowNewCategoryInput(false);
               setNewCategoryDraft("");
@@ -1192,137 +1891,186 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap gap-2">
-            {FILTERS.map((item) => (
+      <div className="linear-card p-0">
+        <div className="space-y-2 px-4 py-3">
+          {searchParams?.get("category") ? (
+            <div>
+              <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                Category: {category}
+                <button
+                  type="button"
+                  onClick={clearCategoryFilterParam}
+                  className="rounded-full px-1 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700"
+                  aria-label="Clear category filter"
+                >
+                  x
+                </button>
+              </span>
+            </div>
+          ) : null}
+
+          <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {FILTERS.map((item) => (
+                <button
+                  key={item.value}
+                  type="button"
+                  onClick={() => {
+                    setCategory(item.value);
+                    if (item.value !== "OTHER") setCustomCategoryFilter("ALL");
+                  }}
+                  className={`h-8 rounded-full px-3 text-xs transition ${
+                    category === item.value
+                      ? "bg-slate-800 font-semibold text-white"
+                      : "bg-slate-100 font-medium text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex w-full items-center gap-2 xl:w-auto">
+              <input
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Search name / SKU / variant..."
+                className="ios-input h-8 w-full min-w-[260px] px-3 text-sm xl:w-[360px]"
+              />
               <button
-                key={item.value}
                 type="button"
-                onClick={() => {
-                  setCategory(item.value);
-                  if (item.value !== "OTHER") setCustomCategoryFilter("ALL");
-                }}
-                className={`h-9 rounded-lg px-3 text-sm transition ${
-                  category === item.value
-                    ? "bg-slate-800 font-semibold text-white"
-                    : "bg-slate-100 font-normal text-slate-600 hover:bg-slate-200"
+                onClick={() => setLowStockFilter(lowStockOnly ? "all" : "low")}
+                className={`inline-flex h-8 shrink-0 items-center rounded-full px-3 text-xs font-medium transition ${
+                  lowStockOnly
+                    ? "border border-rose-200 bg-rose-50 text-rose-700"
+                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                {item.label}
+                Low Stock
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenAdvancedFilters((prev) => {
+                    const next = !prev;
+                    if (!next) setOpenColumnMenu(false);
+                    return next;
+                  });
+                }}
+                className="ios-secondary-btn h-8 shrink-0 px-3 text-xs"
+              >
+                {openAdvancedFilters ? "Hide Filters" : "More Filters"}
+              </button>
+            </div>
           </div>
-          <input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search name / SKU / variant..."
-            className="ios-input h-9 w-full md:w-72"
-          />
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <select
-            value={groupFilter}
-            onChange={(e) => setGroupFilter(e.target.value)}
-            className="ios-input h-9 min-w-[200px] bg-white px-3 text-sm"
-          >
-            <option value="ALL">All Groups</option>
-            {(groupsQuery.data ?? []).map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={customCategoryFilter}
-            onChange={(e) => {
-              const next = e.target.value;
-              setCustomCategoryFilter(next);
-              if (next !== "ALL") setCategory("OTHER");
-            }}
-            className="ios-input h-9 min-w-[220px] bg-white px-3 text-sm"
-          >
-            <option value="ALL">All Custom Categories</option>
-            {customCategoryOptions.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setOpenColumnMenu((prev) => !prev)}
-              className="ios-secondary-btn h-9 px-3 text-sm"
-            >
-              Optional Columns ({optionalColumnCount})
-            </button>
-            {openColumnMenu ? (
-              <div className="absolute right-0 z-20 mt-1 min-w-[220px] rounded-lg border border-slate-200 bg-white p-2 shadow">
-                {(
-                  [
-                    ["group", "Group"],
-                    ["specification", "Specification"],
-                    ["unit", "Unit"],
-                    ["onHand", "On Hand"],
-                    ["reserved", "Reserved"],
-                    ["supplier", "Supplier"],
-                    ["gallery", "Gallery"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2 px-2 py-1.5 text-sm text-slate-700">
-                    <input
-                      type="checkbox"
-                      checked={showOptionalColumns[key]}
-                      onChange={(e) =>
-                        setShowOptionalColumns((prev) => ({
-                          ...prev,
-                          [key]: e.target.checked,
-                        }))
-                      }
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white px-4 py-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm text-slate-600">Selected: {selectedProductIds.length}</span>
-          <select
-            value={bulkGroupId}
-            onChange={(e) => setBulkGroupId(e.target.value)}
-            className="ios-input h-9 min-w-[210px] bg-white px-3 text-sm"
-          >
-            <option value="UNASSIGNED">Assign to: Unassigned</option>
-            {(groupsQuery.data ?? []).map((group) => (
-              <option key={group.id} value={group.id}>
-                Assign to: {group.name}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            disabled={selectedProductIds.length === 0 || submittingBulkGroup}
-            onClick={bulkAssignGroup}
-            className="ios-primary-btn h-9 px-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submittingBulkGroup ? "Applying..." : "Apply Group"}
-          </button>
-          <button
-            type="button"
-            disabled={selectedProductIds.length === 0}
-            onClick={() => setSelectedProductIds([])}
-            className="ios-secondary-btn h-9 px-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Clear
-          </button>
+          {openAdvancedFilters ? (
+            <div className="relative rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={groupFilter}
+                  onChange={(e) => setGroupFilter(e.target.value)}
+                  className="ios-input h-8 min-w-[190px] bg-white px-3 text-sm"
+                >
+                  <option value="ALL">All Groups</option>
+                  {(groupsQuery.data ?? []).map((group) => (
+                    <option key={group.id} value={group.id}>
+                      {group.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={customCategoryFilter}
+                  onChange={(e) => {
+                    const next = e.target.value;
+                    setCustomCategoryFilter(next);
+                    if (next !== "ALL") setCategory("OTHER");
+                  }}
+                  className="ios-input h-8 min-w-[220px] bg-white px-3 text-sm"
+                >
+                  <option value="ALL">All Custom Categories</option>
+                  {customCategoryOptions.map((name) => (
+                    <option key={name} value={name}>
+                      {name}
+                    </option>
+                  ))}
+                </select>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setOpenColumnMenu((prev) => !prev)}
+                    className="ios-secondary-btn h-8 px-3 text-xs"
+                  >
+                    Optional Columns ({optionalColumnCount})
+                  </button>
+                  {openColumnMenu ? (
+                    <div className="absolute right-0 z-20 mt-1 min-w-[220px] rounded-lg border border-slate-200 bg-white p-2 shadow">
+                      {(
+                        [
+                          ["group", "Group"],
+                          ["specification", "Specification"],
+                          ["unit", "Unit"],
+                          ["onHand", "On Hand"],
+                          ["reserved", "Reserved"],
+                          ["supplier", "Supplier"],
+                          ["gallery", "Gallery"],
+                        ] as const
+                      ).map(([key, label]) => (
+                        <label key={key} className="flex items-center gap-2 px-2 py-1.5 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={showOptionalColumns[key]}
+                            onChange={(e) =>
+                              setShowOptionalColumns((prev) => ({
+                                ...prev,
+                                [key]: e.target.checked,
+                              }))
+                            }
+                          />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
-      </div>
+
+        {selectedProductIds.length > 0 ? (
+          <div className="sticky top-0 z-10 border-y border-slate-200 bg-white/95 px-4 py-2 backdrop-blur-sm">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-slate-700">{selectedProductIds.length} selected</span>
+              <select
+                value={bulkCategory}
+                onChange={(e) => setBulkCategory(e.target.value)}
+                className="ios-input h-8 min-w-[210px] bg-white px-3 text-sm"
+              >
+                {BULK_CATEGORY_OPTIONS.map((item) => (
+                  <option key={item} value={item}>
+                    Assign to: {item}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={submittingBulkGroup}
+                onClick={bulkAssignCategory}
+                className="ios-primary-btn h-8 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {submittingBulkGroup ? "Applying..." : "Apply"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedProductIds([])}
+                className="ios-secondary-btn h-8 px-3 text-xs"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        ) : null}
 
       {error ? (
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
@@ -1332,8 +2080,14 @@ export default function ProductsPage() {
           {notice}
         </div>
       ) : null}
+      {validationWarnings.length > 0 ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <p className="font-medium">Validation warnings</p>
+          <p className="mt-1">{validationWarnings.join(" ")}</p>
+        </div>
+      ) : null}
 
-      <div className="linear-card overflow-hidden p-0">
+        <div className="border-t border-slate-100">
         <div className="hidden md:block">
           <div className="max-h-[calc(100vh-320px)] overflow-auto">
             <Table>
@@ -1406,7 +2160,16 @@ export default function ProductsPage() {
                             aria-label={`Select ${product.name}`}
                           />
                         </TableCell>
-                        <TableCell className="font-semibold text-slate-900">{product.name}</TableCell>
+                        <TableCell className="font-semibold text-slate-900">
+                          <div className="flex items-center gap-2">
+                            <span>{product.name}</span>
+                            {product.hasLowStock ? (
+                              <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                                LOW STOCK
+                              </span>
+                            ) : null}
+                          </div>
+                        </TableCell>
                         <TableCell>{getCategoryLabel(product)}</TableCell>
                         {showOptionalColumns.group ? <TableCell>{product.group?.name ?? "-"}</TableCell> : null}
                         {showOptionalColumns.specification ? <TableCell>{product.specification || "-"}</TableCell> : null}
@@ -1426,11 +2189,13 @@ export default function ProductsPage() {
                               : `$${Number(product.salePrice).toFixed(2)}`}
                         </TableCell>
                         {showOptionalColumns.onHand ? (
-                          <TableCell className="text-right">{Number(product.stockSummary?.onHand ?? 0).toFixed(2)}</TableCell>
+                          <TableCell className="text-right">
+                            {formatStockByProductUnit(Number(product.stockSummary?.onHand ?? 0), product.unit)}
+                          </TableCell>
                         ) : null}
                         {showOptionalColumns.reserved ? (
                           <TableCell className="text-right">
-                            {Number(product.stockSummary?.reserved ?? 0).toFixed(2)}
+                            {formatStockByProductUnit(Number(product.stockSummary?.reserved ?? 0), product.unit)}
                           </TableCell>
                         ) : null}
                         <TableCell
@@ -1440,7 +2205,10 @@ export default function ProductsPage() {
                               : "font-semibold text-emerald-700"
                           }`}
                         >
-                          {Number(product.totalAvailable ?? product.stockSummary?.available ?? 0).toFixed(2)}
+                          {formatStockByProductUnit(
+                            Number(product.totalAvailable ?? product.stockSummary?.available ?? 0),
+                            product.unit,
+                          )}
                         </TableCell>
                         <TableCell>{product.warehouse?.name ?? "-"}</TableCell>
                         {showOptionalColumns.supplier ? <TableCell>{product.supplier?.name ?? "-"}</TableCell> : null}
@@ -1552,7 +2320,14 @@ export default function ProductsPage() {
                 }`}
               >
                 <div className="flex items-start justify-between">
-                  <h3 className="text-base font-semibold text-slate-900">{product.name}</h3>
+                  <h3 className="text-base font-semibold text-slate-900">
+                    {product.name}
+                    {product.hasLowStock ? (
+                      <span className="ml-2 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                        LOW STOCK
+                      </span>
+                    ) : null}
+                  </h3>
                   <span className="text-xs text-slate-500">
                     {getCategoryLabel(product)}
                   </span>
@@ -1568,9 +2343,13 @@ export default function ProductsPage() {
                       : `$${Number(product.salePrice).toFixed(2)}`}
                 </p>
                 <p className="mt-1 text-sm text-slate-600">
-                  Stock: On Hand {Number(product.stockSummary?.onHand ?? 0).toFixed(2)} / Reserved{" "}
-                  {Number(product.stockSummary?.reserved ?? 0).toFixed(2)} / Available{" "}
-                  {Number(product.totalAvailable ?? product.stockSummary?.available ?? 0).toFixed(2)}
+                  Stock: On Hand {formatStockByProductUnit(Number(product.stockSummary?.onHand ?? 0), product.unit)} /
+                  Reserved {formatStockByProductUnit(Number(product.stockSummary?.reserved ?? 0), product.unit)} /
+                  Available{" "}
+                  {formatStockByProductUnit(
+                    Number(product.totalAvailable ?? product.stockSummary?.available ?? 0),
+                    product.unit,
+                  )}
                 </p>
                 <p className="mt-1 text-sm text-slate-600">Warehouse: {product.warehouse?.name ?? "-"}</p>
                 {showOptionalColumns.supplier ? (
@@ -1642,6 +2421,7 @@ export default function ProductsPage() {
           })}
         </div>
       </div>
+      </div>
 
       {openNewDialog ? (
         <Modal
@@ -1651,7 +2431,9 @@ export default function ProductsPage() {
             setEditingProductId(null);
             setAddProductTab("GENERAL");
             setNewProductVariants([createEmptyVariantDraft()]);
+            setRemovedVariantIds([]);
             setSkuPrefixCustomMode(false);
+            setPendingCategoryChange(null);
           }}
           maxWidthClass="max-w-4xl"
         >
@@ -1699,38 +2481,7 @@ export default function ProductsPage() {
                         <span className="text-sm text-slate-600">Category</span>
                         <select
                           value={customCategorySelectValue}
-                          onChange={(event) => {
-                            const value = event.target.value;
-                            if (value === ADD_NEW_CATEGORY_VALUE) {
-                              setShowNewCategoryInput(true);
-                              setNewCategoryDraft("");
-                              setNewProductForm((prev) => ({
-                                ...prev,
-                                category: "OTHER",
-                                customCategoryName: "",
-                                categoryId: "",
-                              }));
-                              return;
-                            }
-                            if (value.startsWith("CUSTOM:")) {
-                              const customName = value.slice("CUSTOM:".length).trim();
-                              setShowNewCategoryInput(false);
-                              setNewProductForm((prev) => ({
-                                ...prev,
-                                category: "OTHER",
-                                categoryId: "",
-                                customCategoryName: customName,
-                              }));
-                              return;
-                            }
-                            setShowNewCategoryInput(false);
-                            setNewProductForm((prev) => ({
-                              ...prev,
-                              category: value,
-                              categoryId: "",
-                              customCategoryName: "",
-                            }));
-                          }}
+                          onChange={(event) => handleCategorySelectChange(event.target.value)}
                           className="ios-input h-12 w-full bg-white px-3 text-sm"
                         >
                           {(templatesQuery.data ?? []).map((item) => (
@@ -1796,90 +2547,67 @@ export default function ProductsPage() {
                         ]}
                         onChange={(value) => setNewProductForm((prev) => ({ ...prev, supplierId: value }))}
                       />
-                      <InputField
-                        label="Glass Choice (Legacy)"
-                        value={newProductForm.glass}
-                        onChange={(value) => setNewProductForm((prev) => ({ ...prev, glass: value }))}
-                        placeholder="e.g. Tempered / Laminated / Low-E"
-                      />
-                      <SelectField
-                        label="Glass Type Default"
-                        value={newProductForm.glassTypeDefault}
-                        options={[
-                          { label: "Tempered Low-E 5mm", value: "TEMPERED_LOW_E_5MM" },
-                          { label: "Tempered Low-E 5mm Frosted", value: "TEMPERED_LOW_E_5MM_FROSTED" },
-                          { label: "Tempered Clear 5mm", value: "TEMPERED_CLEAR_5MM" },
-                          { label: "Other", value: "OTHER" },
-                        ]}
-                        onChange={(value) => setNewProductForm((prev) => ({ ...prev, glassTypeDefault: value }))}
-                      />
-                      <SelectField
-                        label="Glass Finish Default"
-                        value={newProductForm.glassFinishDefault}
-                        options={[
-                          { label: "Clear", value: "CLEAR" },
-                          { label: "Frosted", value: "FROSTED" },
-                        ]}
-                        onChange={(value) => setNewProductForm((prev) => ({ ...prev, glassFinishDefault: value }))}
-                      />
-                      <InputField
-                        label="Screen Default"
-                        value={newProductForm.screenDefault}
-                        onChange={(value) =>
-                          setNewProductForm((prev) => ({ ...prev, screenDefault: value, screenType: value }))
-                        }
-                        placeholder="e.g. Full Screen / Half Screen / No Screen"
-                      />
-                      <SelectField
-                        label="Opening Type"
-                        value={newProductForm.openingTypeDefault}
-                        options={[
-                          { label: "Not Set", value: "" },
-                          ...(isWindowCategory
-                            ? [
-                                { label: "Fixed", value: "FIXED" },
-                                { label: "Sliding", value: "SLIDING" },
-                                { label: "Single Hung", value: "SINGLE_HUNG" },
-                                { label: "Double Hung", value: "DOUBLE_HUNG" },
-                                { label: "Casement", value: "CASEMENT" },
-                                { label: "Awning", value: "AWNING" },
-                              ]
-                            : [
-                                { label: "Sliding", value: "SLIDING" },
-                                { label: "Single Swing", value: "SINGLE_SWING" },
-                                { label: "Double Swing", value: "DOUBLE_SWING" },
-                              ]),
-                        ]}
-                        onChange={(value) =>
-                          setNewProductForm((prev) => ({
-                            ...prev,
-                            openingTypeDefault: value,
-                            swing: value,
-                            type: isWindowCategory ? value : prev.type,
-                            handing: String(value ?? "").trim().toUpperCase() === "SLIDING" ? prev.handing : "",
-                          }))
-                        }
-                      />
-                      {isWindowCategory && isSlidingOpeningType ? (
-                        <SelectField
-                          label="Sliding Configuration"
-                          value={newProductForm.handing}
-                          options={[
-                            { label: "Not Set", value: "" },
-                            { label: "XO", value: "XO" },
-                            { label: "OX", value: "OX" },
-                            { label: "XOX", value: "XOX" },
-                            { label: "OXO", value: "OXO" },
-                            { label: "XXO", value: "XXO" },
-                            { label: "OXX", value: "OXX" },
-                          ]}
-                          onChange={(value) =>
-                            setNewProductForm((prev) => ({
-                              ...prev,
-                              handing: value,
-                              openingTypeDefault: prev.openingTypeDefault || "SLIDING",
-                            }))
+                      {newProductForm.category === "WINDOW" ? (
+                        <WindowSpecs
+                          values={{
+                            frameMaterialDefault: newProductForm.frameMaterialDefault,
+                            openingTypeDefault: newProductForm.openingTypeDefault,
+                            slidingConfigDefault: newProductForm.slidingConfigDefault,
+                            glassTypeDefault: newProductForm.glassTypeDefault,
+                            glassCoatingDefault: newProductForm.glassCoatingDefault,
+                            glassThicknessMmDefault: newProductForm.glassThicknessMmDefault,
+                            glassFinishDefault: newProductForm.glassFinishDefault,
+                            screenDefault: newProductForm.screenDefault,
+                          }}
+                          errors={seriesSpecErrors}
+                          required={isWindowCategory}
+                          onChange={(field, value) =>
+                            setNewProductForm((prev) => {
+                              if (field === "openingTypeDefault") {
+                                return {
+                                  ...prev,
+                                  openingTypeDefault: value,
+                                  slidingConfigDefault:
+                                    String(value ?? "").trim().toUpperCase() === "SLIDING"
+                                      ? prev.slidingConfigDefault
+                                      : "",
+                                };
+                              }
+                              if (field === "screenDefault") {
+                                return { ...prev, screenDefault: value, screenType: value };
+                              }
+                              return { ...prev, [field]: value };
+                            })
                           }
+                        />
+                      ) : null}
+                      {newProductForm.category === "FLOOR" ? (
+                        <FlooringSpecs
+                          values={{
+                            flooringBrand: newProductForm.flooringBrand,
+                            flooringSeries: newProductForm.flooringSeries,
+                            flooringMaterial: newProductForm.flooringMaterial,
+                            flooringWearLayer: newProductForm.flooringWearLayer,
+                            flooringThicknessMm: newProductForm.flooringThicknessMm,
+                            flooringPlankLengthIn: newProductForm.flooringPlankLengthIn,
+                            flooringPlankWidthIn: newProductForm.flooringPlankWidthIn,
+                            flooringCoreThicknessMm: newProductForm.flooringCoreThicknessMm,
+                            flooringFinish: newProductForm.flooringFinish,
+                            flooringEdge: newProductForm.flooringEdge,
+                            flooringInstallation: newProductForm.flooringInstallation,
+                            flooringUnderlayment: newProductForm.flooringUnderlayment,
+                            flooringUnderlaymentType: newProductForm.flooringUnderlaymentType,
+                            flooringUnderlaymentMm: newProductForm.flooringUnderlaymentMm,
+                            flooringWaterproof: newProductForm.flooringWaterproof,
+                            flooringWaterResistance: newProductForm.flooringWaterResistance,
+                            flooringWarrantyResidentialYr: newProductForm.flooringWarrantyResidentialYr,
+                            flooringWarrantyCommercialYr: newProductForm.flooringWarrantyCommercialYr,
+                            flooringPiecesPerBox: newProductForm.flooringPiecesPerBox,
+                            flooringBoxCoverageSqft: newProductForm.flooringBoxCoverageSqft,
+                            flooringLowStockThreshold: newProductForm.flooringLowStockThreshold,
+                          }}
+                          errors={seriesSpecErrors}
+                          onChange={(field, value) => setNewProductForm((prev) => ({ ...prev, [field]: value }))}
                         />
                       ) : null}
                       <TextareaField
@@ -1904,22 +2632,65 @@ export default function ProductsPage() {
                         </button>
                       </div>
                     </div>
-                    <div className="mt-3 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                      <table className="min-w-full border-collapse text-sm">
+                    <div className="relative mt-3 rounded-lg border border-slate-200 bg-white">
+                      <div
+                        ref={variantsScrollRef}
+                        className="scroll-x w-full overflow-x-auto overflow-y-hidden [webkit-overflow-scrolling:touch]"
+                      >
+                      <table className="w-full min-w-[1460px] table-fixed border-collapse text-sm">
                         <thead className="bg-slate-50">
                           <tr>
-                            <th className="px-3 py-2 text-left font-medium text-slate-600">Variant Title</th>
-                            <th className="px-3 py-2 text-left font-medium text-slate-600">Size (WxH)</th>
-                            <th className="px-3 py-2 text-left font-medium text-slate-600">Color</th>
-                            <th className="px-3 py-2 text-left font-medium text-slate-600">SKU</th>
-                            <th className="px-3 py-2 text-right font-medium text-slate-600">Sale Price</th>
-                            <th className="px-3 py-2 text-right font-medium text-slate-600">Cost</th>
-                            <th className="px-3 py-2 text-right font-medium text-slate-600">Opening Stock</th>
-                            <th className="px-3 py-2 text-right font-medium text-slate-600">Action</th>
+                            <th className="sticky top-0 z-20 w-[280px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                              {newProductForm.category === "FLOOR" ? "Display Name *" : "Variant Title"}
+                            </th>
+                            {newProductForm.category === "FLOOR" ? (
+                              <>
+                                <th className="sticky top-0 z-20 w-[120px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                                  SKU Prefix
+                                </th>
+                                <th className="sticky top-0 z-20 w-[160px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                                  SKU Suffix *
+                                </th>
+                              </>
+                            ) : (
+                              <>
+                                <th className="sticky top-0 z-20 w-[160px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                                  Size (WxH)
+                                </th>
+                                <th className="sticky top-0 z-20 w-[160px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                                  Color
+                                </th>
+                              </>
+                            )}
+                            <th className="sticky top-0 z-20 w-[160px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                              {newProductForm.category === "FLOOR" ? "Effective SKU" : "SKU"}
+                            </th>
+                            <th className="sticky top-0 z-20 w-[140px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                              Sale Price
+                            </th>
+                            <th className="sticky top-0 z-20 w-[140px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                              Cost
+                            </th>
+                            <th className="sticky top-0 z-20 w-[160px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                              {newProductForm.category === "FLOOR" ? "Boxes On Hand" : "Opening Stock"}
+                            </th>
+                            <th className="sticky top-0 z-20 w-[140px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                              Reorder Level
+                            </th>
+                            <th className="sticky top-0 z-20 w-[150px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                              Available
+                            </th>
+                            <th className="sticky top-0 z-20 w-[120px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                              Actions
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           {newProductVariants.map((variant, index) => {
+                            const isFlooring = newProductForm.category === "FLOOR";
+                            const skuPrefix = normalizeSkuValue(newProductForm.skuPrefix);
+                            const normalizedSuffix = normalizeSkuValue(variant.skuSuffix);
+                            const flooringSkuPreview = skuPrefix && normalizedSuffix ? `${skuPrefix}${normalizedSuffix}` : "";
                             const w = toSkuDimensionPart(variant.width);
                             const h = toSkuDimensionPart(variant.height);
                             const sizeLabel = w && h ? `${w}"x${h}"` : "";
@@ -1934,57 +2705,103 @@ export default function ProductsPage() {
                               variant.color,
                               newProductForm.glassFinishDefault,
                             );
+                            const onHandBoxes = Number(variant.openingStock || 0);
+                            const reservedBoxes = Number(variant.reservedBoxes || 0);
+                            const availableBoxes = onHandBoxes - reservedBoxes;
+                            const reorderLevelBoxes = Number(variant.reorderLevel || 0);
+                            const alertState = isFlooring
+                              ? getStockAlertState(availableBoxes, reorderLevelBoxes)
+                              : null;
                             return (
                               <tr key={variant.id} className="border-t border-slate-100">
                                 <td className="px-3 py-2 text-slate-700">
-                                  <p className="text-sm">{autoVariantTitle || `Variant ${index + 1}`}</p>
-                                  <p className="text-xs text-slate-500">SKU preview: {skuPreview || "-"}</p>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <div className="flex items-center gap-1">
+                                  {isFlooring ? (
                                     <input
-                                      type="number"
-                                      min="0"
-                                      step="1"
-                                      value={variant.width}
-                                      onChange={(event) => updateVariantRow(variant.id, { width: event.target.value })}
-                                      className="ios-input h-9 w-20 px-2 text-right text-sm"
-                                      placeholder="36"
+                                      value={variant.displayName}
+                                      onChange={(event) => updateVariantRow(variant.id, { displayName: event.target.value })}
+                                      placeholder={`Variant ${index + 1}`}
+                                      className="ios-input h-9 w-full px-2 text-sm"
                                     />
-                                    <span className="text-xs text-slate-500">x</span>
+                                  ) : (
+                                    <>
+                                      <p className="text-sm">{autoVariantTitle || `Variant ${index + 1}`}</p>
+                                      <p className="text-xs text-slate-500">SKU preview: {skuPreview || "-"}</p>
+                                    </>
+                                  )}
+                                </td>
+                                {isFlooring ? (
+                                  <>
+                                    <td className="px-3 py-2">
+                                      <span className="inline-flex h-9 items-center rounded border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700">
+                                        {skuPrefix || "-"}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        value={variant.skuSuffix}
+                                        onChange={(event) =>
+                                          updateVariantRow(variant.id, { skuSuffix: normalizeSkuValue(event.target.value) })
+                                        }
+                                        placeholder="e.g. 170123"
+                                        className="ios-input h-9 w-full px-2 text-sm"
+                                      />
+                                    </td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td className="px-3 py-2">
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="1"
+                                          value={variant.width}
+                                          onChange={(event) => updateVariantRow(variant.id, { width: event.target.value })}
+                                          className="ios-input h-9 w-20 px-2 text-right text-sm"
+                                          placeholder="36"
+                                        />
+                                        <span className="text-xs text-slate-500">x</span>
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="1"
+                                          value={variant.height}
+                                          onChange={(event) => updateVariantRow(variant.id, { height: event.target.value })}
+                                          className="ios-input h-9 w-20 px-2 text-right text-sm"
+                                          placeholder="36"
+                                        />
+                                      </div>
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <input
+                                        value={variant.color}
+                                        onChange={(event) => updateVariantRow(variant.id, { color: event.target.value })}
+                                        placeholder={newProductForm.category === "WINDOW" ? "Required" : "Optional"}
+                                        className="ios-input h-9 w-32 px-2 text-sm"
+                                      />
+                                    </td>
+                                  </>
+                                )}
+                                <td className="px-3 py-2">
+                                  {isFlooring ? (
+                                    <span className="inline-flex h-9 w-full items-center rounded border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700">
+                                      {flooringSkuPreview || "-"}
+                                    </span>
+                                  ) : (
                                     <input
-                                      type="number"
-                                      min="0"
-                                      step="1"
-                                      value={variant.height}
-                                      onChange={(event) => updateVariantRow(variant.id, { height: event.target.value })}
-                                      className="ios-input h-9 w-20 px-2 text-right text-sm"
-                                      placeholder="36"
+                                      value={variant.sku}
+                                      onChange={(event) =>
+                                        updateVariantRow(variant.id, { sku: normalizeSkuValue(event.target.value) })
+                                      }
+                                      onBlur={() => {
+                                        if (variant.sku.trim()) return;
+                                        if (!skuPreview) return;
+                                        updateVariantRow(variant.id, { sku: skuPreview });
+                                      }}
+                                      placeholder={skuPreview || "e.g. VWW3636W"}
+                                      className="ios-input h-9 w-full px-2 text-sm"
                                     />
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <input
-                                    value={variant.color}
-                                    onChange={(event) => updateVariantRow(variant.id, { color: event.target.value })}
-                                    placeholder={newProductForm.category === "WINDOW" ? "Required" : "Optional"}
-                                    className="ios-input h-9 w-32 px-2 text-sm"
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <input
-                                    value={variant.sku}
-                                    onChange={(event) =>
-                                      updateVariantRow(variant.id, { sku: normalizeSkuValue(event.target.value) })
-                                    }
-                                    onBlur={() => {
-                                      if (variant.sku.trim()) return;
-                                      if (!skuPreview) return;
-                                      updateVariantRow(variant.id, { sku: skuPreview });
-                                    }}
-                                    placeholder={skuPreview || "e.g. VWW3636W"}
-                                    className="ios-input h-9 w-full px-2 text-sm"
-                                  />
+                                  )}
                                 </td>
                                 <td className="px-3 py-2">
                                   <input
@@ -2016,6 +2833,40 @@ export default function ProductsPage() {
                                     className="ios-input h-9 w-28 px-2 text-right text-sm"
                                   />
                                 </td>
+                                <td className="px-3 py-2">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={variant.reorderLevel}
+                                    onChange={(event) => updateVariantRow(variant.id, { reorderLevel: event.target.value })}
+                                    className="ios-input h-9 w-28 px-2 text-right text-sm"
+                                  />
+                                </td>
+                                <td className="px-3 py-2 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <span
+                                      className={`text-sm font-semibold ${
+                                        alertState === "LOW"
+                                          ? "text-rose-600"
+                                          : alertState === "WARNING"
+                                            ? "text-amber-600"
+                                            : "text-slate-700"
+                                      }`}
+                                    >
+                                      {formatStockByProductUnit(availableBoxes, newProductForm.unit)}
+                                    </span>
+                                    {alertState === "LOW" ? (
+                                      <span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                                        LOW
+                                      </span>
+                                    ) : alertState === "WARNING" ? (
+                                      <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                        WARNING
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </td>
                                 <td className="px-3 py-2 text-right">
                                   <button
                                     type="button"
@@ -2030,6 +2881,14 @@ export default function ProductsPage() {
                           })}
                         </tbody>
                       </table>
+                      </div>
+                      {showVariantsScrollHint ? (
+                        <div className="pointer-events-none absolute inset-y-[1px] right-[1px] flex w-24 items-center justify-end bg-gradient-to-l from-white via-white/90 to-transparent pr-2">
+                          <span className="rounded border border-slate-200 bg-white/90 px-1.5 py-0.5 text-[10px] text-slate-500 shadow-sm">
+                            Scroll →
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 )}
@@ -2243,8 +3102,23 @@ export default function ProductsPage() {
                       placeholder="e.g. VWW"
                     />
                   ) : null}
+                  <InputField
+                    label="Display Name"
+                    required
+                    value={newProductVariants[0]?.displayName ?? ""}
+                    onChange={(value) =>
+                      setNewProductVariants((prev) => {
+                        if (prev.length === 0) return prev;
+                        const next = [...prev];
+                        next[0] = { ...next[0], displayName: value };
+                        return next;
+                      })
+                    }
+                    placeholder={newProductForm.name || "e.g. LVFloor"}
+                  />
                   <p className="text-xs text-slate-500">
-                    Auto SKU Preview: <span className="font-semibold text-slate-700">{autoSkuPreview || "-"}</span>
+                    Auto SKU Preview:{" "}
+                    <span className="font-semibold text-slate-700">{primaryVariantAutoSkuPreview || "-"}</span>
                   </p>
                   <p className="text-xs text-slate-500">
                     Effective SKU: <span className="font-semibold text-slate-700">{effectiveSkuValue || "-"}</span>
@@ -2376,7 +3250,9 @@ export default function ProductsPage() {
                   setOpenNewDialog(false);
                   setAddProductTab("GENERAL");
                   setNewProductVariants([createEmptyVariantDraft()]);
+                  setRemovedVariantIds([]);
                   setSkuPrefixCustomMode(false);
+                  setPendingCategoryChange(null);
                 }}
                 className="ios-secondary-btn h-11 px-5 text-sm"
               >
@@ -2391,6 +3267,173 @@ export default function ProductsPage() {
               </button>
             </div>
           </form>
+        </Modal>
+      ) : null}
+
+      {openImportDialog ? (
+        <Modal
+          title="Import Products"
+          onClose={() => {
+            setOpenImportDialog(false);
+          }}
+          maxWidthClass="max-w-5xl"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-500">
+              Upload a CSV or Excel file, map columns, preview rows, then import with upsert by SKU.
+            </p>
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+              <label className="block space-y-1">
+                <span className="text-sm text-slate-600">File (.csv, .xlsx)</span>
+                <input
+                  type="file"
+                  accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
+                  onChange={(event) => void onImportFileChange(event.target.files?.[0] ?? null)}
+                  className="ios-input h-11 w-full px-3 text-sm"
+                />
+              </label>
+              <p className="mt-2 text-xs text-slate-500">
+                {importParsing
+                  ? "Parsing file..."
+                  : importFileName
+                    ? `Loaded: ${importFileName} (${importRowsRaw.length} rows)`
+                    : "No file loaded yet."}
+              </p>
+            </div>
+
+            {importColumns.length > 0 ? (
+              <div className="rounded-xl border border-slate-100 bg-white p-4">
+                <h4 className="text-sm font-semibold text-slate-900">Column Mapping</h4>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {IMPORT_FIELDS.map((field) => (
+                    <label key={field.key} className="block space-y-1">
+                      <span className="text-xs text-slate-600">
+                        {field.label}
+                        {field.required ? " *" : ""}
+                      </span>
+                      <select
+                        value={importMapping[field.key] ?? ""}
+                        onChange={(event) =>
+                          setImportMapping((prev) => ({
+                            ...prev,
+                            [field.key]: event.target.value,
+                          }))
+                        }
+                        className="ios-input h-10 w-full bg-white px-3 text-sm"
+                      >
+                        <option value="">Not mapped</option>
+                        {importColumns.map((column) => (
+                          <option key={`${field.key}-${column}`} value={column}>
+                            {column}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {importPreviewRows.length > 0 ? (
+              <div className="rounded-xl border border-slate-100 bg-white p-4">
+                <h4 className="text-sm font-semibold text-slate-900">Preview (first 20 rows)</h4>
+                <div className="mt-3 overflow-x-auto">
+                  <table className="min-w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-slate-500">
+                        {IMPORT_FIELDS.map((field) => (
+                          <th key={`preview-head-${field.key}`} className="px-2 py-1">
+                            {field.label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreviewRows.map((row, idx) => (
+                        <tr key={`preview-row-${idx}`} className="border-b border-slate-100">
+                          {IMPORT_FIELDS.map((field) => (
+                            <td key={`preview-cell-${idx}-${field.key}`} className="px-2 py-1 text-slate-700">
+                              {String(row[field.key] ?? "")}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+
+            {(importWarnings.length > 0 || importErrors.length > 0) ? (
+              <div className="rounded-xl border border-slate-100 bg-white p-4">
+                {importWarnings.length > 0 ? (
+                  <div>
+                    <p className="text-sm font-semibold text-amber-700">Warnings</p>
+                    <p className="mt-1 text-xs text-amber-700">
+                      {importWarnings.slice(0, 8).map((row) => `Row ${row.row}: ${row.warning}`).join(" | ")}
+                    </p>
+                  </div>
+                ) : null}
+                {importErrors.length > 0 ? (
+                  <div className={importWarnings.length > 0 ? "mt-3" : ""}>
+                    <p className="text-sm font-semibold text-rose-700">Errors</p>
+                    <p className="mt-1 text-xs text-rose-700">
+                      {importErrors.slice(0, 8).map((row) => `Row ${row.row} (${row.sku || "-"}): ${row.error}`).join(" | ")}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setOpenImportDialog(false)} className="ios-secondary-btn h-10 px-4 text-sm">
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={submitImport}
+                disabled={importSubmitting || importParsing || !importRequiredMapped || importMappedRows.length === 0}
+                className="ios-primary-btn h-10 px-4 text-sm disabled:opacity-60"
+              >
+                {importSubmitting ? "Importing..." : `Import ${importMappedRows.length} Rows`}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {pendingCategoryChange ? (
+        <Modal
+          title="Confirm Category Change"
+          onClose={() => {
+            setPendingCategoryChange(null);
+          }}
+          maxWidthClass="max-w-md"
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Changing category will reset specification fields. Continue?
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingCategoryChange(null)}
+                className="ios-secondary-btn h-10 px-4 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  applyCategoryChange(pendingCategoryChange, true);
+                  setPendingCategoryChange(null);
+                }}
+                className="ios-primary-btn h-10 px-4 text-sm"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
         </Modal>
       ) : null}
 
@@ -2411,7 +3454,7 @@ export default function ProductsPage() {
               value={stockVariantId}
               options={(stockProduct.variants ?? []).map((item) => ({
                 value: item.id,
-                label: `${item.sku} · Available ${Number(item.available).toFixed(2)}`,
+                label: `${item.sku} · Available ${formatStockByProductUnit(Number(item.available ?? 0), stockProduct.unit)}`,
               }))}
               onChange={setStockVariantId}
             />
@@ -2529,6 +3572,22 @@ export default function ProductsPage() {
       ) : null}
 
     </section>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense
+      fallback={
+        <section className="mx-auto max-w-[1320px]">
+          <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+            <p className="text-sm text-slate-500">Loading product management...</p>
+          </div>
+        </section>
+      }
+    >
+      <ProductsPageContent />
+    </Suspense>
   );
 }
 

@@ -20,6 +20,7 @@ const SPECIAL_ORDER_STATUSES = [
   "ARRIVED",
   "DELIVERED",
 ] as const;
+const FULFILLMENT_METHODS = ["PICKUP", "DELIVERY"] as const;
 
 export async function GET(request: NextRequest, { params }: Params) {
   try {
@@ -27,61 +28,128 @@ export async function GET(request: NextRequest, { params }: Params) {
     if (!hasOneOf(role, ["ADMIN", "SALES"])) return deny();
 
     const { id } = await params;
-    const data = await prisma.salesOrder.findUnique({
-      where: { id },
-      include: {
-        customer: true,
-        supplier: {
-          select: { id: true, name: true, contactName: true, phone: true },
-        },
-        items: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                title: true,
-                brand: true,
-                collection: true,
-                availableStock: true,
-                unit: true,
-                price: true,
-                glassTypeDefault: true,
-                glassFinishDefault: true,
-                screenDefault: true,
-                openingTypeDefault: true,
-              },
-            },
-            variant: {
-              select: {
-                id: true,
-                sku: true,
-                width: true,
-                height: true,
-                color: true,
-                glassTypeOverride: true,
-                glassFinishOverride: true,
-                screenOverride: true,
-                openingTypeOverride: true,
-              },
-            },
-            linkedPo: {
-              select: {
-                id: true,
-                poNumber: true,
-                status: true,
-                orderDate: true,
-                expectedArrival: true,
-              },
-            },
+    let data: any = null;
+    try {
+      data = await prisma.salesOrder.findUnique({
+        where: { id },
+        include: {
+          customer: true,
+          supplier: {
+            select: { id: true, name: true, contactName: true, phone: true },
           },
-          orderBy: { createdAt: "asc" },
+          items: {
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  title: true,
+                  brand: true,
+                  collection: true,
+                  availableStock: true,
+                  unit: true,
+                  price: true,
+                  frameMaterialDefault: true,
+                  slidingConfigDefault: true,
+                  glassTypeDefault: true,
+                  glassCoatingDefault: true,
+                  glassThicknessMmDefault: true,
+                  glassFinishDefault: true,
+                  screenDefault: true,
+                  openingTypeDefault: true,
+                  flooringMaterial: true,
+                  flooringWearLayer: true,
+                  flooringThicknessMm: true,
+                  flooringPlankLengthIn: true,
+                  flooringPlankWidthIn: true,
+                  flooringCoreThicknessMm: true,
+                  flooringInstallation: true,
+                  flooringUnderlayment: true,
+                  flooringUnderlaymentType: true,
+                  flooringUnderlaymentMm: true,
+                  flooringBoxCoverageSqft: true,
+                },
+              },
+              variant: {
+                select: {
+                  id: true,
+                  sku: true,
+                  displayName: true,
+                  width: true,
+                  height: true,
+                  color: true,
+                  glassTypeOverride: true,
+                  slidingConfigOverride: true,
+                  glassCoatingOverride: true,
+                  glassThicknessMmOverride: true,
+                  glassFinishOverride: true,
+                  screenOverride: true,
+                  openingTypeOverride: true,
+                },
+              },
+              linkedPo: {
+                select: {
+                  id: true,
+                  poNumber: true,
+                  status: true,
+                  orderDate: true,
+                  expectedArrival: true,
+                },
+              },
+            },
+            orderBy: { createdAt: "asc" },
+          },
+          payments: { orderBy: { receivedAt: "desc" } },
+          fulfillments: { orderBy: { scheduledDate: "desc" } },
+          outboundQueue: true,
         },
-        payments: { orderBy: { receivedAt: "desc" } },
-        fulfillments: { orderBy: { scheduledDate: "desc" } },
-        outboundQueue: true,
-      },
-    });
+      });
+    } catch (detailError) {
+      console.error("GET /api/sales-orders/[id] full include failed, falling back:", detailError);
+      // Additive fallback for legacy/broken relation rows:
+      // return snapshot fields so detail page can still open.
+      data = await prisma.salesOrder.findUnique({
+        where: { id },
+        include: {
+          customer: true,
+          supplier: {
+            select: { id: true, name: true, contactName: true, phone: true },
+          },
+          items: {
+            select: {
+              id: true,
+              salesOrderId: true,
+              productId: true,
+              variantId: true,
+              productSku: true,
+              productTitle: true,
+              skuSnapshot: true,
+              titleSnapshot: true,
+              uomSnapshot: true,
+              costSnapshot: true,
+              discount: true,
+              notes: true,
+              description: true,
+              lineDescription: true,
+              quantity: true,
+              unitPrice: true,
+              lineDiscount: true,
+              lineTotal: true,
+              fulfillQty: true,
+              isSpecialOrder: true,
+              specialOrderStatus: true,
+              linkedPoId: true,
+              specialFollowupDate: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: "asc" },
+          },
+          payments: { orderBy: { receivedAt: "desc" } },
+          fulfillments: { orderBy: { scheduledDate: "desc" } },
+          outboundQueue: true,
+        },
+      });
+    }
 
     if (!data) {
       return NextResponse.json({ error: "Sales order not found." }, { status: 404 });
@@ -112,6 +180,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         { status: 400 },
       );
     }
+    if (payload.taxRate !== undefined && payload.taxRate !== null && payload.taxRate !== "") {
+      const parsedTaxRate = Number(payload.taxRate);
+      if (!Number.isFinite(parsedTaxRate) || parsedTaxRate < 0) {
+        return NextResponse.json({ error: "Tax rate must be 0 or greater." }, { status: 400 });
+      }
+    }
 
     const specialOrderStatus =
       payload.specialOrderStatus !== undefined
@@ -127,6 +201,38 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         { error: "Invalid special order status." },
         { status: 400 },
       );
+    }
+    const fulfillmentMethod =
+      payload.fulfillmentMethod !== undefined || payload.deliveryMethod !== undefined
+        ? String(payload.fulfillmentMethod ?? payload.deliveryMethod ?? "PICKUP").toUpperCase()
+        : undefined;
+    if (
+      fulfillmentMethod &&
+      !FULFILLMENT_METHODS.includes(
+        fulfillmentMethod as (typeof FULFILLMENT_METHODS)[number],
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Invalid fulfillment method." },
+        { status: 400 },
+      );
+    }
+    const deliveryAddress1 =
+      payload.deliveryAddress1 !== undefined ? String(payload.deliveryAddress1 || "").trim() : undefined;
+    const deliveryCity =
+      payload.deliveryCity !== undefined ? String(payload.deliveryCity || "").trim() : undefined;
+    const deliveryState =
+      payload.deliveryState !== undefined ? String(payload.deliveryState || "").trim() : undefined;
+    const deliveryZip =
+      payload.deliveryZip !== undefined ? String(payload.deliveryZip || "").trim() : undefined;
+    const nextMethod = fulfillmentMethod as "PICKUP" | "DELIVERY" | undefined;
+    if (nextMethod === "DELIVERY") {
+      if (!deliveryAddress1 || !deliveryCity || !deliveryState || !deliveryZip) {
+        return NextResponse.json(
+          { error: "Delivery requires address line1/city/state/zip." },
+          { status: 400 },
+        );
+      }
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -168,10 +274,59 @@ export async function PATCH(request: NextRequest, { params }: Params) {
               ? toNumber(payload.depositRequired, 0)
               : undefined,
           discount: payload.discount !== undefined ? toNumber(payload.discount, 0) : undefined,
+          taxRate:
+            payload.taxRate !== undefined
+              ? payload.taxRate === null || payload.taxRate === ""
+                ? null
+                : toNumber(payload.taxRate, 0)
+              : undefined,
           tax: payload.tax !== undefined ? toNumber(payload.tax, 0) : undefined,
           commissionRate:
             payload.commissionRate !== undefined
               ? toNumber(payload.commissionRate, 0)
+              : undefined,
+          fulfillmentMethod: fulfillmentMethod as "PICKUP" | "DELIVERY" | undefined,
+          deliveryName:
+            payload.deliveryName !== undefined
+              ? String(payload.deliveryName || "") || null
+              : undefined,
+          deliveryPhone:
+            payload.deliveryPhone !== undefined
+              ? String(payload.deliveryPhone || "") || null
+              : undefined,
+          deliveryAddress1:
+            payload.deliveryAddress1 !== undefined
+              ? String(payload.deliveryAddress1 || "").trim() || null
+              : undefined,
+          deliveryAddress2:
+            payload.deliveryAddress2 !== undefined
+              ? String(payload.deliveryAddress2 || "") || null
+              : undefined,
+          deliveryCity:
+            payload.deliveryCity !== undefined
+              ? String(payload.deliveryCity || "").trim() || null
+              : undefined,
+          deliveryState:
+            payload.deliveryState !== undefined
+              ? String(payload.deliveryState || "").trim() || null
+              : undefined,
+          deliveryZip:
+            payload.deliveryZip !== undefined
+              ? String(payload.deliveryZip || "").trim() || null
+              : undefined,
+          deliveryNotes:
+            payload.deliveryNotes !== undefined
+              ? String(payload.deliveryNotes || "") || null
+              : undefined,
+          pickupNotes:
+            payload.pickupNotes !== undefined
+              ? String(payload.pickupNotes || "") || null
+              : undefined,
+          requestedDeliveryAt:
+            payload.requestedDeliveryAt !== undefined
+              ? payload.requestedDeliveryAt
+                ? new Date(payload.requestedDeliveryAt)
+                : null
               : undefined,
           salespersonName:
             payload.salespersonName !== undefined

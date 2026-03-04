@@ -10,7 +10,12 @@ datasource db {
 enum ProductCategory {
   WINDOW
   FLOOR
+  FLOOR_ACCESSORIES
+  LED_MIRROR
   MIRROR
+  TILE_EDGE
+  SHAMPOO_NICHE
+  SHOWER_DOOR
   DOOR
   WAREHOUSE_SUPPLY
   OTHER
@@ -71,6 +76,7 @@ enum SalesPaymentMethod {
   CARD
   BANK
   OTHER
+  STORE_CREDIT
 }
 
 enum SalesPaymentStatus {
@@ -84,9 +90,20 @@ enum SalesPaymentType {
   REFUND
 }
 
+enum SalesCustomerType {
+  RESIDENTIAL
+  COMMERCIAL
+  CONTRACTOR
+}
+
 enum SalesDocType {
   QUOTE
   SALES_ORDER
+}
+
+enum SalesOrderFulfillmentMethod {
+  PICKUP
+  DELIVERY
 }
 
 enum SalesFulfillmentType {
@@ -95,10 +112,50 @@ enum SalesFulfillmentType {
 }
 
 enum SalesFulfillmentStatus {
+  DRAFT
   SCHEDULED
+  PACKING
+  READY
+  OUT_FOR_DELIVERY
+  DELIVERED
+  PICKED_UP
+  OUT
+  PARTIAL
   IN_PROGRESS
   COMPLETED
   CANCELLED
+}
+
+enum ReturnStatus {
+  DRAFT
+  COMPLETED
+  CANCELLED
+}
+
+enum StoreCreditStatus {
+  OPEN
+  USED
+  VOID
+}
+
+enum AfterSalesReturnType {
+  RETURN
+  EXCHANGE
+}
+
+enum AfterSalesReturnStatus {
+  DRAFT
+  APPROVED
+  RECEIVED
+  REFUNDED
+  CLOSED
+  VOID
+}
+
+enum AfterSalesRefundMethod {
+  STORE_CREDIT
+  REFUND_PAYMENT
+  NO_REFUND
 }
 
 enum GlassType {
@@ -111,6 +168,40 @@ enum GlassType {
 enum GlassFinish {
   CLEAR
   FROSTED
+}
+
+enum FlooringMaterial {
+  SPC
+  LVP
+  LAMINATE
+  HARDWOOD
+}
+
+enum FlooringFinish {
+  MATTE
+  GLOSS
+  EMBOSSED
+}
+
+enum FlooringEdge {
+  BEVEL
+  MICRO_BEVEL
+  SQUARE
+}
+
+enum FlooringInstallation {
+  CLICK
+  GLUE_DOWN
+}
+
+enum FlooringUnderlayment {
+  ATTACHED
+  NONE
+}
+
+enum FlooringWaterResistance {
+  WATERPROOF
+  WATER_RESISTANT
 }
 
 model Product {
@@ -136,10 +227,35 @@ model Product {
   sizeH        Decimal?
   thicknessMm  Decimal?
   glass        String?
-  glassTypeDefault GlassType? @map("glass_type_default")
-  glassFinishDefault GlassFinish? @map("glass_finish_default")
+  glassTypeDefault String? @map("glass_type_default")
+  glassFinishDefault String? @map("glass_finish_default")
   screenDefault String? @map("screen_default")
   openingTypeDefault String? @map("opening_type_default")
+  frameMaterialDefault String? @map("frame_material_default")
+  slidingConfigDefault String? @map("sliding_config_default")
+  glassCoatingDefault String? @map("glass_coating_default")
+  glassThicknessMmDefault Int? @map("glass_thickness_mm_default")
+  flooringBrand String? @map("flooring_brand")
+  flooringSeries String? @map("flooring_series")
+  flooringMaterial FlooringMaterial? @map("flooring_material")
+  flooringWearLayer String? @map("flooring_wear_layer")
+  flooringThicknessMm Decimal? @map("flooring_thickness_mm")
+  flooringPlankLengthIn Decimal? @map("flooring_plank_length_in")
+  flooringPlankWidthIn Decimal? @map("flooring_plank_width_in")
+  flooringCoreThicknessMm Decimal? @map("flooring_core_thickness_mm")
+  flooringFinish FlooringFinish? @map("flooring_finish")
+  flooringEdge FlooringEdge? @map("flooring_edge")
+  flooringInstallation FlooringInstallation? @map("flooring_installation")
+  flooringUnderlayment FlooringUnderlayment? @map("flooring_underlayment")
+  flooringUnderlaymentType String? @map("flooring_underlayment_type")
+  flooringUnderlaymentMm Decimal? @map("flooring_underlayment_mm")
+  flooringWaterResistance FlooringWaterResistance? @map("flooring_water_resistance")
+  flooringWaterproof Boolean? @map("flooring_waterproof")
+  flooringWarrantyResidentialYr Int? @map("flooring_warranty_residential_yr")
+  flooringWarrantyCommercialYr Int? @map("flooring_warranty_commercial_yr")
+  flooringPiecesPerBox Int? @map("flooring_pieces_per_box")
+  flooringBoxCoverageSqft Decimal? @map("flooring_box_coverage_sqft")
+  flooringLowStockThreshold Decimal? @map("flooring_low_stock_threshold")
   rating       String?
   swing        String?
   handing      String?
@@ -414,12 +530,24 @@ model SalesCustomer {
   phone      String?
   email      String?
   address    String?
+  billingAddress String? @map("billing_address")
+  city       String?
+  state      String?
+  zipCode    String?     @map("zip_code")
+  companyName String?    @map("company_name")
+  customerType SalesCustomerType? @map("customer_type")
+  taxExempt  Boolean     @default(false) @map("tax_exempt")
+  taxRate    Decimal?    @map("tax_rate")
+  referredBy String?     @map("referred_by")
   notes      String?
   createdAt  DateTime    @default(now()) @map("created_at")
 
   salesOrders SalesOrder[]
   invoices   Invoice[]
   customerNotes CustomerNote[]
+  fulfillments SalesOrderFulfillment[]
+  storeCredits StoreCredit[]
+  afterSalesReturns AfterSalesReturn[]
 
   @@index([name])
   @@map("customers")
@@ -443,10 +571,35 @@ model SalesProduct {
   name      String
   title     String?
   defaultDescription String? @map("default_description")
-  glassTypeDefault GlassType? @map("glass_type_default")
-  glassFinishDefault GlassFinish? @map("glass_finish_default")
+  glassTypeDefault String? @map("glass_type_default")
+  glassFinishDefault String? @map("glass_finish_default")
   screenDefault String? @map("screen_default")
   openingTypeDefault String? @map("opening_type_default")
+  frameMaterialDefault String? @map("frame_material_default")
+  slidingConfigDefault String? @map("sliding_config_default")
+  glassCoatingDefault String? @map("glass_coating_default")
+  glassThicknessMmDefault Int? @map("glass_thickness_mm_default")
+  flooringBrand String? @map("flooring_brand")
+  flooringSeries String? @map("flooring_series")
+  flooringMaterial FlooringMaterial? @map("flooring_material")
+  flooringWearLayer String? @map("flooring_wear_layer")
+  flooringThicknessMm Decimal? @map("flooring_thickness_mm")
+  flooringPlankLengthIn Decimal? @map("flooring_plank_length_in")
+  flooringPlankWidthIn Decimal? @map("flooring_plank_width_in")
+  flooringCoreThicknessMm Decimal? @map("flooring_core_thickness_mm")
+  flooringFinish FlooringFinish? @map("flooring_finish")
+  flooringEdge FlooringEdge? @map("flooring_edge")
+  flooringInstallation FlooringInstallation? @map("flooring_installation")
+  flooringUnderlayment FlooringUnderlayment? @map("flooring_underlayment")
+  flooringUnderlaymentType String? @map("flooring_underlayment_type")
+  flooringUnderlaymentMm Decimal? @map("flooring_underlayment_mm")
+  flooringWaterResistance FlooringWaterResistance? @map("flooring_water_resistance")
+  flooringWaterproof Boolean? @map("flooring_waterproof")
+  flooringWarrantyResidentialYr Int? @map("flooring_warranty_residential_yr")
+  flooringWarrantyCommercialYr Int? @map("flooring_warranty_commercial_yr")
+  flooringPiecesPerBox Int? @map("flooring_pieces_per_box")
+  flooringBoxCoverageSqft Decimal? @map("flooring_box_coverage_sqft")
+  flooringLowStockThreshold Decimal? @map("flooring_low_stock_threshold")
   brand     String?
   collection String?
   skuPrefix String?  @map("sku_prefix")
@@ -468,13 +621,19 @@ model ProductVariant {
   id           String   @id @default(uuid())
   productId    String   @map("product_id")
   sku          String   @unique
+  displayName  String?  @map("display_name")
+  imageUrl     String?  @map("image_url")
+  skuSuffix    String?  @map("sku_suffix")
   description  String?
   width        Decimal?
   height       Decimal?
   color        String?
   glassType    String?  @map("glass_type")
-  glassTypeOverride GlassType? @map("glass_type_override")
-  glassFinishOverride GlassFinish? @map("glass_finish_override")
+  glassTypeOverride String? @map("glass_type_override")
+  slidingConfigOverride String? @map("sliding_config_override")
+  glassCoatingOverride String? @map("glass_coating_override")
+  glassThicknessMmOverride Int? @map("glass_thickness_mm_override")
+  glassFinishOverride String? @map("glass_finish_override")
   screenOverride String? @map("screen_override")
   openingTypeOverride String? @map("opening_type_override")
   screenType   String?  @map("screen_type")
@@ -487,12 +646,17 @@ model ProductVariant {
   reorderLevel Decimal  @default(0) @map("reorder_level")
   reorderQty   Decimal  @default(0) @map("reorder_qty")
   isStockItem  Boolean  @default(true) @map("is_stock_item")
+  archivedAt   DateTime? @map("archived_at")
   createdAt    DateTime @default(now()) @map("created_at")
 
   product      SalesProduct   @relation(fields: [productId], references: [id], onDelete: Cascade)
   inventoryStock InventoryStock?
+  inventoryMovements InventoryMovement[]
+  returnItems SalesReturnItem[]
+  afterSalesReturnItems AfterSalesReturnItem[]
   salesOrderItems SalesOrderItem[]
   invoiceItems InvoiceItem[]
+  fulfillmentItems SalesOrderFulfillmentItem[]
 
   @@index([productId])
   @@index([isStockItem])
@@ -523,6 +687,7 @@ model SalesOrder {
   depositRequired Decimal           @default(0) @map("deposit_required")
   subtotal        Decimal           @default(0)
   discount        Decimal           @default(0)
+  taxRate         Decimal?          @map("tax_rate")
   tax             Decimal           @default(0)
   total           Decimal           @default(0)
   paidAmount      Decimal           @default(0) @map("paid_amount")
@@ -531,6 +696,19 @@ model SalesOrder {
   salespersonName String?           @map("salesperson_name")
   commissionRate  Decimal           @default(0) @map("commission_rate")
   commissionAmount Decimal          @default(0) @map("commission_amount")
+  fulfillmentMethod SalesOrderFulfillmentMethod @default(PICKUP) @map("fulfillment_method")
+  deliveryName    String?           @map("delivery_name")
+  deliveryPhone   String?           @map("delivery_phone")
+  deliveryAddress1 String?          @map("delivery_address1")
+  deliveryAddress2 String?          @map("delivery_address2")
+  deliveryCity    String?           @map("delivery_city")
+  deliveryState   String?           @map("delivery_state")
+  deliveryZip     String?           @map("delivery_zip")
+  deliveryNotes   String?           @map("delivery_notes")
+  pickupNotes     String?           @map("pickup_notes")
+  requestedDeliveryAt DateTime?     @map("requested_delivery_at")
+  reservedAppliedAt DateTime?       @map("reserved_applied_at")
+  reservedReleasedAt DateTime?      @map("reserved_released_at")
   notes           String?
   createdAt       DateTime          @default(now()) @map("created_at")
   updatedAt       DateTime          @updatedAt @map("updated_at")
@@ -541,6 +719,8 @@ model SalesOrder {
   payments  SalesOrderPayment[]
   invoices  Invoice[]
   fulfillments SalesOrderFulfillment[]
+  returns   SalesReturn[]
+  afterSalesReturns AfterSalesReturn[]
   outboundQueue SalesOutboundQueue?
   tickets   SalesOrderTicket[]
 
@@ -583,6 +763,7 @@ model SalesOrderItem {
   product      SalesProduct? @relation(fields: [productId], references: [id], onDelete: SetNull)
   variant      ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
   linkedPo     PurchaseOrder? @relation(fields: [linkedPoId], references: [id], onDelete: SetNull)
+  fulfillmentItems SalesOrderFulfillmentItem[]
 
   @@index([salesOrderId])
   @@index([productId])
@@ -626,6 +807,7 @@ model SalesOrderPayment {
 
   salesOrder      SalesOrder         @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   invoice         Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  storeCreditApplications StoreCreditApplication[]
 
   @@index([salesOrderId])
   @@index([status, salesOrderId])
@@ -652,6 +834,7 @@ model Invoice {
   dueDate        DateTime? @map("due_date")
   status         String    @default("draft")
   subtotal       Decimal   @default(0)
+  taxRate        Decimal?  @map("tax_rate")
   taxAmount      Decimal   @default(0) @map("tax_amount")
   total          Decimal   @default(0)
   billingAddress String?   @map("billing_address")
@@ -663,12 +846,23 @@ model Invoice {
   customer       SalesCustomer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
   items          InvoiceItem[]
   payments       SalesOrderPayment[]
+  storeCreditApplications StoreCreditApplication[]
+  sourceReturns  SalesReturn[]        @relation("return_source_invoice")
+  afterSalesReturns AfterSalesReturn[]
 
   @@index([salesOrderId])
   @@index([customerId])
   @@index([issueDate])
   @@index([status])
   @@map("invoices")
+}
+
+model Settings {
+  id             String   @id @default("default")
+  defaultTaxRate Decimal  @default(0) @map("default_tax_rate")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
 }
 
 model InvoiceItem {
@@ -695,22 +889,76 @@ model InvoiceItem {
 
 model SalesOrderFulfillment {
   id            String                 @id @default(uuid())
-  salesOrderId  String                 @map("sales_order_id")
+  salesOrderId  String                 @unique @map("sales_order_id")
+  customerId    String?                @map("customer_id")
   type          SalesFulfillmentType
-  scheduledDate DateTime               @map("scheduled_date")
+  scheduledAt   DateTime?              @map("scheduled_at")
+  scheduledDate DateTime?              @map("scheduled_date")
   status        SalesFulfillmentStatus @default(SCHEDULED)
+  timeWindow    String?                @map("time_window")
+  driverName    String?                @map("driver_name")
+  shiptoName    String?                @map("shipto_name")
+  shiptoPhone   String?                @map("shipto_phone")
+  shiptoAddress1 String?               @map("shipto_address1")
+  shiptoAddress2 String?               @map("shipto_address2")
+  shiptoCity    String?                @map("shipto_city")
+  shiptoState   String?                @map("shipto_state")
+  shiptoZip     String?                @map("shipto_zip")
+  shiptoNotes   String?                @map("shipto_notes")
+  markedOutAt   DateTime?              @map("marked_out_at")
+  markedDoneAt  DateTime?              @map("marked_done_at")
+  inventoryDeductedAt DateTime?        @map("inventory_deducted_at")
+  inventoryDeductedBy String?          @map("inventory_deducted_by")
+  pickupContact String?                @map("pickup_contact")
+  deliveryName  String?                @map("delivery_name")
+  deliveryPhone String?                @map("delivery_phone")
+  address1      String?                @map("address1")
+  address2      String?                @map("address2")
+  city          String?
+  state         String?
+  zip           String?
   address       String?
   notes         String?
   createdAt     DateTime               @default(now()) @map("created_at")
   updatedAt     DateTime               @updatedAt @map("updated_at")
 
   salesOrder    SalesOrder             @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  customer      SalesCustomer?         @relation(fields: [customerId], references: [id], onDelete: SetNull)
   outboundQueue SalesOutboundQueue?
   tickets       SalesOrderTicket[]
+  items         SalesOrderFulfillmentItem[]
+  inventoryMovements InventoryMovement[]
+  returns SalesReturn[]
 
-  @@index([salesOrderId])
+  @@index([customerId])
   @@index([scheduledDate])
   @@map("sales_order_fulfillments")
+}
+
+model SalesOrderFulfillmentItem {
+  id              String                @id @default(uuid())
+  fulfillmentId   String                @map("fulfillment_id")
+  salesOrderItemId String               @map("sales_order_item_id")
+  variantId       String?               @map("variant_id")
+  title           String
+  sku             String
+  unit            String
+  orderedQty      Decimal               @map("ordered_qty")
+  fulfilledQty    Decimal               @default(0) @map("fulfilled_qty")
+  notes           String?
+  createdAt       DateTime              @default(now()) @map("created_at")
+
+  fulfillment     SalesOrderFulfillment @relation(fields: [fulfillmentId], references: [id], onDelete: Cascade)
+  salesOrderItem  SalesOrderItem        @relation(fields: [salesOrderItemId], references: [id], onDelete: Cascade)
+  variant         ProductVariant?       @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  inventoryMovements InventoryMovement[]
+  returnItems SalesReturnItem[]
+
+  @@unique([fulfillmentId, salesOrderItemId])
+  @@index([fulfillmentId])
+  @@index([salesOrderItemId])
+  @@index([variantId])
+  @@map("sales_order_fulfillment_items")
 }
 
 model SalesOutboundQueue {
@@ -745,6 +993,173 @@ model InventoryStock {
 
   @@index([reserved])
   @@map("inventory_stock")
+}
+
+model InventoryMovement {
+  id                String                    @id @default(uuid())
+  variantId         String                    @map("variant_id")
+  fulfillmentId     String?                   @map("fulfillment_id")
+  fulfillmentItemId String?                   @map("fulfillment_item_id")
+  type              String
+  qty               Decimal
+  unit              String
+  note              String?
+  createdAt         DateTime                  @default(now()) @map("created_at")
+
+  variant           ProductVariant            @relation(fields: [variantId], references: [id], onDelete: Restrict)
+  fulfillment       SalesOrderFulfillment?    @relation(fields: [fulfillmentId], references: [id], onDelete: SetNull)
+  fulfillmentItem   SalesOrderFulfillmentItem? @relation(fields: [fulfillmentItemId], references: [id], onDelete: SetNull)
+
+  @@index([variantId, createdAt])
+  @@index([fulfillmentId])
+  @@index([fulfillmentItemId])
+  @@map("inventory_movements")
+}
+
+model SalesReturn {
+  id            String                  @id @default(uuid())
+  salesOrderId  String                  @map("sales_order_id")
+  fulfillmentId String?                 @map("fulfillment_id")
+  sourceInvoiceId String?               @map("source_invoice_id")
+  returnType    String                  @default("RETURN") @map("return_type")
+  refundMethod  String?                 @map("refund_method")
+  status        ReturnStatus            @default(DRAFT)
+  reason        String?
+  issueStoreCredit Boolean              @default(false) @map("issue_store_credit")
+  creditAmount  Decimal                 @default(0) @map("credit_amount")
+  completedAt   DateTime?               @map("completed_at")
+  createdAt     DateTime                @default(now()) @map("created_at")
+
+  salesOrder    SalesOrder              @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  fulfillment   SalesOrderFulfillment?  @relation(fields: [fulfillmentId], references: [id], onDelete: SetNull)
+  sourceInvoice Invoice?                @relation("return_source_invoice", fields: [sourceInvoiceId], references: [id], onDelete: SetNull)
+  items         SalesReturnItem[]
+  storeCredit   StoreCredit?
+
+  @@index([salesOrderId, createdAt])
+  @@index([fulfillmentId])
+  @@index([sourceInvoiceId])
+  @@map("returns")
+}
+
+model SalesReturnItem {
+  id                String                    @id @default(uuid())
+  returnId          String                    @map("return_id")
+  fulfillmentItemId String                    @map("fulfillment_item_id")
+  variantId         String                    @map("variant_id")
+  qty               Decimal                   @default(0)
+  createdAt         DateTime                  @default(now()) @map("created_at")
+
+  salesReturn       SalesReturn               @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  fulfillmentItem   SalesOrderFulfillmentItem @relation(fields: [fulfillmentItemId], references: [id], onDelete: Restrict)
+  variant           ProductVariant            @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@index([returnId])
+  @@index([fulfillmentItemId])
+  @@index([variantId])
+  @@map("return_items")
+}
+
+model StoreCredit {
+  id         String            @id @default(uuid())
+  customerId String            @map("customer_id")
+  returnId   String            @unique @map("return_id")
+  amount     Decimal
+  usedAmount Decimal           @default(0) @map("used_amount")
+  status     StoreCreditStatus @default(OPEN)
+  notes      String?
+  createdAt  DateTime          @default(now()) @map("created_at")
+
+  customer   SalesCustomer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  salesReturn SalesReturn      @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  applications StoreCreditApplication[]
+
+  @@index([customerId, createdAt])
+  @@index([status])
+  @@map("store_credits")
+}
+
+model StoreCreditApplication {
+  id            String           @id @default(uuid())
+  storeCreditId String           @map("store_credit_id")
+  invoiceId     String           @map("invoice_id")
+  paymentId     String?          @map("payment_id")
+  amount        Decimal
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  storeCredit   StoreCredit      @relation(fields: [storeCreditId], references: [id], onDelete: Cascade)
+  invoice       Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  payment       SalesOrderPayment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId, createdAt])
+  @@index([storeCreditId, createdAt])
+  @@index([paymentId])
+  @@map("store_credit_applications")
+}
+
+model AfterSalesReturn {
+  id            String                 @id @default(uuid())
+  returnNumber  String                 @unique @map("return_number")
+  customerId    String                 @map("customer_id")
+  salesOrderId  String?                @map("sales_order_id")
+  invoiceId     String?                @map("invoice_id")
+  type          AfterSalesReturnType   @default(RETURN)
+  status        AfterSalesReturnStatus @default(DRAFT)
+  refundMethod  AfterSalesRefundMethod @default(NO_REFUND) @map("refund_method")
+  refundTotal   Decimal                @default(0) @map("refund_total")
+  notes         String?
+  pdfUrl        String?                @map("pdf_url")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  customer      SalesCustomer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  salesOrder    SalesOrder?            @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
+  invoice       Invoice?               @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  items         AfterSalesReturnItem[]
+  events        AfterSalesReturnEvent[]
+
+  @@index([customerId, createdAt])
+  @@index([salesOrderId])
+  @@index([invoiceId])
+  @@index([status, createdAt])
+  @@map("after_sales_returns")
+}
+
+model AfterSalesReturnItem {
+  id             String          @id @default(uuid())
+  returnId       String          @map("return_id")
+  lineItemId     String?         @map("line_item_id")
+  variantId      String?         @map("variant_id")
+  title          String
+  sku            String?
+  qtyPurchased   Decimal?        @map("qty_purchased")
+  qtyReturn      Decimal         @default(0) @map("qty_return")
+  unitPrice      Decimal         @default(0) @map("unit_price")
+  reason         String?
+  condition      String?
+  lineRefund     Decimal         @default(0) @map("line_refund")
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  afterSalesReturn AfterSalesReturn @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  variant        ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  @@index([returnId])
+  @@index([lineItemId])
+  @@index([variantId])
+  @@map("after_sales_return_items")
+}
+
+model AfterSalesReturnEvent {
+  id             String                 @id @default(uuid())
+  returnId       String                 @map("return_id")
+  status         AfterSalesReturnStatus
+  note           String?
+  createdAt      DateTime               @default(now()) @map("created_at")
+
+  afterSalesReturn AfterSalesReturn     @relation(fields: [returnId], references: [id], onDelete: Cascade)
+
+  @@index([returnId, createdAt])
+  @@map("after_sales_return_events")
 }
 
 model SalesOrderTicket {

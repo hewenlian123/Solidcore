@@ -31,7 +31,11 @@ export async function POST(request: NextRequest) {
           select: {
             id: true,
             skuPrefix: true,
+            frameMaterialDefault: true,
+            slidingConfigDefault: true,
             glassTypeDefault: true,
+            glassCoatingDefault: true,
+            glassThicknessMmDefault: true,
             glassFinishDefault: true,
             screenDefault: true,
             openingTypeDefault: true,

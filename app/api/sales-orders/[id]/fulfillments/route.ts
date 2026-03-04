@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncSalesOutboundQueue } from "@/lib/sales-orders";
+import { ensureFulfillmentFromSalesOrder } from "@/lib/fulfillment";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = {
@@ -36,18 +37,21 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     let createdFulfillmentId: string | null = null;
     await prisma.$transaction(async (tx) => {
-      const created = await tx.salesOrderFulfillment.create({
+      const ensured = await ensureFulfillmentFromSalesOrder(tx, {
+        salesOrderId: id,
+        type: type as any,
+      });
+      const updated = await tx.salesOrderFulfillment.update({
+        where: { id: ensured.fulfillment.id },
         data: {
-          salesOrderId: id,
-          type: type as any,
           scheduledDate,
           status: mappedStatus,
-          address: payload.address ? String(payload.address) : null,
-          notes: payload.notes ? String(payload.notes) : null,
+          address: payload.address ? String(payload.address) : undefined,
+          notes: payload.notes ? String(payload.notes) : undefined,
         },
       });
-      createdFulfillmentId = created.id;
-      if (created.status === "IN_PROGRESS") {
+      createdFulfillmentId = updated.id;
+      if (updated.status === "IN_PROGRESS") {
         await tx.salesOrder.update({
           where: { id },
           data: { status: "READY" },

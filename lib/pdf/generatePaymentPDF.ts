@@ -13,6 +13,9 @@ type PaymentPDFData = {
   referenceNumber?: string | null;
   receivedAt: string | Date;
   status: string;
+  subtotal: number;
+  taxRate?: number | null;
+  taxAmount: number;
   total: number;
   paidAmount: number;
   balanceDue: number;
@@ -187,6 +190,12 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
 
   const totalsLeft = pageWidth - margin - 210;
   const totalsRight = pageWidth - margin;
+  drawText("Subtotal", totalsLeft, 10);
+  drawRight(formatMoney(data.subtotal), totalsRight, 10);
+  y -= 14;
+  drawText(`Tax (${Number(data.taxRate ?? 0).toFixed(3)}%)`, totalsLeft, 10);
+  drawRight(formatMoney(data.taxAmount), totalsRight, 10);
+  y -= 14;
   drawText("Order Total", totalsLeft, 10);
   drawRight(formatMoney(data.total), totalsRight, 10);
   y -= 14;

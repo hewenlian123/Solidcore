@@ -4,6 +4,8 @@ import { renderDescription } from "@/lib/description/renderDescription";
 import { ensureDescriptionTemplateSeeds } from "@/lib/description/templates";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { getCustomerSpecLine, getEffectiveSpecs } from "@/lib/specs/glass";
+import { formatFlooringSubtitle } from "@/lib/specs/effective";
+import { resolveSellingUnit } from "@/lib/selling-unit";
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,14 +18,19 @@ export async function GET(request: NextRequest) {
     const data = await prisma.productVariant.findMany({
       where: {
         isStockItem: true,
+        archivedAt: null,
         product: { active: true },
         ...(q
           ? {
               OR: [
                 { sku: { contains: q } },
                 { description: { contains: q } },
+                { displayName: { contains: q } },
                 { openingTypeOverride: { contains: q } },
+                { slidingConfigOverride: { contains: q } },
                 { screenOverride: { contains: q } },
+                { glassTypeOverride: { contains: q } },
+                { glassCoatingOverride: { contains: q } },
                 { variantType: { contains: q } },
                 { product: { name: { contains: q } } },
                 { product: { title: { contains: q } } },
@@ -43,9 +50,13 @@ export async function GET(request: NextRequest) {
             title: true,
             defaultDescription: true,
             glassTypeDefault: true,
+            glassCoatingDefault: true,
+            glassThicknessMmDefault: true,
             glassFinishDefault: true,
             screenDefault: true,
             openingTypeDefault: true,
+            frameMaterialDefault: true,
+            slidingConfigDefault: true,
             brand: true,
             collection: true,
               price: true,
@@ -74,9 +85,24 @@ export async function GET(request: NextRequest) {
               thicknessMm: true,
               glass: true,
               glassTypeDefault: true,
+              glassCoatingDefault: true,
+              glassThicknessMmDefault: true,
               glassFinishDefault: true,
               screenDefault: true,
               openingTypeDefault: true,
+              frameMaterialDefault: true,
+              slidingConfigDefault: true,
+              flooringMaterial: true,
+              flooringWearLayer: true,
+              flooringThicknessMm: true,
+              flooringPlankLengthIn: true,
+              flooringPlankWidthIn: true,
+              flooringCoreThicknessMm: true,
+              flooringInstallation: true,
+              flooringUnderlayment: true,
+              flooringUnderlaymentType: true,
+              flooringUnderlaymentMm: true,
+              flooringBoxCoverageSqft: true,
               type: true,
               style: true,
               rating: true,
@@ -119,43 +145,66 @@ export async function GET(request: NextRequest) {
               },
               templateJson: templateByCategory.get(categoryName) ?? null,
             });
+            const windowSummary =
+              productMeta?.category === "WINDOW"
+                ? getCustomerSpecLine(
+                    getEffectiveSpecs(productMeta, {
+                      glassTypeOverride: variant.glassTypeOverride,
+                      slidingConfigOverride: variant.slidingConfigOverride,
+                      glassCoatingOverride: variant.glassCoatingOverride,
+                      glassThicknessMmOverride: variant.glassThicknessMmOverride,
+                      glassFinishOverride: variant.glassFinishOverride,
+                      screenOverride: variant.screenOverride,
+                      openingTypeOverride: variant.openingTypeOverride,
+                      glassType: variant.glassType,
+                      screenType: variant.screenType,
+                      slideDirection: variant.slideDirection,
+                    }),
+                  )
+                : "";
+            const flooringSummary = formatFlooringSubtitle({
+              flooringMaterial: productMeta?.flooringMaterial,
+              flooringWearLayer: productMeta?.flooringWearLayer,
+              flooringThicknessMm:
+                productMeta?.flooringThicknessMm != null ? Number(productMeta.flooringThicknessMm) : null,
+              flooringPlankLengthIn:
+                productMeta?.flooringPlankLengthIn != null ? Number(productMeta.flooringPlankLengthIn) : null,
+              flooringPlankWidthIn:
+                productMeta?.flooringPlankWidthIn != null ? Number(productMeta.flooringPlankWidthIn) : null,
+              flooringCoreThicknessMm:
+                productMeta?.flooringCoreThicknessMm != null
+                  ? Number(productMeta.flooringCoreThicknessMm)
+                  : null,
+              flooringInstallation: productMeta?.flooringInstallation,
+              flooringUnderlayment: productMeta?.flooringUnderlayment,
+              flooringUnderlaymentType: productMeta?.flooringUnderlaymentType,
+              flooringUnderlaymentMm:
+                productMeta?.flooringUnderlaymentMm != null
+                  ? Number(productMeta.flooringUnderlaymentMm)
+                  : null,
+              flooringBoxCoverageSqft:
+                productMeta?.flooringBoxCoverageSqft != null
+                  ? Number(productMeta.flooringBoxCoverageSqft)
+                  : null,
+            });
+            const effectiveDescription = windowSummary || flooringSummary || generatedDescription || null;
             return {
-              specsLine:
-                productMeta?.category === "WINDOW"
-                  ? getCustomerSpecLine(
-                      getEffectiveSpecs(productMeta, {
-                        glassTypeOverride: variant.glassTypeOverride,
-                        glassFinishOverride: variant.glassFinishOverride,
-                        screenOverride: variant.screenOverride,
-                        openingTypeOverride: variant.openingTypeOverride,
-                        glassType: variant.glassType,
-                        screenType: variant.screenType,
-                        slideDirection: variant.slideDirection,
-                      }),
-                    )
-                  : "",
+              specsLine: effectiveDescription ?? "",
               category: categoryName || null,
-              generatedDescription:
-                (productMeta?.category === "WINDOW"
-                  ? getCustomerSpecLine(
-                      getEffectiveSpecs(productMeta, {
-                        glassTypeOverride: variant.glassTypeOverride,
-                        glassFinishOverride: variant.glassFinishOverride,
-                        screenOverride: variant.screenOverride,
-                        openingTypeOverride: variant.openingTypeOverride,
-                        glassType: variant.glassType,
-                        screenType: variant.screenType,
-                        slideDirection: variant.slideDirection,
-                      }),
-                    )
-                  : generatedDescription) || null,
+              flooringBoxCoverageSqft:
+                productMeta?.flooringBoxCoverageSqft != null
+                  ? Number(productMeta.flooringBoxCoverageSqft)
+                  : null,
+              generatedDescription: effectiveDescription,
             };
           })(),
           id: variant.id,
           productId: variant.productId,
-          name: variant.product.name,
-          title: variant.product.name,
+          name: variant.displayName ?? variant.product.name,
+          title: variant.displayName ?? variant.product.name,
           sku: variant.sku,
+          displayName: variant.displayName ?? null,
+          skuSuffix: variant.skuSuffix ?? null,
           variantDescription: variant.description ?? null,
           defaultDescription: variant.product.defaultDescription ?? null,
           brand: variant.product.brand,
@@ -165,10 +214,17 @@ export async function GET(request: NextRequest) {
             Number(variant.inventoryStock?.onHand ?? 0) - Number(variant.inventoryStock?.reserved ?? 0),
           ),
           price: String(variant.price ?? 0),
+          imageUrl: variant.imageUrl ?? null,
+          unit: variant.product.unit ?? null,
+          sellingUnit: resolveSellingUnit(productMetaById.get(variant.productId)?.category, variant.product.unit),
         }));
+    const withSpecs = mappedData.map((item) => ({
+      ...item,
+      specsLine: String(item.specsLine || item.generatedDescription || ""),
+    }));
     const qLower = q.toLowerCase();
     const filtered = qLower
-      ? mappedData.filter((variant) => {
+      ? withSpecs.filter((variant) => {
           const productMeta = productMetaById.get(variant.productId);
           const sizeText =
             productMeta?.sizeW !== null && productMeta?.sizeW !== undefined &&
@@ -192,7 +248,7 @@ export async function GET(request: NextRequest) {
             .join(" ");
           return searchBlob.includes(qLower);
         })
-      : mappedData;
+      : withSpecs;
 
     return NextResponse.json({ data: filtered }, { status: 200 });
   } catch (error) {

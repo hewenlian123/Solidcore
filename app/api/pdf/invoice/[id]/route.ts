@@ -27,16 +27,35 @@ export async function GET(request: NextRequest, { params }: Params) {
               height: true,
               color: true,
               glassTypeOverride: true,
+              displayName: true,
+              slidingConfigOverride: true,
+              glassCoatingOverride: true,
+              glassThicknessMmOverride: true,
               glassFinishOverride: true,
               screenOverride: true,
               openingTypeOverride: true,
               product: {
                 select: {
                   name: true,
+                  frameMaterialDefault: true,
+                  slidingConfigDefault: true,
                   glassTypeDefault: true,
+                  glassCoatingDefault: true,
+                  glassThicknessMmDefault: true,
                   glassFinishDefault: true,
                   screenDefault: true,
                   openingTypeDefault: true,
+                  flooringMaterial: true,
+                  flooringWearLayer: true,
+                  flooringThicknessMm: true,
+                  flooringPlankLengthIn: true,
+                  flooringPlankWidthIn: true,
+                  flooringCoreThicknessMm: true,
+                  flooringInstallation: true,
+                  flooringUnderlayment: true,
+                  flooringUnderlaymentType: true,
+                  flooringUnderlaymentMm: true,
+                  flooringBoxCoverageSqft: true,
                 },
               },
             },
@@ -67,25 +86,66 @@ export async function GET(request: NextRequest, { params }: Params) {
     salesOrderNumber: invoice.salesOrder?.orderNumber ?? null,
     items: invoice.items.map((item) => ({
       sku: item.skuSnapshot,
-      title: item.titleSnapshot ?? "-",
+      title: item.variant?.displayName ?? item.titleSnapshot ?? "-",
       description: item.description ?? "",
       productName: item.variant?.product?.name ?? null,
       width: item.variant?.width != null ? Number(item.variant.width) : null,
       height: item.variant?.height != null ? Number(item.variant.height) : null,
       color: item.variant?.color ?? null,
+      frameMaterialDefault: item.variant?.product?.frameMaterialDefault ?? null,
+      slidingConfigDefault: item.variant?.product?.slidingConfigDefault ?? null,
       glassTypeDefault: item.variant?.product?.glassTypeDefault ?? null,
+      glassCoatingDefault: item.variant?.product?.glassCoatingDefault ?? null,
+      glassThicknessMmDefault:
+        item.variant?.product?.glassThicknessMmDefault != null
+          ? Number(item.variant.product.glassThicknessMmDefault)
+          : null,
       glassFinishDefault: item.variant?.product?.glassFinishDefault ?? null,
       screenDefault: item.variant?.product?.screenDefault ?? null,
       openingTypeDefault: item.variant?.product?.openingTypeDefault ?? null,
       glassTypeOverride: item.variant?.glassTypeOverride ?? null,
+      slidingConfigOverride: item.variant?.slidingConfigOverride ?? null,
+      glassCoatingOverride: item.variant?.glassCoatingOverride ?? null,
+      glassThicknessMmOverride:
+        item.variant?.glassThicknessMmOverride != null ? Number(item.variant.glassThicknessMmOverride) : null,
       glassFinishOverride: item.variant?.glassFinishOverride ?? null,
       screenOverride: item.variant?.screenOverride ?? null,
       openingTypeOverride: item.variant?.openingTypeOverride ?? null,
+      flooringMaterial: item.variant?.product?.flooringMaterial ?? null,
+      flooringWearLayer: item.variant?.product?.flooringWearLayer ?? null,
+      flooringThicknessMm:
+        item.variant?.product?.flooringThicknessMm != null
+          ? Number(item.variant.product.flooringThicknessMm)
+          : null,
+      flooringPlankLengthIn:
+        item.variant?.product?.flooringPlankLengthIn != null
+          ? Number(item.variant.product.flooringPlankLengthIn)
+          : null,
+      flooringPlankWidthIn:
+        item.variant?.product?.flooringPlankWidthIn != null
+          ? Number(item.variant.product.flooringPlankWidthIn)
+          : null,
+      flooringCoreThicknessMm:
+        item.variant?.product?.flooringCoreThicknessMm != null
+          ? Number(item.variant.product.flooringCoreThicknessMm)
+          : null,
+      flooringInstallation: item.variant?.product?.flooringInstallation ?? null,
+      flooringUnderlayment: item.variant?.product?.flooringUnderlayment ?? null,
+      flooringUnderlaymentType: item.variant?.product?.flooringUnderlaymentType ?? null,
+      flooringUnderlaymentMm:
+        item.variant?.product?.flooringUnderlaymentMm != null
+          ? Number(item.variant.product.flooringUnderlaymentMm)
+          : null,
+      flooringBoxCoverageSqft:
+        item.variant?.product?.flooringBoxCoverageSqft != null
+          ? Number(item.variant.product.flooringBoxCoverageSqft)
+          : null,
       qty: Number(item.qty),
       unitPrice: Number(item.unitPrice),
       lineTotal: Number(item.lineTotal),
     })),
     subtotal: Number(invoice.subtotal),
+    taxRate: invoice.taxRate != null ? Number(invoice.taxRate) : null,
     taxAmount: Number(invoice.taxAmount),
     total,
     paidTotal,

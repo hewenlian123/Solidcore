@@ -3,6 +3,8 @@ import { COMPANY_SETTINGS } from "@/lib/company-settings";
 import { getPdfThemeColors } from "@/lib/pdf/theme";
 import { formatLineItemTitle } from "@/lib/display";
 import { getCustomerSpecLine, getEffectiveSpecs } from "@/lib/specs/glass";
+import { formatFlooringSubtitle } from "@/lib/specs/effective";
+import { formatBoxesSqftSummary } from "@/lib/selling-unit";
 
 type SalesOrderPDFData = {
   orderNumber: string;
@@ -14,6 +16,9 @@ type SalesOrderPDFData = {
   customerEmail?: string | null;
   projectName?: string | null;
   salespersonName?: string | null;
+  fulfillmentType?: string | null;
+  fulfillmentAddress?: string | null;
+  fulfillmentScheduledDate?: string | Date | null;
   notes?: string | null;
   items: Array<{
     productName?: string | null;
@@ -24,20 +29,39 @@ type SalesOrderPDFData = {
     color?: string | null;
     detailText?: string | null;
     lineNote?: string | null;
+    frameMaterialDefault?: string | null;
+    slidingConfigDefault?: string | null;
     glassTypeDefault?: string | null;
+    glassCoatingDefault?: string | null;
+    glassThicknessMmDefault?: number | null;
     glassFinishDefault?: string | null;
     screenDefault?: string | null;
     openingTypeDefault?: string | null;
     glassTypeOverride?: string | null;
+    slidingConfigOverride?: string | null;
+    glassCoatingOverride?: string | null;
+    glassThicknessMmOverride?: number | null;
     glassFinishOverride?: string | null;
     screenOverride?: string | null;
     openingTypeOverride?: string | null;
+    flooringMaterial?: string | null;
+    flooringWearLayer?: string | null;
+    flooringThicknessMm?: number | null;
+    flooringPlankLengthIn?: number | null;
+    flooringPlankWidthIn?: number | null;
+    flooringCoreThicknessMm?: number | null;
+    flooringInstallation?: string | null;
+    flooringUnderlayment?: string | null;
+    flooringUnderlaymentType?: string | null;
+    flooringUnderlaymentMm?: number | null;
+    flooringBoxCoverageSqft?: number | null;
     qty: number;
     unitPrice: number;
     lineTotal: number;
   }>;
   subtotal: number;
   discount: number;
+  taxRate?: number | null;
   tax: number;
   total: number;
   paidAmount: number;
@@ -204,6 +228,26 @@ export async function generateSalesOrderPDF(data: SalesOrderPDFData): Promise<Ui
   drawText(`Phone: ${data.customerPhone || "-"}`, margin, 10);
   y -= 13;
   drawText(`Email: ${data.customerEmail || "-"}`, margin, 10);
+  y -= 13;
+  if (String(data.fulfillmentType ?? "").toUpperCase() === "DELIVERY") {
+    drawText("Delivery", margin, 10, { bold: true });
+    y -= 13;
+    drawText(
+      `Address: ${String(data.fulfillmentAddress ?? "").trim() || "-"}`,
+      margin,
+      10,
+      { color: { r: 0.42, g: 0.45, b: 0.5 } },
+    );
+    y -= 13;
+    drawText(
+      `Scheduled: ${formatDate(data.fulfillmentScheduledDate ?? null)}`,
+      margin,
+      10,
+      { color: { r: 0.42, g: 0.45, b: 0.5 } },
+    );
+  } else {
+    drawText("Pickup", margin, 10, { bold: true });
+  }
 
   const metaX = pageWidth - margin - 220;
   const metaTop = y + 26;
@@ -223,44 +267,83 @@ export async function generateSalesOrderPDF(data: SalesOrderPDFData): Promise<Ui
   for (const item of data.items) {
     const leftX = margin + 8;
     const leftMaxWidth = pageWidth - 250 - leftX;
+    const flooringSummary = formatFlooringSubtitle({
+      flooringMaterial: item.flooringMaterial,
+      flooringWearLayer: item.flooringWearLayer,
+      flooringThicknessMm: item.flooringThicknessMm,
+      flooringPlankLengthIn: item.flooringPlankLengthIn,
+      flooringPlankWidthIn: item.flooringPlankWidthIn,
+      flooringCoreThicknessMm: item.flooringCoreThicknessMm,
+      flooringInstallation: item.flooringInstallation,
+      flooringUnderlayment: item.flooringUnderlayment,
+      flooringUnderlaymentType: item.flooringUnderlaymentType,
+      flooringUnderlaymentMm: item.flooringUnderlaymentMm,
+      flooringBoxCoverageSqft: item.flooringBoxCoverageSqft,
+    });
     const productLine = fitSingleLine(
-      formatLineItemTitle({
-        productName: item.productName,
-        variant: {
-          title: item.variantTitle,
-          sku: item.variantSku,
-          width: item.width,
-          height: item.height,
-          color: item.color,
-          detailText: item.detailText,
-        },
-      }),
+      flooringSummary
+        ? String(item.variantTitle ?? item.productName ?? "").trim() || "-"
+        : formatLineItemTitle({
+            productName: item.productName,
+            variant: {
+              title: item.variantTitle,
+              sku: item.variantSku,
+              width: item.width,
+              height: item.height,
+              color: item.color,
+              detailText: item.detailText,
+            },
+          }),
       leftMaxWidth,
       10,
       true,
     );
+    const skuLine = flooringSummary
+      ? fitSingleLine(`SKU: ${String(item.variantSku ?? "-")}`, leftMaxWidth, 9, false)
+      : "";
+    const sqftPerBox = Number(item.flooringBoxCoverageSqft ?? 0);
+    const qtyBoxes = Number(item.qty ?? 0);
+    const flooringShipLine =
+      flooringSummary && Number.isFinite(sqftPerBox) && sqftPerBox > 0 && Number.isFinite(qtyBoxes)
+        ? fitSingleLine(
+            formatBoxesSqftSummary(Math.max(0, qtyBoxes), sqftPerBox) ?? "",
+            leftMaxWidth,
+            9,
+            false,
+          )
+        : "";
     const windowSummary = fitSingleLine(
-      getCustomerSpecLine(
-        getEffectiveSpecs(
-          {
-            glassTypeDefault: item.glassTypeDefault,
-            glassFinishDefault: item.glassFinishDefault,
-            screenDefault: item.screenDefault,
-            openingTypeDefault: item.openingTypeDefault,
-          },
-          {
-            glassTypeOverride: item.glassTypeOverride,
-            glassFinishOverride: item.glassFinishOverride,
-            screenOverride: item.screenOverride,
-            openingTypeOverride: item.openingTypeOverride,
-          },
+      flooringSummary
+        ? flooringShipLine
+        : getCustomerSpecLine(
+          getEffectiveSpecs(
+            {
+              frameMaterialDefault: item.frameMaterialDefault,
+              slidingConfigDefault: item.slidingConfigDefault,
+              glassTypeDefault: item.glassTypeDefault,
+              glassCoatingDefault: item.glassCoatingDefault,
+              glassThicknessMmDefault: item.glassThicknessMmDefault,
+              glassFinishDefault: item.glassFinishDefault,
+              screenDefault: item.screenDefault,
+              openingTypeDefault: item.openingTypeDefault,
+            },
+            {
+              glassTypeOverride: item.glassTypeOverride,
+              slidingConfigOverride: item.slidingConfigOverride,
+              glassCoatingOverride: item.glassCoatingOverride,
+              glassThicknessMmOverride: item.glassThicknessMmOverride,
+              glassFinishOverride: item.glassFinishOverride,
+              screenOverride: item.screenOverride,
+              openingTypeOverride: item.openingTypeOverride,
+              detailText: item.detailText,
+            },
+          ),
         ),
-      ),
       leftMaxWidth,
       9,
       false,
     );
-    const rowLinesCount = windowSummary ? 2 : 1;
+    const rowLinesCount = 1 + (windowSummary ? 1 : 0) + (skuLine ? 1 : 0);
     const rowHeight = Math.max(24, rowLinesCount * 12 + 8);
     ensureSpace(rowHeight + 4);
     const rowTopY = y;
@@ -271,6 +354,11 @@ export async function generateSalesOrderPDF(data: SalesOrderPDFData): Promise<Ui
     if (windowSummary) {
       y = textY;
       drawText(windowSummary, leftX, 9, { color: { r: 0.42, g: 0.45, b: 0.5 } });
+      textY -= 12;
+    }
+    if (skuLine) {
+      y = textY;
+      drawText(skuLine, leftX, 9, { color: { r: 0.42, g: 0.45, b: 0.5 } });
       textY -= 12;
     }
     y = rowTopY;
@@ -298,7 +386,11 @@ export async function generateSalesOrderPDF(data: SalesOrderPDFData): Promise<Ui
   drawText("Discount", totalsLeft, 10);
   drawRight(formatMoney(data.discount), totalsRight, 10);
   y -= 14;
-  drawText("Tax", totalsLeft, 10);
+  const taxRateLabel =
+    data.taxRate != null && Number.isFinite(Number(data.taxRate))
+      ? `Tax (${Number(data.taxRate).toFixed(2)}%)`
+      : "Tax";
+  drawText(taxRateLabel, totalsLeft, 10);
   drawRight(formatMoney(data.tax), totalsRight, 10);
   y -= 12;
   page.drawLine({
@@ -324,12 +416,54 @@ export async function generateSalesOrderPDF(data: SalesOrderPDFData): Promise<Ui
     y -= 14;
     const note = data.notes.length > 180 ? `${data.notes.slice(0, 177)}...` : data.notes;
     drawText(note, margin, 9, { color: { r: 0.42, g: 0.45, b: 0.5 } });
+    y -= 14;
+  }
+
+  const methods = Array.isArray(COMPANY_SETTINGS.accepted_payment_methods)
+    ? COMPANY_SETTINGS.accepted_payment_methods
+    : [];
+  if (methods.length > 0) {
+    ensureSpace(42);
+    drawText("Accepted Payment Methods", margin, 10, { bold: true, color: { r: 0.3, g: 0.33, b: 0.38 } });
+    y -= 12;
+    drawText(methods.join(" / "), margin, 9, { color: { r: 0.42, g: 0.45, b: 0.5 } });
+    y -= 14;
+  }
+
+  if (COMPANY_SETTINGS.invoice_terms_text) {
+    ensureSpace(52);
+    drawText("Terms & Conditions", margin, 10, { bold: true, color: { r: 0.3, g: 0.33, b: 0.38 } });
+    y -= 12;
+    const terms = COMPANY_SETTINGS.invoice_terms_text;
+    const line = terms.length > 220 ? `${terms.slice(0, 217)}...` : terms;
+    drawText(line, margin, 9, { color: { r: 0.42, g: 0.45, b: 0.5 } });
   }
 
   // Footer
   const pages = pdfDoc.getPages();
   const totalPages = pages.length;
   pages.forEach((p, i) => {
+    p.drawText("Authorized Signature", {
+      x: margin,
+      y: 56,
+      size: 10,
+      font: fontBold,
+      color: rgb(0.2, 0.21, 0.24),
+    });
+    p.drawLine({
+      start: { x: margin, y: 44 },
+      end: { x: margin + 230, y: 44 },
+      thickness: 0.8,
+      color: rgb(0.55, 0.55, 0.58),
+    });
+    p.drawText("Date: ____________", {
+      x: margin,
+      y: 30,
+      size: 9,
+      font,
+      color: rgb(0.4, 0.4, 0.43),
+    });
+
     const footer = "Thank you for your business.";
     const fw = font.widthOfTextAtSize(footer, 9);
     p.drawText(footer, {

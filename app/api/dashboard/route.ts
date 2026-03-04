@@ -22,7 +22,7 @@ function endOfTodayUtc() {
 export async function GET(request: NextRequest) {
   try {
     const role = getRequestRole(request);
-    if (!hasOneOf(role, ["ADMIN"])) {
+    if (!hasOneOf(role, ["ADMIN", "SALES", "WAREHOUSE"])) {
       return deny();
     }
 
@@ -39,15 +39,18 @@ export async function GET(request: NextRequest) {
         where: { createdAt: { gte: startDate } },
         select: {
           id: true,
+          orderNo: true,
           totalAmount: true,
           paidAmount: true,
           createdAt: true,
           status: true,
+          customer: { select: { name: true } },
           items: {
             select: {
+              quantity: true,
               subtotal: true,
               product: {
-                select: { category: true },
+                select: { id: true, name: true, sku: true, category: true },
               },
             },
           },
@@ -196,13 +199,17 @@ export async function GET(request: NextRequest) {
     ]);
 
     const dailyMap = new Map<string, number>();
+    const dailyOrderCountMap = new Map<string, number>();
     for (let i = 0; i < 7; i += 1) {
       const d = new Date(startDate);
       d.setDate(startDate.getDate() + i);
-      dailyMap.set(formatDate(d), 0);
+      const key = formatDate(d);
+      dailyMap.set(key, 0);
+      dailyOrderCountMap.set(key, 0);
     }
 
     let totalRevenue = 0;
+    let todayOrderCount = 0;
     const categorySales: Record<ProductCategory, number> = {
       WINDOW: 0,
       FLOOR: 0,
@@ -211,16 +218,36 @@ export async function GET(request: NextRequest) {
       WAREHOUSE_SUPPLY: 0,
       OTHER: 0,
     };
+    const productSalesMap = new Map<string, { id: string; name: string; sku: string; sales: number; revenue: number }>();
 
     for (const order of orders) {
       const amount = Number(order.totalAmount);
       totalRevenue += amount;
       const key = formatDate(order.createdAt);
       dailyMap.set(key, (dailyMap.get(key) ?? 0) + amount);
+      dailyOrderCountMap.set(key, (dailyOrderCountMap.get(key) ?? 0) + 1);
+      if (order.createdAt >= todayStart && order.createdAt < todayEnd) {
+        todayOrderCount += 1;
+      }
 
       for (const item of order.items) {
         const itemAmount = Number(item.subtotal);
         categorySales[item.product.category] += itemAmount;
+        const productKey = item.product.id;
+        const existing = productSalesMap.get(productKey);
+        const salesQty = Number(item.quantity ?? 0);
+        if (existing) {
+          existing.sales += salesQty;
+          existing.revenue += itemAmount;
+        } else {
+          productSalesMap.set(productKey, {
+            id: item.product.id,
+            name: item.product.name ?? "Unnamed Product",
+            sku: item.product.sku ?? "-",
+            sales: salesQty,
+            revenue: itemAmount,
+          });
+        }
       }
     }
 
@@ -236,7 +263,33 @@ export async function GET(request: NextRequest) {
     const trendData = Array.from(dailyMap.entries()).map(([date, value]) => ({
       date,
       amount: Number(value.toFixed(2)),
+      orders: dailyOrderCountMap.get(date) ?? 0,
     }));
+
+    const topProducts = Array.from(productSalesMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5)
+      .map((row) => ({
+        id: row.id,
+        name: row.name,
+        sku: row.sku,
+        sales: Number(row.sales.toFixed(0)),
+        revenue: Number(row.revenue.toFixed(2)),
+        trend: "+0.0%",
+      }));
+
+    const recentOrders = orders
+      .slice()
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, 5)
+      .map((row) => ({
+        id: row.orderNo ?? row.id.slice(0, 8),
+        customer: row.customer?.name ?? "-",
+        date: row.createdAt.toISOString().slice(0, 10),
+        total: Number(row.totalAmount),
+        status: row.status === "SETTLED" ? "Paid" : row.status === "READY_DELIVERY" ? "Shipped" : "Pending",
+        payment: Number(row.paidAmount) > 0 ? "Credit Card" : "Bank Transfer",
+      }));
 
     const pieTotal = categoryKeys.reduce((sum, key) => sum + categorySales[key], 0);
     const pieData = categoryKeys.map((key) => ({
@@ -267,9 +320,12 @@ export async function GET(request: NextRequest) {
             totalReceivable: Number(receivableTotal.toFixed(2)),
             specialOrdersInProgress,
             delayedSpecialOrders,
+            todayOrderCount,
           },
           trendData,
           pieData,
+          topProducts,
+          recentOrders,
           followUpReminders: specialFollowupRows.map((row) => ({
             id: row.id,
             followupDate: row.specialFollowupDate,

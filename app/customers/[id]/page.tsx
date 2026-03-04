@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useRole } from "@/components/layout/role-provider";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -12,6 +12,15 @@ type CustomerProfile = {
   phone: string | null;
   email: string | null;
   installAddress: string | null;
+  billingAddress: string | null;
+  city: string | null;
+  state: string | null;
+  zipCode: string | null;
+  companyName: string | null;
+  customerType: "RESIDENTIAL" | "COMMERCIAL" | "CONTRACTOR" | null;
+  taxExempt: boolean;
+  taxRate: number | null;
+  referredBy: string | null;
   notes: string | null;
   createdAt: string;
 };
@@ -47,14 +56,48 @@ type CustomerNote = {
   createdAt: string;
 };
 
+type CustomerReturnRow = {
+  id: string;
+  createdAt: string;
+  status: string;
+  creditAmount: number;
+  issueStoreCredit: boolean;
+  storeCreditId: string | null;
+  storeCreditStatus: string | null;
+};
+
+type CustomerStoreCreditRow = {
+  id: string;
+  createdAt: string;
+  amount: number;
+  status: string;
+  returnId: string;
+};
+
+type CustomerInvoiceRow = {
+  id: string;
+  invoiceNumber: string;
+  status: string;
+  total: number;
+  paidTotal: number;
+  balance: number;
+  createdAt: string;
+  issueDate: string;
+};
+
 export default function CustomerDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const id = String(params?.id ?? "");
   const { role } = useRole();
   const [profile, setProfile] = useState<CustomerProfile | null>(null);
   const [summary, setSummary] = useState<SummaryPayload | null>(null);
   const [orders, setOrders] = useState<CustomerOrderRow[]>([]);
   const [notes, setNotes] = useState<CustomerNote[]>([]);
+  const [returns, setReturns] = useState<CustomerReturnRow[]>([]);
+  const [openCredits, setOpenCredits] = useState<CustomerStoreCreditRow[]>([]);
+  const [invoices, setInvoices] = useState<CustomerInvoiceRow[]>([]);
+  const [openCreditBalance, setOpenCreditBalance] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"ORDERS" | "NOTES">("ORDERS");
   const [orderFilter, setOrderFilter] = useState<
@@ -64,12 +107,22 @@ export default function CustomerDetailPage() {
   const [openEditModal, setOpenEditModal] = useState(false);
   const [submittingNote, setSubmittingNote] = useState(false);
   const [submittingEdit, setSubmittingEdit] = useState(false);
+  const [defaultTaxRate, setDefaultTaxRate] = useState("0");
   const [newNote, setNewNote] = useState("");
   const [editForm, setEditForm] = useState({
     name: "",
     phone: "",
     email: "",
     installAddress: "",
+    billingAddress: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    companyName: "",
+    customerType: "RESIDENTIAL" as "RESIDENTIAL" | "COMMERCIAL" | "CONTRACTOR",
+    taxExempt: false,
+    taxRate: "0",
+    referredBy: "",
     notes: "",
   });
 
@@ -90,6 +143,18 @@ export default function CustomerDetailPage() {
         phone: profilePayload.data?.phone ?? "",
         email: profilePayload.data?.email ?? "",
         installAddress: profilePayload.data?.installAddress ?? "",
+        billingAddress: profilePayload.data?.billingAddress ?? "",
+        city: profilePayload.data?.city ?? "",
+        state: profilePayload.data?.state ?? "",
+        zipCode: profilePayload.data?.zipCode ?? "",
+        companyName: profilePayload.data?.companyName ?? "",
+        customerType: profilePayload.data?.customerType ?? "RESIDENTIAL",
+        taxExempt: Boolean(profilePayload.data?.taxExempt ?? false),
+        taxRate:
+          profilePayload.data?.taxRate === null || profilePayload.data?.taxRate === undefined
+            ? ""
+            : String(profilePayload.data.taxRate),
+        referredBy: profilePayload.data?.referredBy ?? "",
         notes: profilePayload.data?.notes ?? "",
       });
     } catch (err) {
@@ -127,11 +192,67 @@ export default function CustomerDetailPage() {
     }
   };
 
+  const loadReturnsAndCredits = async () => {
+    if (!id) return;
+    try {
+      const [returnsRes, creditsRes] = await Promise.all([
+        fetch(`/api/customers/${id}/returns`, {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        }),
+        fetch(`/api/customers/${id}/store-credits`, {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        }),
+      ]);
+      const [returnsPayload, creditsPayload] = await Promise.all([returnsRes.json(), creditsRes.json()]);
+      if (!returnsRes.ok) throw new Error(returnsPayload.error ?? "Failed to load customer returns");
+      if (!creditsRes.ok) throw new Error(creditsPayload.error ?? "Failed to load customer store credits");
+      setReturns(returnsPayload.data ?? []);
+      setOpenCredits(creditsPayload.data?.credits ?? []);
+      setOpenCreditBalance(Number(creditsPayload.data?.totalOpenCredit ?? 0));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load return and store credit data");
+    }
+  };
+
+  const loadInvoices = async () => {
+    if (!id) return;
+    try {
+      const res = await fetch(`/api/customers/${id}/invoices`, {
+        cache: "no-store",
+        headers: { "x-user-role": role },
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to load customer invoices");
+      setInvoices(payload.data ?? []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load customer invoices");
+    }
+  };
+
+  useEffect(() => {
+    const loadDefaultTaxRate = async () => {
+      try {
+        const res = await fetch("/api/settings/company", {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error ?? "Failed to load default tax rate");
+        setDefaultTaxRate(String(Number(payload.data?.defaultTaxRate ?? 0)));
+      } catch {
+        // Keep edit modal usable with existing values.
+      }
+    };
+    void loadDefaultTaxRate();
+  }, [role]);
+
   useEffect(() => {
     const load = async () => {
       try {
         setError(null);
-        await Promise.all([loadProfileAndSummary(), loadOrders("ALL"), loadNotes()]);
+        await Promise.all([loadProfileAndSummary(), loadOrders("ALL"), loadNotes(), loadReturnsAndCredits(), loadInvoices()]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load customer details");
       }
@@ -204,6 +325,19 @@ export default function CustomerDetailPage() {
             {[profile?.phone, profile?.email].filter(Boolean).join(" · ") || "-"}
           </p>
           <p className="mt-1 text-sm text-slate-500">{profile?.installAddress || "-"}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {[profile?.city, profile?.state, profile?.zipCode].filter(Boolean).join(", ") || "-"}
+          </p>
+          <p className="mt-1 text-sm text-slate-500">
+            {profile?.companyName ? `${profile.companyName} · ` : ""}
+            {profile?.customerType ? profile.customerType : "Customer Type N/A"}
+            {profile?.taxExempt ? " · Tax Exempt" : ""}
+          </p>
+          <p className="mt-1 text-sm text-slate-500">
+            Tax Rate: {profile?.taxExempt ? "-" : `${Number(profile?.taxRate ?? 0).toFixed(3)}%`}
+          </p>
+          <p className="mt-1 text-sm text-slate-500">Billing: {profile?.billingAddress || "-"}</p>
+          <p className="mt-1 text-sm text-slate-500">Referred By: {profile?.referredBy || "-"}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
@@ -385,6 +519,165 @@ export default function CustomerDetailPage() {
               </div>
             )}
           </div>
+
+          <div className="linear-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-900">Invoices</h3>
+              <Link href="/invoices" className="text-xs text-slate-600 hover:text-slate-900 hover:underline">
+                View all
+              </Link>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                    <TableHead>Date</TableHead>
+                    <TableHead>Invoice #</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="text-right">Paid</TableHead>
+                    <TableHead className="text-right">Balance</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invoices.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-slate-500">
+                        No invoices yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    invoices.map((row) => (
+                      <TableRow
+                        key={row.id}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => router.push(`/invoices/${row.id}`)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            router.push(`/invoices/${row.id}`);
+                          }
+                        }}
+                        className="cursor-pointer odd:bg-white even:bg-slate-50/40 hover:bg-slate-100/70"
+                      >
+                        <TableCell>
+                          {new Date(row.issueDate || row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
+                        </TableCell>
+                        <TableCell className="font-medium text-slate-900">{row.invoiceNumber}</TableCell>
+                        <TableCell>{row.status}</TableCell>
+                        <TableCell className="text-right">${Number(row.total).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">${Number(row.paidTotal).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">${Number(row.balance).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">
+                          <Link
+                            href={`/invoices/${row.id}`}
+                            className="ios-secondary-btn h-8 px-2 text-xs"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            View
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          <div className="linear-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-base font-semibold text-slate-900">Returns</h3>
+              <span className="text-xs text-slate-500">Last 10</span>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                    <TableHead>Return #</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Credit Amount</TableHead>
+                    <TableHead className="text-right">Link</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {returns.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-slate-500">
+                        No returns yet.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    returns.map((row) => (
+                      <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
+                        <TableCell className="font-medium text-slate-900">{row.id.slice(0, 8)}</TableCell>
+                        <TableCell>
+                          {new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
+                        </TableCell>
+                        <TableCell>{row.status}</TableCell>
+                        <TableCell className="text-right">${Number(row.creditAmount).toFixed(2)}</TableCell>
+                        <TableCell className="text-right">
+                          <Link href={`/returns/${row.id}`} className="ios-secondary-btn h-8 px-2 text-xs">
+                            Open
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          <div className="linear-card p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-base font-semibold text-slate-900">Store Credit</h3>
+              <div className="rounded-md bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                Open Balance: ${openCreditBalance.toFixed(2)}
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                    <TableHead>Credit #</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Source Return</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {openCredits.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-slate-500">
+                        No open store credits.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    openCredits.map((row) => (
+                      <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
+                        <TableCell className="font-medium text-slate-900">{row.id.slice(0, 8)}</TableCell>
+                        <TableCell>
+                          {new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
+                        </TableCell>
+                        <TableCell className="text-right">${Number(row.amount).toFixed(2)}</TableCell>
+                        <TableCell>{row.status}</TableCell>
+                        <TableCell className="text-right">
+                          <Link href={`/returns/${row.returnId}`} className="ios-secondary-btn h-8 px-2 text-xs">
+                            Open Return
+                          </Link>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
         </div>
 
         <aside className="linear-card p-4">
@@ -453,6 +746,77 @@ export default function CustomerDetailPage() {
               label="Install Address"
               value={editForm.installAddress}
               onChange={(value) => setEditForm((prev) => ({ ...prev, installAddress: value }))}
+            />
+            <InputField
+              label="Billing Address"
+              value={editForm.billingAddress}
+              onChange={(value) => setEditForm((prev) => ({ ...prev, billingAddress: value }))}
+            />
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <InputField label="City" value={editForm.city} onChange={(value) => setEditForm((prev) => ({ ...prev, city: value }))} />
+              <InputField label="State" value={editForm.state} onChange={(value) => setEditForm((prev) => ({ ...prev, state: value }))} />
+              <InputField label="Zip Code" value={editForm.zipCode} onChange={(value) => setEditForm((prev) => ({ ...prev, zipCode: value }))} />
+            </div>
+            <InputField
+              label="Company Name"
+              value={editForm.companyName}
+              onChange={(value) => setEditForm((prev) => ({ ...prev, companyName: value }))}
+            />
+            <label className="block space-y-1">
+              <span className="text-sm text-slate-600">Customer Type</span>
+              <select
+                value={editForm.customerType}
+                onChange={(event) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    customerType: event.target.value as "RESIDENTIAL" | "COMMERCIAL" | "CONTRACTOR",
+                  }))
+                }
+                className="ios-input h-11 w-full px-3 text-sm"
+              >
+                <option value="RESIDENTIAL">Residential</option>
+                <option value="COMMERCIAL">Commercial</option>
+                <option value="CONTRACTOR">Contractor</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2 rounded-lg border border-slate-100 px-3 py-2">
+              <input
+                type="checkbox"
+                checked={editForm.taxExempt}
+                onChange={(event) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    taxExempt: event.target.checked,
+                    taxRate: event.target.checked ? "" : prev.taxRate || defaultTaxRate,
+                  }))
+                }
+                className="h-4 w-4"
+              />
+              <span className="text-sm text-slate-700">Tax Exempt</span>
+            </label>
+            <label className="block space-y-1">
+              <span className="text-sm text-slate-600">Tax Rate</span>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  value={editForm.taxRate}
+                  disabled={editForm.taxExempt}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({ ...prev, taxRate: event.target.value }))
+                  }
+                  className="ios-input h-11 w-full px-3 pr-8 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                />
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
+                  %
+                </span>
+              </div>
+            </label>
+            <InputField
+              label="Referred By"
+              value={editForm.referredBy}
+              onChange={(value) => setEditForm((prev) => ({ ...prev, referredBy: value }))}
             />
             <label className="block space-y-1">
               <span className="text-sm text-slate-600">Notes</span>

@@ -52,6 +52,11 @@ type ReportsResponse = {
   charts: {
     dailyCollected: Array<{ date: string; amount: number }>;
     dailySales: Array<{ date: string; amount: number }>;
+    salesByDateRange?: {
+      daily: Array<{ date: string; amount: number }>;
+      weekly: Array<{ date: string; amount: number }>;
+      monthly: Array<{ date: string; amount: number }>;
+    };
   };
   tables: {
     topOutstanding: Array<{
@@ -101,6 +106,31 @@ type ReportsResponse = {
       totalStock: number;
       stockValue: number;
     }>;
+    salesByProduct?: Array<{
+      productId: string | null;
+      sku: string;
+      title: string;
+      category: string;
+      qty: number;
+      revenue: number;
+      cost: number;
+      margin: number;
+    }>;
+    salesByCategory?: Array<{
+      category: string;
+      revenue: number;
+      cost: number;
+      margin: number;
+      qty: number;
+    }>;
+  };
+  summaries?: {
+    revenueVsCost?: {
+      revenue: number;
+      cost: number;
+      margin: number;
+      marginRate: number;
+    };
   };
 };
 
@@ -331,6 +361,30 @@ export default function ReportsPage() {
             </article>
           </div>
 
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <article className="linear-card p-6">
+              <p className="text-xs text-slate-500">Revenue</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900">
+                ${Number(data.summaries?.revenueVsCost?.revenue ?? 0).toFixed(2)}
+              </p>
+            </article>
+            <article className="linear-card p-6">
+              <p className="text-xs text-slate-500">Cost</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900">
+                ${Number(data.summaries?.revenueVsCost?.cost ?? 0).toFixed(2)}
+              </p>
+            </article>
+            <article className="linear-card p-6">
+              <p className="text-xs text-slate-500">Gross Margin</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900">
+                ${Number(data.summaries?.revenueVsCost?.margin ?? 0).toFixed(2)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Margin Rate {Number(data.summaries?.revenueVsCost?.marginRate ?? 0).toFixed(2)}%
+              </p>
+            </article>
+          </div>
+
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <article className="linear-card p-6">
               <h2 className="text-base font-semibold text-slate-900">Daily Collected ($)</h2>
@@ -368,6 +422,30 @@ export default function ReportsPage() {
                 )}
               </div>
             </article>
+          </div>
+
+          <div className="linear-card p-6">
+            <h3 className="text-sm font-semibold text-slate-900">Sales by Date Range Summary</h3>
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-slate-100 bg-white p-3">
+                <p className="text-xs text-slate-500">Daily Buckets</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">
+                  {(data.charts.salesByDateRange?.daily ?? []).length}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-white p-3">
+                <p className="text-xs text-slate-500">Weekly Buckets</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">
+                  {(data.charts.salesByDateRange?.weekly ?? []).length}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-100 bg-white p-3">
+                <p className="text-xs text-slate-500">Monthly Buckets</p>
+                <p className="mt-1 text-lg font-semibold text-slate-900">
+                  {(data.charts.salesByDateRange?.monthly ?? []).length}
+                </p>
+              </div>
+            </div>
           </div>
 
           <div className="linear-card overflow-hidden p-0">
@@ -563,6 +641,82 @@ export default function ReportsPage() {
                       <TableCell>{row.productCount}</TableCell>
                       <TableCell>{row.totalStock.toFixed(2)}</TableCell>
                       <TableCell>${row.stockValue.toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="linear-card overflow-hidden p-0">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h3 className="text-sm font-semibold text-slate-900">Sales by Category</h3>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Qty</TableHead>
+                  <TableHead>Revenue</TableHead>
+                  <TableHead>Cost</TableHead>
+                  <TableHead>Margin</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(data.tables.salesByCategory ?? []).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-slate-500">
+                      No sales category data.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  (data.tables.salesByCategory ?? []).map((row) => (
+                    <TableRow key={row.category}>
+                      <TableCell>{row.category}</TableCell>
+                      <TableCell>{Number(row.qty).toFixed(2)}</TableCell>
+                      <TableCell>${Number(row.revenue).toFixed(2)}</TableCell>
+                      <TableCell>${Number(row.cost).toFixed(2)}</TableCell>
+                      <TableCell>${Number(row.margin).toFixed(2)}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          <div className="linear-card overflow-hidden p-0">
+            <div className="border-b border-slate-100 px-6 py-4">
+              <h3 className="text-sm font-semibold text-slate-900">Sales by Product</h3>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Qty</TableHead>
+                  <TableHead>Revenue</TableHead>
+                  <TableHead>Cost</TableHead>
+                  <TableHead>Margin</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(data.tables.salesByProduct ?? []).length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center text-slate-500">
+                      No sales product data.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  (data.tables.salesByProduct ?? []).slice(0, 20).map((row, idx) => (
+                    <TableRow key={`${row.productId ?? "product"}-${idx}`}>
+                      <TableCell>{row.sku}</TableCell>
+                      <TableCell>{row.title}</TableCell>
+                      <TableCell>{row.category}</TableCell>
+                      <TableCell>{Number(row.qty).toFixed(2)}</TableCell>
+                      <TableCell>${Number(row.revenue).toFixed(2)}</TableCell>
+                      <TableCell>${Number(row.cost).toFixed(2)}</TableCell>
+                      <TableCell>${Number(row.margin).toFixed(2)}</TableCell>
                     </TableRow>
                   ))
                 )}

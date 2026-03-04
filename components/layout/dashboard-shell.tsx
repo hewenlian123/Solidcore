@@ -15,11 +15,33 @@ type DashboardShellProps = {
 export function DashboardShell({ children }: DashboardShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const pathname = usePathname();
-  const { role } = useRole();
+  const { role, authenticated, loading } = useRole();
+  const isLogin = pathname === "/login";
+  const isDashboardHome = pathname === "/dashboard";
   const canView = canViewPath(role, pathname);
 
+  if (isLogin) {
+    return <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] tracking-tight">{children}</div>;
+  }
+
+  if (!authenticated && loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg)] text-sm text-[var(--muted)]">
+        Loading session...
+      </div>
+    );
+  }
+
+  if (isDashboardHome) {
+    return (
+      <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] tracking-tight">
+        <main className="px-6 pb-10 pt-8 md:px-10">{canView ? children : <AccessDenied />}</main>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#fafafa] text-slate-900 tracking-tight">
+    <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] tracking-tight">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="md:pl-72">

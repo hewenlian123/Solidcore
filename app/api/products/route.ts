@@ -1,4 +1,14 @@
-import { GlassFinish, GlassType, Prisma, ProductCategory, ProductUnit } from "@prisma/client";
+import {
+  Prisma,
+  ProductCategory,
+  ProductUnit,
+  FlooringMaterial,
+  FlooringFinish,
+  FlooringEdge,
+  FlooringInstallation,
+  FlooringUnderlayment,
+  FlooringWaterResistance,
+} from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { renderTemplateSku } from "@/lib/product-template-engine";
@@ -17,26 +27,76 @@ function toIntPart(value: number | null) {
   return Math.trunc(value);
 }
 
-function parseGlassType(value: unknown): GlassType | null {
-  const normalized = String(value ?? "").trim().toUpperCase();
-  return Object.values(GlassType).includes(normalized as GlassType) ? (normalized as GlassType) : null;
+function normalizeDefaultText(value: unknown) {
+  const normalized = String(value ?? "").trim();
+  return normalized || null;
 }
 
-function parseGlassFinish(value: unknown): GlassFinish | null {
-  const normalized = String(value ?? "").trim().toUpperCase();
-  return Object.values(GlassFinish).includes(normalized as GlassFinish)
-    ? (normalized as GlassFinish)
-    : null;
+function normalizeDefaultInt(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  const integer = Math.trunc(numeric);
+  return integer >= 0 ? integer : null;
+}
+
+function normalizeDefaultDecimal(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return numeric >= 0 ? numeric : null;
+}
+
+function buildProductValidationWarnings(input: {
+  defaultDescription: string | null;
+  variantDescription: string | null;
+  variantsInput: Array<{ sku: string }>;
+}) {
+  const warnings: string[] = [];
+  if (!String(input.defaultDescription ?? "").trim()) {
+    warnings.push("Description is empty for this product.");
+  }
+  if (input.variantsInput.length > 0) {
+    const missingSkuCount = input.variantsInput.filter((row) => !String(row.sku ?? "").trim()).length;
+    if (missingSkuCount > 0) warnings.push(`${missingSkuCount} inventory item(s) have empty SKU.`);
+    if (!String(input.variantDescription ?? "").trim()) {
+      warnings.push("Description is empty for product variants.");
+    }
+  }
+  return warnings;
+}
+
+function safeEnumValues<T extends string>(
+  enumObj: Record<string, T> | undefined,
+  fallback: readonly T[],
+) {
+  if (enumObj && typeof enumObj === "object") {
+    const values = Object.values(enumObj).filter((value): value is T => typeof value === "string");
+    if (values.length > 0) return values;
+  }
+  return [...fallback];
+}
+
+function normalizeEnumChoice<T extends string>(value: unknown, allowed: readonly T[]) {
+  const normalized = String(value ?? "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_") as T;
+  if (!normalized) return null;
+  return allowed.includes(normalized) ? normalized : null;
 }
 
 type CreateVariantInput = {
   sku: string;
+  displayName: string | null;
+  skuSuffix: string | null;
   width: number;
   height: number;
   color: string | null;
   salePrice: number;
   cost: number;
   openingStock: number;
+  reorderLevel: number;
 };
 
 function colorCodeFromColor(color: string) {
@@ -99,10 +159,35 @@ export async function GET(request: NextRequest) {
             id: true,
             skuPrefix: true,
             defaultDescription: true,
+            frameMaterialDefault: true,
+            openingTypeDefault: true,
+            slidingConfigDefault: true,
             glassTypeDefault: true,
+            glassCoatingDefault: true,
+            glassThicknessMmDefault: true,
             glassFinishDefault: true,
             screenDefault: true,
-            openingTypeDefault: true,
+            flooringBrand: true,
+            flooringSeries: true,
+            flooringMaterial: true,
+            flooringWearLayer: true,
+            flooringThicknessMm: true,
+            flooringPlankLengthIn: true,
+            flooringPlankWidthIn: true,
+            flooringCoreThicknessMm: true,
+            flooringFinish: true,
+            flooringEdge: true,
+            flooringInstallation: true,
+            flooringUnderlayment: true,
+            flooringUnderlaymentType: true,
+            flooringUnderlaymentMm: true,
+            flooringWaterResistance: true,
+            flooringWaterproof: true,
+            flooringWarrantyResidentialYr: true,
+            flooringWarrantyCommercialYr: true,
+            flooringPiecesPerBox: true,
+            flooringBoxCoverageSqft: true,
+            flooringLowStockThreshold: true,
           },
         })
       : [];
@@ -112,20 +197,82 @@ export async function GET(request: NextRequest) {
         {
           skuPrefix: string | null;
           defaultDescription: string | null;
-          glassTypeDefault: GlassType | null;
-          glassFinishDefault: GlassFinish | null;
-          screenDefault: string | null;
+          frameMaterialDefault: string | null;
           openingTypeDefault: string | null;
+          slidingConfigDefault: string | null;
+          glassTypeDefault: string | null;
+          glassCoatingDefault: string | null;
+          glassThicknessMmDefault: number | null;
+          glassFinishDefault: string | null;
+          screenDefault: string | null;
+          flooringBrand: string | null;
+          flooringSeries: string | null;
+          flooringMaterial: string | null;
+          flooringWearLayer: string | null;
+          flooringThicknessMm: number | null;
+          flooringPlankLengthIn: number | null;
+          flooringPlankWidthIn: number | null;
+          flooringCoreThicknessMm: number | null;
+          flooringFinish: string | null;
+          flooringEdge: string | null;
+          flooringInstallation: string | null;
+          flooringUnderlayment: string | null;
+          flooringUnderlaymentType: string | null;
+          flooringUnderlaymentMm: number | null;
+          flooringWaterResistance: string | null;
+          flooringWaterproof: boolean | null;
+          flooringWarrantyResidentialYr: number | null;
+          flooringWarrantyCommercialYr: number | null;
+          flooringPiecesPerBox: number | null;
+          flooringBoxCoverageSqft: number | null;
+          flooringLowStockThreshold: number | null;
         }
       >
     >((acc, row) => {
       acc[row.id] = {
         skuPrefix: row.skuPrefix ?? null,
         defaultDescription: row.defaultDescription ?? null,
+        frameMaterialDefault: row.frameMaterialDefault ?? null,
+        openingTypeDefault: row.openingTypeDefault ?? null,
+        slidingConfigDefault: row.slidingConfigDefault ?? null,
         glassTypeDefault: row.glassTypeDefault ?? null,
+        glassCoatingDefault: row.glassCoatingDefault ?? null,
+        glassThicknessMmDefault:
+          row.glassThicknessMmDefault != null ? Number(row.glassThicknessMmDefault) : null,
         glassFinishDefault: row.glassFinishDefault ?? null,
         screenDefault: row.screenDefault ?? null,
-        openingTypeDefault: row.openingTypeDefault ?? null,
+        flooringBrand: row.flooringBrand ?? null,
+        flooringSeries: row.flooringSeries ?? null,
+        flooringMaterial: row.flooringMaterial ?? null,
+        flooringWearLayer: row.flooringWearLayer ?? null,
+        flooringThicknessMm: row.flooringThicknessMm != null ? Number(row.flooringThicknessMm) : null,
+        flooringPlankLengthIn:
+          row.flooringPlankLengthIn != null ? Number(row.flooringPlankLengthIn) : null,
+        flooringPlankWidthIn: row.flooringPlankWidthIn != null ? Number(row.flooringPlankWidthIn) : null,
+        flooringCoreThicknessMm:
+          row.flooringCoreThicknessMm != null ? Number(row.flooringCoreThicknessMm) : null,
+        flooringFinish: row.flooringFinish ?? null,
+        flooringEdge: row.flooringEdge ?? null,
+        flooringInstallation: row.flooringInstallation ?? null,
+        flooringUnderlayment: row.flooringUnderlayment ?? null,
+        flooringUnderlaymentType: row.flooringUnderlaymentType ?? null,
+        flooringUnderlaymentMm:
+          row.flooringUnderlaymentMm != null ? Number(row.flooringUnderlaymentMm) : null,
+        flooringWaterResistance: row.flooringWaterResistance ?? null,
+        flooringWaterproof:
+          row.flooringWaterproof === null || row.flooringWaterproof === undefined
+            ? null
+            : Boolean(row.flooringWaterproof),
+        flooringWarrantyResidentialYr:
+          row.flooringWarrantyResidentialYr != null ? Number(row.flooringWarrantyResidentialYr) : null,
+        flooringWarrantyCommercialYr:
+          row.flooringWarrantyCommercialYr != null ? Number(row.flooringWarrantyCommercialYr) : null,
+        flooringPiecesPerBox:
+          row.flooringPiecesPerBox != null ? Number(row.flooringPiecesPerBox) : null,
+        flooringBoxCoverageSqft:
+          row.flooringBoxCoverageSqft != null ? Number(row.flooringBoxCoverageSqft) : null,
+        flooringLowStockThreshold:
+          row.flooringLowStockThreshold != null ? Number(row.flooringLowStockThreshold) : null,
       };
       return acc;
     }, {});
@@ -137,12 +284,16 @@ export async function GET(request: NextRequest) {
             id: true,
             productId: true,
             sku: true,
+            displayName: true,
+            skuSuffix: true,
             description: true,
             cost: true,
             price: true,
             width: true,
             height: true,
             color: true,
+            reorderLevel: true,
+            reorderQty: true,
             inventoryStock: {
               select: {
                 onHand: true,
@@ -158,12 +309,16 @@ export async function GET(request: NextRequest) {
         Array<{
           id: string;
           sku: string;
+          displayName: string | null;
+          skuSuffix: string | null;
           description: string | null;
           cost: number | null;
           price: number | null;
           width: number | null;
           height: number | null;
           color: string | null;
+          reorderLevel: number;
+          reorderQty: number;
           onHand: number;
           reserved: number;
           available: number;
@@ -175,12 +330,16 @@ export async function GET(request: NextRequest) {
       const row = {
         id: variant.id,
         sku: variant.sku,
+        displayName: variant.displayName ?? null,
+        skuSuffix: variant.skuSuffix ?? null,
         description: variant.description ?? null,
         cost: variant.cost != null ? Number(variant.cost) : null,
         price: variant.price != null ? Number(variant.price) : null,
         width: variant.width != null ? Number(variant.width) : null,
         height: variant.height != null ? Number(variant.height) : null,
         color: variant.color ?? null,
+        reorderLevel: Number(variant.reorderLevel ?? 0),
+        reorderQty: Number(variant.reorderQty ?? 0),
         onHand,
         reserved,
         available: onHand - reserved,
@@ -189,9 +348,25 @@ export async function GET(request: NextRequest) {
       acc[variant.productId].push(row);
       return acc;
     }, {});
-    // Deprecated: product-level stock fields are no longer used for inventory calculations.
-    const lowStockCount = 0;
-    const filteredProducts = lowStockOnly ? [] : products;
+    const lowStockVariantCount = variants.filter((variant) => {
+      const onHand = Number(variant.inventoryStock?.onHand ?? 0);
+      const reserved = Number(variant.inventoryStock?.reserved ?? 0);
+      const available = onHand - reserved;
+      return available <= Number(variant.reorderLevel ?? 0);
+    }).length;
+    const lowStockProductIdSet = new Set(
+      variants
+        .filter((variant) => {
+          const onHand = Number(variant.inventoryStock?.onHand ?? 0);
+          const reserved = Number(variant.inventoryStock?.reserved ?? 0);
+          const available = onHand - reserved;
+          return available <= Number(variant.reorderLevel ?? 0);
+        })
+        .map((variant) => variant.productId),
+    );
+    const filteredProducts = lowStockOnly
+      ? products.filter((item) => lowStockProductIdSet.has(item.id))
+      : products;
 
     const data = filteredProducts.map((item) => {
       const productVariants = variantsByProduct[item.id] ?? [];
@@ -214,13 +389,42 @@ export async function GET(request: NextRequest) {
         skuPrefix: salesProductMetaById[item.id]?.skuPrefix ?? null,
         defaultDescription:
           salesProductMetaById[item.id]?.defaultDescription ?? item.defaultDescription ?? null,
+        frameMaterialDefault: salesProductMetaById[item.id]?.frameMaterialDefault ?? null,
+        openingTypeDefault: salesProductMetaById[item.id]?.openingTypeDefault ?? null,
+        slidingConfigDefault: salesProductMetaById[item.id]?.slidingConfigDefault ?? null,
         glassTypeDefault: salesProductMetaById[item.id]?.glassTypeDefault ?? null,
+        glassCoatingDefault: salesProductMetaById[item.id]?.glassCoatingDefault ?? null,
+        glassThicknessMmDefault: salesProductMetaById[item.id]?.glassThicknessMmDefault ?? null,
         glassFinishDefault: salesProductMetaById[item.id]?.glassFinishDefault ?? null,
         screenDefault: salesProductMetaById[item.id]?.screenDefault ?? null,
-        openingTypeDefault: salesProductMetaById[item.id]?.openingTypeDefault ?? null,
+        flooringBrand: salesProductMetaById[item.id]?.flooringBrand ?? null,
+        flooringSeries: salesProductMetaById[item.id]?.flooringSeries ?? null,
+        flooringMaterial: salesProductMetaById[item.id]?.flooringMaterial ?? null,
+        flooringWearLayer: salesProductMetaById[item.id]?.flooringWearLayer ?? null,
+        flooringThicknessMm: salesProductMetaById[item.id]?.flooringThicknessMm ?? null,
+        flooringPlankLengthIn: salesProductMetaById[item.id]?.flooringPlankLengthIn ?? null,
+        flooringPlankWidthIn: salesProductMetaById[item.id]?.flooringPlankWidthIn ?? null,
+        flooringCoreThicknessMm: salesProductMetaById[item.id]?.flooringCoreThicknessMm ?? null,
+        flooringFinish: salesProductMetaById[item.id]?.flooringFinish ?? null,
+        flooringEdge: salesProductMetaById[item.id]?.flooringEdge ?? null,
+        flooringInstallation: salesProductMetaById[item.id]?.flooringInstallation ?? null,
+        flooringUnderlayment: salesProductMetaById[item.id]?.flooringUnderlayment ?? null,
+        flooringUnderlaymentType: salesProductMetaById[item.id]?.flooringUnderlaymentType ?? null,
+        flooringUnderlaymentMm: salesProductMetaById[item.id]?.flooringUnderlaymentMm ?? null,
+        flooringWaterResistance: salesProductMetaById[item.id]?.flooringWaterResistance ?? null,
+        flooringWaterproof: salesProductMetaById[item.id]?.flooringWaterproof ?? null,
+        flooringWarrantyResidentialYr:
+          salesProductMetaById[item.id]?.flooringWarrantyResidentialYr ?? null,
+        flooringWarrantyCommercialYr:
+          salesProductMetaById[item.id]?.flooringWarrantyCommercialYr ?? null,
+        flooringPiecesPerBox: salesProductMetaById[item.id]?.flooringPiecesPerBox ?? null,
+        flooringBoxCoverageSqft: salesProductMetaById[item.id]?.flooringBoxCoverageSqft ?? null,
+        flooringLowStockThreshold: salesProductMetaById[item.id]?.flooringLowStockThreshold ?? null,
         variants: productVariants,
         stockSummary,
         variantCount: productVariants.length,
+        lowStockVariantCount: productVariants.filter((variant) => variant.available <= variant.reorderLevel).length,
+        hasLowStock: productVariants.some((variant) => variant.available <= variant.reorderLevel),
         priceMin,
         priceMax,
         totalAvailable: stockSummary.available,
@@ -237,7 +441,7 @@ export async function GET(request: NextRequest) {
         data,
         meta: {
           lowStockThreshold: null,
-          lowStockCount,
+          lowStockCount: lowStockVariantCount,
         },
       },
       { status: 200 },
@@ -279,10 +483,67 @@ export async function POST(request: NextRequest) {
     const color = String(body?.color ?? "").trim() || null;
     const finish = String(body?.finish ?? "").trim() || null;
     const glass = String(body?.glass ?? "").trim() || null;
-    const glassTypeDefault = parseGlassType(body?.glassTypeDefault);
-    const glassFinishDefault = parseGlassFinish(body?.glassFinishDefault) ?? "CLEAR";
-    const screenDefault = String(body?.screenDefault ?? "").trim() || null;
-    const openingTypeDefault = String(body?.openingTypeDefault ?? "").trim() || null;
+    const frameMaterialDefault = normalizeDefaultText(body?.frameMaterialDefault);
+    const openingTypeDefault = normalizeDefaultText(body?.openingTypeDefault);
+    const slidingConfigDefault = normalizeDefaultText(body?.slidingConfigDefault);
+    const glassTypeDefault = normalizeDefaultText(body?.glassTypeDefault);
+    const glassCoatingDefault = normalizeDefaultText(body?.glassCoatingDefault);
+    const glassThicknessMmDefault = normalizeDefaultInt(body?.glassThicknessMmDefault);
+    const glassFinishDefault = normalizeDefaultText(body?.glassFinishDefault);
+    const screenDefault = normalizeDefaultText(body?.screenDefault);
+    const flooringBrand = normalizeDefaultText(body?.flooringBrand);
+    const flooringSeries = normalizeDefaultText(body?.flooringSeries);
+    const flooringMaterial = normalizeEnumChoice(
+      body?.flooringMaterial,
+      safeEnumValues(FlooringMaterial as Record<string, string> | undefined, [
+        "SPC",
+        "LVP",
+        "LAMINATE",
+        "HARDWOOD",
+      ]),
+    ) as FlooringMaterial | null;
+    const flooringWearLayer = normalizeDefaultText(body?.flooringWearLayer);
+    const flooringThicknessMm = normalizeDefaultDecimal(body?.flooringThicknessMm);
+    const flooringPlankLengthIn = normalizeDefaultDecimal(body?.flooringPlankLengthIn);
+    const flooringPlankWidthIn = normalizeDefaultDecimal(body?.flooringPlankWidthIn);
+    const flooringCoreThicknessMm = normalizeDefaultDecimal(body?.flooringCoreThicknessMm);
+    const flooringFinish = normalizeEnumChoice(
+      body?.flooringFinish,
+      safeEnumValues(FlooringFinish as Record<string, string> | undefined, ["MATTE", "GLOSS", "EMBOSSED"]),
+    ) as FlooringFinish | null;
+    const flooringEdge = normalizeEnumChoice(
+      body?.flooringEdge,
+      safeEnumValues(FlooringEdge as Record<string, string> | undefined, ["BEVEL", "MICRO_BEVEL", "SQUARE"]),
+    ) as FlooringEdge | null;
+    const flooringInstallation = normalizeEnumChoice(
+      body?.flooringInstallation,
+      safeEnumValues(FlooringInstallation as Record<string, string> | undefined, ["CLICK", "GLUE_DOWN"]),
+    ) as FlooringInstallation | null;
+    const flooringUnderlayment = normalizeEnumChoice(
+      body?.flooringUnderlayment,
+      safeEnumValues(FlooringUnderlayment as Record<string, string> | undefined, ["ATTACHED", "NONE"]),
+    ) as FlooringUnderlayment | null;
+    const flooringUnderlaymentType = normalizeDefaultText(body?.flooringUnderlaymentType);
+    const flooringUnderlaymentMm = normalizeDefaultDecimal(body?.flooringUnderlaymentMm);
+    const flooringWaterproof =
+      body?.flooringWaterproof === true || String(body?.flooringWaterproof ?? "").trim().toLowerCase() === "true"
+        ? true
+        : body?.flooringWaterproof === false ||
+            String(body?.flooringWaterproof ?? "").trim().toLowerCase() === "false"
+          ? false
+          : null;
+    const flooringWaterResistance = normalizeEnumChoice(
+      body?.flooringWaterResistance,
+      safeEnumValues(FlooringWaterResistance as Record<string, string> | undefined, [
+        "WATERPROOF",
+        "WATER_RESISTANT",
+      ]),
+    ) as FlooringWaterResistance | null;
+    const flooringWarrantyResidentialYr = normalizeDefaultInt(body?.flooringWarrantyResidentialYr);
+    const flooringWarrantyCommercialYr = normalizeDefaultInt(body?.flooringWarrantyCommercialYr);
+    const flooringPiecesPerBox = normalizeDefaultInt(body?.flooringPiecesPerBox);
+    const flooringBoxCoverageSqft = normalizeDefaultDecimal(body?.flooringBoxCoverageSqft);
+    const flooringLowStockThreshold = normalizeDefaultDecimal(body?.flooringLowStockThreshold);
     const rating = String(body?.rating ?? "").trim() || null;
     const swing = String(body?.swing ?? "").trim() || null;
     const handing = String(body?.handing ?? "").trim() || null;
@@ -310,12 +571,15 @@ export async function POST(request: NextRequest) {
     const variantsInput: CreateVariantInput[] = variantsInputRaw
       .map((item: any): CreateVariantInput => ({
         sku: normalizeSkuValue(String(item?.sku ?? "")),
+        displayName: String(item?.displayName ?? "").trim() || null,
+        skuSuffix: normalizeSkuValue(String(item?.skuSuffix ?? "")) || null,
         width: Number(item?.width ?? 0),
         height: Number(item?.height ?? 0),
         color: String(item?.color ?? "").trim() || null,
         salePrice: Number(item?.salePrice ?? 0),
         cost: Number(item?.cost ?? 0),
         openingStock: Number(item?.openingStock ?? 0),
+        reorderLevel: Number(item?.reorderLevel ?? 0),
       }))
       .filter((item: CreateVariantInput) => item.sku);
 
@@ -335,6 +599,38 @@ export async function POST(request: NextRequest) {
     if (category === "OTHER" && !customCategoryName) {
       return NextResponse.json({ error: "Custom category name is required for Other." }, { status: 400 });
     }
+    if (category === "WINDOW") {
+      if (!openingTypeDefault || !glassTypeDefault || !glassThicknessMmDefault || !screenDefault) {
+        return NextResponse.json(
+          {
+            error:
+              "Window defaults required: Opening Type, Glass Type, Glass Thickness (mm), and Screen.",
+          },
+          { status: 400 },
+        );
+      }
+    }
+    if (category === "FLOOR") {
+      if (
+        !flooringMaterial ||
+        !flooringPlankLengthIn ||
+        !flooringPlankWidthIn ||
+        !flooringThicknessMm ||
+        !flooringWearLayer ||
+        !flooringCoreThicknessMm ||
+        !flooringUnderlaymentType ||
+        !flooringUnderlaymentMm ||
+        !flooringBoxCoverageSqft
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              "Flooring defaults required: Type, Plank L/W, Total Thickness, Wear Layer, Core Thickness, Underlayment Type, Underlayment Thickness, and Sqft/Box.",
+          },
+          { status: 400 },
+        );
+      }
+    }
     if (!Object.values(ProductUnit).includes(unit)) {
       return NextResponse.json({ error: "Invalid product unit." }, { status: 400 });
     }
@@ -353,14 +649,16 @@ export async function POST(request: NextRequest) {
           Number.isNaN(item.salePrice) ||
           Number.isNaN(item.cost) ||
           Number.isNaN(item.openingStock) ||
+          Number.isNaN(item.reorderLevel) ||
           item.sku.includes("-") ||
           item.salePrice < 0 ||
           item.cost < 0 ||
-          item.openingStock < 0,
+          item.openingStock < 0 ||
+          item.reorderLevel < 0,
       )
     ) {
       return NextResponse.json(
-        { error: "Each variant requires valid size, SKU (no hyphen), sale price, cost, and opening stock." },
+        { error: "Each variant requires valid SKU (no hyphen), sale price, cost, and non-negative stock/reorder values." },
         { status: 400 },
       );
     }
@@ -376,6 +674,26 @@ export async function POST(request: NextRequest) {
         { error: "SKU Prefix is required for Window products." },
         { status: 400 },
       );
+    }
+    if (category === "FLOOR" && !effectiveSkuPrefix) {
+      return NextResponse.json(
+        { error: "SKU Prefix is required for Flooring products." },
+        { status: 400 },
+      );
+    }
+    if (category === "FLOOR") {
+      const missingDisplayName = variantsInput.some((item) => !String(item.displayName ?? "").trim());
+      if (missingDisplayName) {
+        return NextResponse.json({ error: "Display Name is required for Flooring variants." }, { status: 400 });
+      }
+      const missingSuffix = variantsInput.some(
+        (item) =>
+          !String(item.skuSuffix ?? "").trim() &&
+          !String(item.sku ?? "").trim(),
+      );
+      if (missingSuffix) {
+        return NextResponse.json({ error: "SKU Suffix is required for Flooring variants." }, { status: 400 });
+      }
     }
     if (category === "WINDOW") {
       const missingSize = variantsInput.some(
@@ -520,7 +838,7 @@ export async function POST(request: NextRequest) {
             width: widthInt,
             height: heightInt,
             color,
-            glassFinish: glassFinishDefault,
+            glassFinish: String(glassFinishDefault ?? "").trim().toUpperCase() === "FROSTED" ? "FROSTED" : "CLEAR",
           }).effectiveSku
         : "";
     const preferredSku = variantSkuOverrideInput ?? normalizeSkuValue(autoNoHyphenSku || autoSku || "");
@@ -553,9 +871,34 @@ export async function POST(request: NextRequest) {
             thicknessMm,
             glass,
             glassTypeDefault,
+            glassCoatingDefault,
+            glassThicknessMmDefault,
             glassFinishDefault,
             screenDefault,
+            flooringBrand,
+            flooringSeries,
+            flooringMaterial,
+            flooringWearLayer,
+            flooringThicknessMm,
+            flooringPlankLengthIn,
+            flooringPlankWidthIn,
+            flooringCoreThicknessMm,
+            flooringFinish,
+            flooringEdge,
+            flooringInstallation,
+            flooringUnderlayment,
+            flooringUnderlaymentType,
+            flooringUnderlaymentMm,
+            flooringWaterResistance,
+            flooringWaterproof,
+            flooringWarrantyResidentialYr,
+            flooringWarrantyCommercialYr,
+            flooringPiecesPerBox,
+            flooringBoxCoverageSqft,
+            flooringLowStockThreshold,
             openingTypeDefault,
+            frameMaterialDefault,
+            slidingConfigDefault,
             rating,
             swing,
             handing,
@@ -592,9 +935,34 @@ export async function POST(request: NextRequest) {
           name: name,
           title: finalTitle || name,
           defaultDescription,
+          frameMaterialDefault,
+          slidingConfigDefault,
           glassTypeDefault,
+          glassCoatingDefault,
+          glassThicknessMmDefault,
           glassFinishDefault,
           screenDefault,
+          flooringBrand,
+          flooringSeries,
+          flooringMaterial,
+          flooringWearLayer,
+          flooringThicknessMm,
+          flooringPlankLengthIn,
+          flooringPlankWidthIn,
+          flooringCoreThicknessMm,
+          flooringFinish,
+          flooringEdge,
+          flooringInstallation,
+          flooringUnderlayment,
+          flooringUnderlaymentType,
+          flooringUnderlaymentMm,
+          flooringWaterResistance,
+          flooringWaterproof,
+          flooringWarrantyResidentialYr,
+          flooringWarrantyCommercialYr,
+          flooringPiecesPerBox,
+          flooringBoxCoverageSqft,
+          flooringLowStockThreshold,
           openingTypeDefault,
           brand,
           collection,
@@ -611,9 +979,34 @@ export async function POST(request: NextRequest) {
             name: salesProductData.name,
             title: salesProductData.title,
             defaultDescription: salesProductData.defaultDescription,
+            frameMaterialDefault: salesProductData.frameMaterialDefault,
+            slidingConfigDefault: salesProductData.slidingConfigDefault,
             glassTypeDefault: salesProductData.glassTypeDefault,
+            glassCoatingDefault: salesProductData.glassCoatingDefault,
+            glassThicknessMmDefault: salesProductData.glassThicknessMmDefault,
             glassFinishDefault: salesProductData.glassFinishDefault,
             screenDefault: salesProductData.screenDefault,
+            flooringBrand: salesProductData.flooringBrand,
+            flooringSeries: salesProductData.flooringSeries,
+            flooringMaterial: salesProductData.flooringMaterial,
+            flooringWearLayer: salesProductData.flooringWearLayer,
+            flooringThicknessMm: salesProductData.flooringThicknessMm,
+            flooringPlankLengthIn: salesProductData.flooringPlankLengthIn,
+            flooringPlankWidthIn: salesProductData.flooringPlankWidthIn,
+            flooringCoreThicknessMm: salesProductData.flooringCoreThicknessMm,
+            flooringFinish: salesProductData.flooringFinish,
+            flooringEdge: salesProductData.flooringEdge,
+            flooringInstallation: salesProductData.flooringInstallation,
+            flooringUnderlayment: salesProductData.flooringUnderlayment,
+            flooringUnderlaymentType: salesProductData.flooringUnderlaymentType,
+            flooringUnderlaymentMm: salesProductData.flooringUnderlaymentMm,
+            flooringWaterResistance: salesProductData.flooringWaterResistance,
+            flooringWaterproof: salesProductData.flooringWaterproof,
+            flooringWarrantyResidentialYr: salesProductData.flooringWarrantyResidentialYr,
+            flooringWarrantyCommercialYr: salesProductData.flooringWarrantyCommercialYr,
+            flooringPiecesPerBox: salesProductData.flooringPiecesPerBox,
+            flooringBoxCoverageSqft: salesProductData.flooringBoxCoverageSqft,
+            flooringLowStockThreshold: salesProductData.flooringLowStockThreshold,
             openingTypeDefault: salesProductData.openingTypeDefault,
             brand: salesProductData.brand,
             collection: salesProductData.collection,
@@ -633,11 +1026,16 @@ export async function POST(request: NextRequest) {
               data: {
                 productId: createdProduct.id,
                 sku: variant.sku,
+              displayName: variant.displayName,
+              skuSuffix: variant.skuSuffix,
                 description: variantDescription,
                 width: variant.width > 0 ? variant.width : null,
                 height: variant.height > 0 ? variant.height : null,
                 color: variant.color || null,
                 glassTypeOverride: null,
+                slidingConfigOverride: null,
+                glassCoatingOverride: null,
+                glassThicknessMmOverride: null,
                 glassFinishOverride: null,
                 screenOverride: null,
                 openingTypeOverride: null,
@@ -669,6 +1067,9 @@ export async function POST(request: NextRequest) {
               height: sizeH,
               color,
               glassTypeOverride: null,
+              slidingConfigOverride: null,
+              glassCoatingOverride: null,
+              glassThicknessMmOverride: null,
               glassFinishOverride: null,
               screenOverride: null,
               openingTypeOverride: null,
@@ -686,7 +1087,19 @@ export async function POST(request: NextRequest) {
         return createdProduct;
       });
 
-      return NextResponse.json({ data: product }, { status: 201 });
+      return NextResponse.json(
+        {
+          data: product,
+          meta: {
+            validationWarnings: buildProductValidationWarnings({
+              defaultDescription,
+              variantDescription,
+              variantsInput,
+            }),
+          },
+        },
+        { status: 201 },
+      );
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         return NextResponse.json({ error: "SKU already exists. Please use a different SKU." }, { status: 400 });

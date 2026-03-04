@@ -3,6 +3,8 @@ import { COMPANY_SETTINGS } from "@/lib/company-settings";
 import { getPdfThemeColors } from "@/lib/pdf/theme";
 import { formatLineItemTitle } from "@/lib/display";
 import { getCustomerSpecLine, getEffectiveSpecs } from "@/lib/specs/glass";
+import { formatFlooringSubtitle } from "@/lib/specs/effective";
+import { formatBoxesSqftSummary } from "@/lib/selling-unit";
 
 type InvoicePDFData = {
   invoiceNumber: string;
@@ -22,19 +24,38 @@ type InvoicePDFData = {
     width?: number | null;
     height?: number | null;
     color?: string | null;
+    frameMaterialDefault?: string | null;
+    slidingConfigDefault?: string | null;
     glassTypeDefault?: string | null;
+    glassCoatingDefault?: string | null;
+    glassThicknessMmDefault?: number | null;
     glassFinishDefault?: string | null;
     screenDefault?: string | null;
     openingTypeDefault?: string | null;
     glassTypeOverride?: string | null;
+    slidingConfigOverride?: string | null;
+    glassCoatingOverride?: string | null;
+    glassThicknessMmOverride?: number | null;
     glassFinishOverride?: string | null;
     screenOverride?: string | null;
     openingTypeOverride?: string | null;
+    flooringMaterial?: string | null;
+    flooringWearLayer?: string | null;
+    flooringThicknessMm?: number | null;
+    flooringPlankLengthIn?: number | null;
+    flooringPlankWidthIn?: number | null;
+    flooringCoreThicknessMm?: number | null;
+    flooringInstallation?: string | null;
+    flooringUnderlayment?: string | null;
+    flooringUnderlaymentType?: string | null;
+    flooringUnderlaymentMm?: number | null;
+    flooringBoxCoverageSqft?: number | null;
     qty: number;
     unitPrice: number;
     lineTotal: number;
   }>;
   subtotal: number;
+  taxRate?: number | null;
   taxAmount: number;
   total: number;
   paidTotal?: number;
@@ -302,44 +323,83 @@ export async function generateInvoicePDF(data: InvoicePDFData): Promise<Uint8Arr
   for (const item of data.items) {
     const leftX = margin + 8;
     const leftMaxWidth = pageWidth - 250 - leftX;
+    const flooringSummary = formatFlooringSubtitle({
+      flooringMaterial: item.flooringMaterial,
+      flooringWearLayer: item.flooringWearLayer,
+      flooringThicknessMm: item.flooringThicknessMm,
+      flooringPlankLengthIn: item.flooringPlankLengthIn,
+      flooringPlankWidthIn: item.flooringPlankWidthIn,
+      flooringCoreThicknessMm: item.flooringCoreThicknessMm,
+      flooringInstallation: item.flooringInstallation,
+      flooringUnderlayment: item.flooringUnderlayment,
+      flooringUnderlaymentType: item.flooringUnderlaymentType,
+      flooringUnderlaymentMm: item.flooringUnderlaymentMm,
+      flooringBoxCoverageSqft: item.flooringBoxCoverageSqft,
+    });
     const productLine = fitSingleLine(
-      formatLineItemTitle({
-        productName: item.productName,
-        variant: {
-          title: item.title,
-          sku: item.sku,
-          width: item.width,
-          height: item.height,
-          color: item.color,
-          detailText: item.description,
-        },
-      }),
+      flooringSummary
+        ? String(item.title ?? item.productName ?? "").trim() || "-"
+        : formatLineItemTitle({
+            productName: item.productName,
+            variant: {
+              title: item.title,
+              sku: item.sku,
+              width: item.width,
+              height: item.height,
+              color: item.color,
+              detailText: item.description,
+            },
+          }),
       leftMaxWidth,
       10,
       true,
     );
+    const skuLine = flooringSummary
+      ? fitSingleLine(`SKU: ${String(item.sku ?? "-")}`, leftMaxWidth, 9, false)
+      : "";
+    const sqftPerBox = Number(item.flooringBoxCoverageSqft ?? 0);
+    const qtyBoxes = Number(item.qty ?? 0);
+    const flooringShipLine =
+      flooringSummary && Number.isFinite(sqftPerBox) && sqftPerBox > 0 && Number.isFinite(qtyBoxes)
+        ? fitSingleLine(
+            formatBoxesSqftSummary(Math.max(0, qtyBoxes), sqftPerBox) ?? "",
+            leftMaxWidth,
+            9,
+            false,
+          )
+        : "";
     const specLine = fitSingleLine(
-      getCustomerSpecLine(
-        getEffectiveSpecs(
-          {
-            glassTypeDefault: item.glassTypeDefault,
-            glassFinishDefault: item.glassFinishDefault,
-            screenDefault: item.screenDefault,
-            openingTypeDefault: item.openingTypeDefault,
-          },
-          {
-            glassTypeOverride: item.glassTypeOverride,
-            glassFinishOverride: item.glassFinishOverride,
-            screenOverride: item.screenOverride,
-            openingTypeOverride: item.openingTypeOverride,
-          },
+      flooringSummary
+        ? flooringShipLine
+        : getCustomerSpecLine(
+          getEffectiveSpecs(
+            {
+              frameMaterialDefault: item.frameMaterialDefault,
+              slidingConfigDefault: item.slidingConfigDefault,
+              glassTypeDefault: item.glassTypeDefault,
+              glassCoatingDefault: item.glassCoatingDefault,
+              glassThicknessMmDefault: item.glassThicknessMmDefault,
+              glassFinishDefault: item.glassFinishDefault,
+              screenDefault: item.screenDefault,
+              openingTypeDefault: item.openingTypeDefault,
+            },
+            {
+              glassTypeOverride: item.glassTypeOverride,
+              slidingConfigOverride: item.slidingConfigOverride,
+              glassCoatingOverride: item.glassCoatingOverride,
+              glassThicknessMmOverride: item.glassThicknessMmOverride,
+              glassFinishOverride: item.glassFinishOverride,
+              screenOverride: item.screenOverride,
+              openingTypeOverride: item.openingTypeOverride,
+              detailText: item.description,
+            },
+          ),
         ),
-      ),
       leftMaxWidth,
       9,
       false,
     );
-    const rowLinesCount = specLine ? 2 : 1;
+    const rowLinesCount = 1 + (specLine ? 1 : 0) + (skuLine ? 1 : 0);
     const rowHeight = Math.max(24, rowLinesCount * 12 + 8);
     ensureTableSpace(rowHeight + 4);
 
@@ -351,6 +411,11 @@ export async function generateInvoicePDF(data: InvoicePDFData): Promise<Uint8Arr
     if (specLine) {
       y = textY;
       drawText(specLine, leftX, 9, { color: { r: 0.42, g: 0.45, b: 0.5 } });
+      textY -= 12;
+    }
+    if (skuLine) {
+      y = textY;
+      drawText(skuLine, leftX, 9, { color: { r: 0.42, g: 0.45, b: 0.5 } });
       textY -= 12;
     }
     y = rowTopY;
@@ -376,7 +441,7 @@ export async function generateInvoicePDF(data: InvoicePDFData): Promise<Uint8Arr
   drawText("Subtotal", totalsLeft, 10);
   drawRight(formatMoney(data.subtotal), totalsRight, 10);
   y -= 14;
-  drawText("Tax", totalsLeft, 10);
+  drawText(`Tax (${Number(data.taxRate ?? 0).toFixed(3)}%)`, totalsLeft, 10);
   drawRight(formatMoney(data.taxAmount), totalsRight, 10);
   y -= 14;
   page.drawLine({

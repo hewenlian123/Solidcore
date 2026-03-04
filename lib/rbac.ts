@@ -32,7 +32,9 @@ export function canViewPath(role: Role, path: string) {
     );
   if (role === "WAREHOUSE")
     return (
+      path.startsWith("/inventory") ||
       path.startsWith("/inventory/reorder") ||
+      path.startsWith("/inventory/movements") ||
       path.startsWith("/products") ||
       path.startsWith("/outbound") ||
       path.startsWith("/fulfillment") ||

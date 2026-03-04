@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useRole } from "@/components/layout/role-provider";
 import { getSalesOrderStatusBadge, getSalesOrderStatusLabel } from "@/lib/sales-order-ui";
@@ -10,6 +10,8 @@ import { PDFPreviewModal } from "@/components/pdf/PDFPreviewModal";
 import { buildProductDisplayName } from "@/lib/product-display-format";
 import { formatLineItemTitle } from "@/lib/display";
 import { getEffectiveSpecs, getInternalSpecLine } from "@/lib/specs/glass";
+import { formatFlooringSubtitle } from "@/lib/specs/effective";
+import { formatBoxesSqftSummary, formatSellingUnitLabel, resolveSellingUnit } from "@/lib/selling-unit";
 
 type SalesOrderDetail = {
   id: string;
@@ -25,15 +27,35 @@ type SalesOrderDetail = {
   depositRequired: string;
   subtotal: string;
   discount: string;
+  taxRate: string | null;
   tax: string;
   total: string;
   paidAmount: string;
   balanceDue: string;
   paymentStatus: "unpaid" | "partial" | "paid";
   salespersonName: string | null;
+  fulfillmentMethod: "PICKUP" | "DELIVERY";
+  deliveryName: string | null;
+  deliveryPhone: string | null;
+  deliveryAddress1: string | null;
+  deliveryAddress2: string | null;
+  deliveryCity: string | null;
+  deliveryState: string | null;
+  deliveryZip: string | null;
+  deliveryNotes: string | null;
+  pickupNotes: string | null;
+  requestedDeliveryAt: string | null;
   notes: string | null;
   createdAt: string;
-  customer: { id: string; name: string; phone: string | null; email: string | null };
+  customer: {
+    id: string;
+    name: string;
+    phone: string | null;
+    email: string | null;
+    address: string | null;
+    taxExempt: boolean;
+    taxRate: number | null;
+  };
   supplier: { id: string; name: string; contactName: string; phone: string } | null;
   items: Array<{
     id: string;
@@ -51,19 +73,39 @@ type SalesOrderDetail = {
     product?:
       | {
           name: string | null;
+          unit?: string | null;
+          frameMaterialDefault?: string | null;
+          slidingConfigDefault?: string | null;
           glassTypeDefault?: string | null;
+          glassCoatingDefault?: string | null;
+          glassThicknessMmDefault?: number | null;
           glassFinishDefault?: string | null;
           screenDefault?: string | null;
           openingTypeDefault?: string | null;
+          flooringMaterial?: string | null;
+          flooringWearLayer?: string | null;
+          flooringThicknessMm?: number | null;
+          flooringPlankLengthIn?: number | null;
+          flooringPlankWidthIn?: number | null;
+          flooringCoreThicknessMm?: number | null;
+          flooringInstallation?: string | null;
+          flooringUnderlayment?: string | null;
+          flooringUnderlaymentType?: string | null;
+          flooringUnderlaymentMm?: number | null;
+          flooringBoxCoverageSqft?: number | null;
         }
       | null;
     variant?:
       | {
           sku?: string | null;
+          displayName?: string | null;
           width?: number | null;
           height?: number | null;
           color?: string | null;
           glassTypeOverride?: string | null;
+          slidingConfigOverride?: string | null;
+          glassCoatingOverride?: string | null;
+          glassThicknessMmOverride?: number | null;
           glassFinishOverride?: string | null;
           screenOverride?: string | null;
           openingTypeOverride?: string | null;
@@ -108,6 +150,10 @@ type SalesProduct = {
   onHandStock?: string;
   availableStock: string;
   price: string;
+  unit?: string | null;
+  sellingUnit?: "BOX" | "PIECE" | "SQFT";
+  category?: string | null;
+  flooringBoxCoverageSqft?: number | null;
 };
 
 type SupplierOption = {
@@ -115,6 +161,21 @@ type SupplierOption = {
   name: string;
   contactName: string;
   phone: string;
+};
+
+type SalesCustomerOption = {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  taxExempt: boolean;
+  taxRate: number | null;
+};
+
+type SalespersonOption = {
+  id: string;
+  name: string;
 };
 
 type SalesOrderTicket = {
@@ -320,14 +381,53 @@ function toItemRowDraft(item: SalesOrderDetail["items"][number], existing?: Item
   };
 }
 
+function formatFlooringMetric(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
+}
+
+function getFlooringShipmentPlan(quantityBoxes: number, sqftPerBox: number) {
+  if (!Number.isFinite(quantityBoxes)) return null;
+  if (!Number.isFinite(sqftPerBox) || sqftPerBox <= 0) return null;
+  const requiredBoxes = Math.max(0, quantityBoxes);
+  const coversSqft = requiredBoxes * sqftPerBox;
+  const summary = formatBoxesSqftSummary(requiredBoxes, sqftPerBox);
+  return {
+    requiredBoxes,
+    coversSqft,
+    label: summary ?? `${formatFlooringMetric(requiredBoxes)} boxes`,
+  };
+}
+
+function formatUnitLabel(unit: string | null | undefined) {
+  const normalized = String(unit ?? "").trim().toUpperCase();
+  if (!normalized) return "-";
+  if (normalized === "BOX") return "boxes";
+  if (normalized === "SQFT" || normalized === "SQM") return "sqft";
+  if (normalized === "PIECE") return "qty";
+  return normalized.toLowerCase();
+}
+
+function getReservedFlooringBoxesFromItems(items: SalesOrderDetail["items"]) {
+  return items.reduce((sum, item) => {
+    const plan = getFlooringShipmentPlan(
+      Number(item.quantity ?? 0),
+      Number(item.product?.flooringBoxCoverageSqft ?? 0),
+    );
+    return sum + Number(plan?.requiredBoxes ?? 0);
+  }, 0);
+}
+
 export default function SalesOrderDetailPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const params = useParams<{ id: string }>();
   const id = String(params?.id ?? "");
   const { role } = useRole();
   const [data, setData] = useState<SalesOrderDetail | null>(null);
   const [products, setProducts] = useState<SalesProduct[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [customers, setCustomers] = useState<SalesCustomerOption[]>([]);
+  const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
   const [tickets, setTickets] = useState<SalesOrderTicket[]>([]);
   const [invoiceId, setInvoiceId] = useState<string | null>(null);
   const [activeBottomTab, setActiveBottomTab] = useState<"PAYMENTS" | "FULFILLMENT" | "TICKETS">("PAYMENTS");
@@ -338,6 +438,7 @@ export default function SalesOrderDetailPage() {
   const [mode, setMode] = useState<"view" | "edit">("view");
   const [editSnapshot, setEditSnapshot] = useState<SalesOrderDetail | null>(null);
   const [supplierQuery, setSupplierQuery] = useState("");
+  const [customerQuery, setCustomerQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [savingHeader, setSavingHeader] = useState(false);
@@ -345,6 +446,10 @@ export default function SalesOrderDetailPage() {
   const [savingStatus, setSavingStatus] = useState(false);
   const [openPayment, setOpenPayment] = useState(false);
   const [openFulfillment, setOpenFulfillment] = useState(false);
+  const [openStartFulfillmentDialog, setOpenStartFulfillmentDialog] = useState(false);
+  const [startingFulfillmentType, setStartingFulfillmentType] = useState<"DELIVERY" | "PICKUP" | null>(null);
+  const [creatingReturn, setCreatingReturn] = useState(false);
+  const [hasRelatedReturns, setHasRelatedReturns] = useState(false);
   const [openTicket, setOpenTicket] = useState(false);
   const [pdfPreview, setPdfPreview] = useState<{ title: string; src: string } | null>(null);
   const quickAddSearchRef = useRef<HTMLInputElement | null>(null);
@@ -381,9 +486,23 @@ export default function SalesOrderDetailPage() {
   const [openDetailsDrawer, setOpenDetailsDrawer] = useState(false);
   const [rowDraftsByItemId, setRowDraftsByItemId] = useState<Record<string, ItemRowDraft>>({});
 
+  const loadCustomers = async (q = "") => {
+    const params = new URLSearchParams();
+    if (q.trim()) params.set("q", q.trim());
+    const query = params.toString();
+    const res = await fetch(query ? `/api/sales-orders/customers?${query}` : "/api/sales-orders/customers", {
+      cache: "no-store",
+      headers: { "x-user-role": role },
+    });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload.error ?? "Failed to fetch customers");
+    setCustomers(payload.data ?? []);
+  };
+
   const load = async () => {
     try {
-      const [detailRes, productRes, supplierRes, ticketRes, invoiceRes] = await Promise.all([
+      const [detailRes, productRes, supplierRes, ticketRes, invoiceRes, returnRes, customerRes, salespersonRes] =
+        await Promise.all([
         fetch(`/api/sales-orders/${id}`, {
           cache: "no-store",
           headers: { "x-user-role": role },
@@ -404,23 +523,44 @@ export default function SalesOrderDetailPage() {
           cache: "no-store",
           headers: { "x-user-role": role },
         }),
+        fetch(`/api/after-sales/returns?salesOrderId=${id}`, {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        }),
+        fetch("/api/sales-orders/customers", {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        }),
+        fetch("/api/sales-orders/salespeople", {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        }),
       ]);
       const detailPayload = await detailRes.json();
       const productPayload = await productRes.json();
       const suppliersPayload = await supplierRes.json();
       const ticketPayload = await ticketRes.json();
       const invoicePayload = await invoiceRes.json();
+      const returnPayload = await returnRes.json();
+      const customerPayload = await customerRes.json();
+      const salespersonPayload = await salespersonRes.json();
       if (!detailRes.ok) throw new Error(detailPayload.error ?? "Failed to fetch order");
       if (!productRes.ok) throw new Error(productPayload.error ?? "Failed to fetch products");
       if (!supplierRes.ok) throw new Error(suppliersPayload.error ?? "Failed to fetch suppliers");
       if (!ticketRes.ok) throw new Error(ticketPayload.error ?? "Failed to fetch tickets");
       if (!invoiceRes.ok) throw new Error(invoicePayload.error ?? "Failed to fetch invoice");
+      if (!returnRes.ok) throw new Error(returnPayload.error ?? "Failed to fetch returns");
+      if (!customerRes.ok) throw new Error(customerPayload.error ?? "Failed to fetch customers");
+      if (!salespersonRes.ok) throw new Error(salespersonPayload.error ?? "Failed to fetch salespeople");
       if (!Array.isArray(suppliersPayload.data)) throw new Error("Failed to fetch suppliers");
       setData(detailPayload.data);
       setProducts(productPayload.data ?? []);
       setSuppliers(suppliersPayload.data ?? []);
+      setCustomers(customerPayload.data ?? []);
+      setSalespeople(salespersonPayload.data ?? []);
       setTickets(ticketPayload.data ?? []);
       setInvoiceId(invoicePayload.data?.[0]?.id ?? null);
+      setHasRelatedReturns(Array.isArray(returnPayload.data) && returnPayload.data.length > 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch data");
     }
@@ -429,16 +569,62 @@ export default function SalesOrderDetailPage() {
   const createInvoiceFromSalesOrder = async () => {
     try {
       setError(null);
+      if (invoiceId) {
+        router.push(`/invoices/${invoiceId}`);
+        return;
+      }
       const res = await fetch(`/api/invoices/from-sales-order/${id}`, {
         method: "POST",
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? "Failed to create invoice");
-      setInvoiceId(payload.data?.invoice?.id ?? null);
+      const nextInvoiceId = payload.data?.invoice?.id ?? null;
+      setInvoiceId(nextInvoiceId);
       setSuccessMessage(payload.data?.existed ? "Invoice already exists." : "Invoice created.");
+      if (nextInvoiceId) router.push(`/invoices/${nextInvoiceId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create invoice");
+    }
+  };
+
+  const ensureFulfillment = async (type: "DELIVERY" | "PICKUP") => {
+    try {
+      setError(null);
+      setStartingFulfillmentType(type);
+      const res = await fetch(`/api/sales-orders/${id}/fulfillments/ensure`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-user-role": role },
+        body: JSON.stringify({ type }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to start fulfillment");
+      const fulfillmentId = String(payload.data?.fulfillmentId ?? "").trim();
+      if (!fulfillmentId) throw new Error("Failed to start fulfillment");
+      setOpenStartFulfillmentDialog(false);
+      router.push(`/fulfillment/${fulfillmentId}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start fulfillment");
+    } finally {
+      setStartingFulfillmentType(null);
+    }
+  };
+
+  const createReturnFromSalesOrder = async () => {
+    try {
+      if (!data) return;
+      setError(null);
+      setCreatingReturn(true);
+      const params = new URLSearchParams();
+      params.set("openCreate", "1");
+      params.set("customerId", data.customer.id);
+      params.set("salesOrderId", data.id);
+      if (invoiceId) params.set("invoiceId", invoiceId);
+      router.push(`/after-sales/returns?${params.toString()}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create return");
+    } finally {
+      setCreatingReturn(false);
     }
   };
 
@@ -461,10 +647,29 @@ export default function SalesOrderDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, role]);
   useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadCustomers(customerQuery).catch((err) =>
+        setError(err instanceof Error ? err.message : "Failed to fetch customers"),
+      );
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [customerQuery]);
+  useEffect(() => {
     if (!successMessage) return;
     const timer = window.setTimeout(() => setSuccessMessage(null), 2500);
     return () => window.clearTimeout(timer);
   }, [successMessage]);
+  useEffect(() => {
+    const created = searchParams.get("created");
+    if (created !== "1") return;
+    const status = searchParams.get("status");
+    setSuccessMessage(status === "confirmed" ? "Sales Order created and confirmed." : "Sales Order created");
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("created");
+    nextParams.delete("status");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `/sales-orders/${id}?${nextQuery}` : `/sales-orders/${id}`);
+  }, [searchParams, router, id]);
   useEffect(() => {
     if (!data?.items) return;
     setRowDraftsByItemId((prev) => {
@@ -493,6 +698,14 @@ export default function SalesOrderDetailPage() {
     () => (data ? Number.isFinite(Number(data.total)) : false),
     [data],
   );
+  const liveTotal = useMemo(() => {
+    if (!data) return 0;
+    return roundTo2(Number(data.subtotal || 0) - Number(data.discount || 0) + Number(data.tax || 0));
+  }, [data]);
+  const liveBalanceDue = useMemo(() => {
+    if (!data) return 0;
+    return roundTo2(liveTotal - Number(data.paidAmount || 0));
+  }, [data, liveTotal]);
   const filteredSuppliers = useMemo(() => {
     const q = supplierQuery.trim().toLowerCase();
     if (!q) return suppliers;
@@ -503,6 +716,27 @@ export default function SalesOrderDetailPage() {
         supplier.phone.toLowerCase().includes(q),
     );
   }, [supplierQuery, suppliers]);
+  const walkInCustomerId = useMemo(() => {
+    const row = customers.find((customer) => /walk[\s-]?in/i.test(String(customer.name ?? "")));
+    return row?.id ?? "";
+  }, [customers]);
+  const customerOptions = useMemo(() => {
+    if (!data?.customer) return customers;
+    const exists = customers.some((customer) => customer.id === data.customer.id);
+    if (exists) return customers;
+    return [
+      {
+        id: data.customer.id,
+        name: data.customer.name,
+        phone: data.customer.phone,
+        email: data.customer.email,
+        address: data.customer.address,
+        taxExempt: data.customer.taxExempt,
+        taxRate: data.customer.taxRate,
+      },
+      ...customers,
+    ];
+  }, [customers, data?.customer]);
   const filteredTickets = useMemo(() => {
     if (ticketStatusFilter === "ALL") return tickets;
     return tickets.filter((ticket) => ticket.status === ticketStatusFilter);
@@ -554,6 +788,10 @@ export default function SalesOrderDetailPage() {
     });
   }, [products, quickAddQuery]);
   const activeQuickAddProduct = quickAddCandidates[quickAddActiveIndex] ?? null;
+  const quickAddFlooringPlan = getFlooringShipmentPlan(
+    Math.max(0, Number(quickAddQty || 0)),
+    Number(activeQuickAddProduct?.flooringBoxCoverageSqft ?? 0),
+  );
   const activeQuickAddDetails = useMemo(
     () => getProductDetailPreview(activeQuickAddProduct?.generatedDescription ?? activeQuickAddProduct?.variantDescription ?? ""),
     [activeQuickAddProduct],
@@ -623,23 +861,93 @@ export default function SalesOrderDetailPage() {
       );
     });
   }, [mode, data, rowDraftsByItemId]);
+  const calcTaxAmount = (subtotalValue: number, discountValue: number, taxRateValue: number) => {
+    const taxableBase = Math.max(0, subtotalValue - discountValue);
+    const rate = Number.isFinite(taxRateValue) ? Math.max(0, taxRateValue) : 0;
+    return roundTo2((taxableBase * rate) / 100);
+  };
+  const applyCustomerToOrder = (
+    prev: SalesOrderDetail,
+    nextCustomer: SalesCustomerOption,
+    forceAddressForDelivery = false,
+  ): SalesOrderDetail => {
+    const taxRateNumber = nextCustomer.taxExempt ? 0 : Number(nextCustomer.taxRate ?? 0);
+    const nextTaxRate = String(Number.isFinite(taxRateNumber) ? taxRateNumber : 0);
+    const nextTax = String(
+      calcTaxAmount(Number(prev.subtotal || 0), Number(prev.discount || 0), Number(nextTaxRate || 0)),
+    );
+    const nextAddress = String(nextCustomer.address ?? "").trim();
+    const shouldFillAddress =
+      prev.fulfillmentMethod === "DELIVERY" &&
+      (forceAddressForDelivery || !String(prev.deliveryAddress1 ?? "").trim());
+    const parsedAddress = nextAddress
+      ? nextAddress
+          .split(",")
+          .map((part) => part.trim())
+          .filter(Boolean)
+      : [];
+    return {
+      ...prev,
+      customer: {
+        ...prev.customer,
+        id: nextCustomer.id,
+        name: nextCustomer.name,
+        phone: nextCustomer.phone,
+        email: nextCustomer.email,
+        address: nextCustomer.address,
+        taxExempt: nextCustomer.taxExempt,
+        taxRate: nextCustomer.taxRate,
+      },
+      taxRate: nextTaxRate,
+      tax: nextTax,
+      deliveryName: prev.deliveryName || nextCustomer.name || null,
+      deliveryPhone: prev.deliveryPhone || nextCustomer.phone || null,
+      deliveryAddress1: shouldFillAddress ? (parsedAddress[0] ?? nextAddress ?? null) : prev.deliveryAddress1,
+      deliveryAddress2: shouldFillAddress ? parsedAddress[1] ?? null : prev.deliveryAddress2,
+    };
+  };
   const hasHeaderUnsavedChanges = useMemo(() => {
     if (mode !== "edit" || !data || !editSnapshot) return false;
     return (
+      data.customer.id !== editSnapshot.customer.id ||
       data.projectName !== editSnapshot.projectName ||
       data.salespersonName !== editSnapshot.salespersonName ||
       String(data.discount) !== String(editSnapshot.discount) ||
+      String(data.taxRate ?? "0") !== String(editSnapshot.taxRate ?? "0") ||
       String(data.tax) !== String(editSnapshot.tax) ||
       data.specialOrder !== editSnapshot.specialOrder ||
       data.supplierId !== editSnapshot.supplierId ||
       data.etaDate !== editSnapshot.etaDate ||
       data.specialOrderStatus !== editSnapshot.specialOrderStatus ||
       data.supplierNotes !== editSnapshot.supplierNotes ||
+      data.fulfillmentMethod !== editSnapshot.fulfillmentMethod ||
+      data.deliveryName !== editSnapshot.deliveryName ||
+      data.deliveryPhone !== editSnapshot.deliveryPhone ||
+      data.deliveryAddress1 !== editSnapshot.deliveryAddress1 ||
+      data.deliveryAddress2 !== editSnapshot.deliveryAddress2 ||
+      data.deliveryCity !== editSnapshot.deliveryCity ||
+      data.deliveryState !== editSnapshot.deliveryState ||
+      data.deliveryZip !== editSnapshot.deliveryZip ||
+      data.deliveryNotes !== editSnapshot.deliveryNotes ||
+      data.pickupNotes !== editSnapshot.pickupNotes ||
+      data.requestedDeliveryAt !== editSnapshot.requestedDeliveryAt ||
       data.notes !== editSnapshot.notes ||
       String(data.depositRequired) !== String(editSnapshot.depositRequired)
     );
   }, [mode, data, editSnapshot]);
   const hasUnsavedChanges = hasUnsavedItemDrafts || hasHeaderUnsavedChanges;
+  const isInvoiceCreateEligible = useMemo(() => {
+    const status = String(data?.status ?? "").toUpperCase();
+    return ["CONFIRMED", "READY", "PARTIALLY_FULFILLED", "FULFILLED"].includes(status);
+  }, [data?.status]);
+  const activeFulfillment = useMemo(
+    () => data?.fulfillments.find((item) => item.status !== "CANCELLED") ?? null,
+    [data?.fulfillments],
+  );
+  const canStartFulfillment = useMemo(() => {
+    const status = String(data?.status ?? "").toUpperCase();
+    return ["CONFIRMED", "READY", "PARTIALLY_FULFILLED"].includes(status);
+  }, [data?.status]);
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => {
       if (!hasUnsavedChanges) return;
@@ -652,6 +960,18 @@ export default function SalesOrderDetailPage() {
 
   const updateHeader = async () => {
     if (!data) return;
+    if (data.fulfillmentMethod === "DELIVERY") {
+      const required = [
+        String(data.deliveryAddress1 ?? "").trim(),
+        String(data.deliveryCity ?? "").trim(),
+        String(data.deliveryState ?? "").trim(),
+        String(data.deliveryZip ?? "").trim(),
+      ];
+      if (required.some((value) => !value)) {
+        setError("Delivery requires address line1/city/state/zip.");
+        return false;
+      }
+    }
     setSavingHeader(true);
     setError(null);
     try {
@@ -659,13 +979,26 @@ export default function SalesOrderDetailPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "x-user-role": role },
         body: JSON.stringify({
+          customerId: data.customer.id,
           projectName: data.projectName,
           specialOrder: data.specialOrder,
           supplierId: data.specialOrder ? data.supplierId : null,
           etaDate: data.specialOrder ? data.etaDate : null,
           specialOrderStatus: data.specialOrder ? data.specialOrderStatus : null,
           supplierNotes: data.specialOrder ? data.supplierNotes : null,
+          fulfillmentMethod: data.fulfillmentMethod || "PICKUP",
+          deliveryName: data.deliveryName,
+          deliveryPhone: data.deliveryPhone,
+          deliveryAddress1: data.deliveryAddress1,
+          deliveryAddress2: data.deliveryAddress2,
+          deliveryCity: data.deliveryCity,
+          deliveryState: data.deliveryState,
+          deliveryZip: data.deliveryZip,
+          deliveryNotes: data.deliveryNotes,
+          pickupNotes: data.pickupNotes,
+          requestedDeliveryAt: data.requestedDeliveryAt,
           discount: Number(data.discount),
+          taxRate: Number(data.taxRate ?? 0),
           tax: Number(data.tax),
           salespersonName: data.salespersonName,
           notes: data.notes,
@@ -733,11 +1066,13 @@ export default function SalesOrderDetailPage() {
   const quickAddVariant = async (product: SalesProduct, keepFocus: boolean) => {
     const qty = Math.max(1, Number(quickAddQty || 1));
     if (!Number.isFinite(qty)) return;
+    const sellingUnit = product.sellingUnit ?? resolveSellingUnit(product.category, product.unit);
+    const roundedQty = qty;
     try {
       setError(null);
       const existingItem = data?.items.find((item) => item.variantId === product.id) ?? null;
       if (existingItem) {
-        const nextQty = Number(existingItem.quantity || 0) + qty;
+        const nextQty = Number(existingItem.quantity || 0) + roundedQty;
         const res = await fetch(`/api/sales-orders/${id}/items/${existingItem.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json", "x-user-role": role },
@@ -755,9 +1090,10 @@ export default function SalesOrderDetailPage() {
             variantId: product.id,
             productSku: product.sku,
             productTitle: product.name,
+            uomSnapshot: sellingUnit,
             description: product.generatedDescription ?? null,
             lineDescription: product.generatedDescription ?? "",
-            quantity: qty,
+            quantity: roundedQty,
             unitPrice: Number(product.price || 0),
             lineDiscount: 0,
           }),
@@ -939,6 +1275,12 @@ export default function SalesOrderDetailPage() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? "Failed to update status");
       setData(payload.data);
+      if (status === "CONFIRMED") {
+        const reservedBoxes = getReservedFlooringBoxesFromItems(payload.data?.items ?? []);
+        if (reservedBoxes > 0) {
+          setSuccessMessage(`Reserved: ${reservedBoxes} boxes`);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update status");
     } finally {
@@ -1207,7 +1549,7 @@ export default function SalesOrderDetailPage() {
   }, [activeDrawerItemId, mode, isDrawerDirty, activeDrawerItem, activeDrawerDraft, rowDraftsByItemId]);
 
   return (
-    <section className="mx-auto max-w-[1400px] space-y-3 bg-[#F3F4F6] px-4 py-3 text-[#111827]">
+    <section className="so-glass-page mx-auto max-w-[1400px] space-y-3 px-4 py-3 text-[#111827]">
       {successMessage ? (
         <div className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
           {successMessage}
@@ -1220,50 +1562,26 @@ export default function SalesOrderDetailPage() {
       ) : null}
 
       {!data ? (
-        <div className="rounded-md border border-[#E5E7EB] bg-white p-6 text-sm text-[#6B7280]">Loading order...</div>
+        <div className="so-panel p-6 text-sm text-[#6B7280]">Loading order...</div>
       ) : (
         <>
-          <div className="border-b border-[#E5E7EB] pb-3">
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)_minmax(0,1.35fr)] lg:items-start">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
+          <div className="so-panel px-4 py-4">
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-start">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <h1 className="text-2xl font-semibold tracking-tight text-[#111827]">{data.orderNumber}</h1>
                   <span
-                    className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${
+                    className={`so-chip ${
                       mode === "edit" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-700"
                     }`}
                   >
                     {mode === "edit" ? "EDIT" : "VIEW"}
                   </span>
-                </div>
-                <p className="text-sm text-[#6B7280]">
-                  Customer: <span className="text-[#111827]">{data.customer.name || "-"}</span>
-                </p>
-                <p className="text-sm text-[#6B7280]">
-                  Project: <span className="text-[#111827]">{data.projectName || "-"}</span>
-                </p>
-                <p className="text-sm text-[#6B7280]">
-                  Salesperson: <span className="text-[#111827]">{data.salespersonName || "-"}</span>
-                </p>
-                <p className="text-sm text-[#6B7280]">
-                  Created:{" "}
-                  <span className="text-[#111827]">
-                    {new Date(data.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
+                  <span className={`so-chip ${getSalesOrderStatusBadge(data.status)}`}>
+                    {getSalesOrderStatusLabel(data.status)}
                   </span>
-                </p>
-              </div>
-
-              <div className="space-y-2 lg:pt-1">
-                <span
-                  className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${getSalesOrderStatusBadge(
-                    data.status,
-                  )}`}
-                >
-                  {getSalesOrderStatusLabel(data.status)}
-                </span>
-                <div>
                   <span
-                    className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium ${
+                    className={`so-chip ${
                       paymentStatus === "Paid"
                         ? "bg-emerald-100 text-emerald-700"
                         : paymentStatus === "Partial"
@@ -1274,137 +1592,258 @@ export default function SalesOrderDetailPage() {
                     {paymentStatus}
                   </span>
                 </div>
-                {data.docType === "QUOTE" ? (
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <button
-                      type="button"
-                      onClick={() => updateStatus("DRAFT")}
-                      disabled={savingStatus}
-                      className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-3 text-xs text-[#374151] hover:bg-slate-50 disabled:opacity-60"
-                    >
-                      Save Draft
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateStatus("QUOTED")}
-                      disabled={savingStatus}
-                      className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-3 text-xs text-[#374151] hover:bg-slate-50 disabled:opacity-60"
-                    >
-                      Mark Quoted
-                    </button>
-                    <button
-                      type="button"
-                      onClick={convertQuote}
-                      disabled={savingStatus || data.status === "CANCELLED"}
-                      className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-3 text-xs text-[#374151] hover:bg-slate-50 disabled:opacity-60"
-                    >
-                      Convert
-                    </button>
+
+                <div className="rounded-xl border border-white/70 bg-white/55 p-3 backdrop-blur-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Customer Information</p>
+                  <div className="mt-2 grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+                    <span className="text-[#6B7280]">Customer</span>
+                    <span className="text-[#111827]">
+                      {data.customer.name || "-"}
+                      {data.customer.phone ? ` (${data.customer.phone})` : ""}
+                    </span>
+                    <span className="text-[#6B7280]">Project</span>
+                    <span className="text-[#111827]">{data.projectName || "-"}</span>
+                    <span className="text-[#6B7280]">Salesperson</span>
+                    <span className="text-[#111827]">{data.salespersonName || "-"}</span>
+                    <span className="text-[#6B7280]">Tax Rate</span>
+                    <span className="text-[#111827]">
+                      {data.customer.taxExempt ? "Tax Exempt (0%)" : `${Number(data.taxRate ?? 0).toFixed(2)}%`}
+                    </span>
                   </div>
-                ) : null}
+                </div>
+
+                <div className="rounded-xl border border-white/70 bg-white/55 p-3 backdrop-blur-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Fulfillment</p>
+                  <div className="mt-2 grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+                    <span className="text-[#6B7280]">Fulfillment Type</span>
+                    <span className="text-[#111827]">{data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"}</span>
+                    <span className="text-[#6B7280]">Pickup</span>
+                    <span className="text-[#111827]">
+                      {data.fulfillmentMethod === "PICKUP"
+                        ? String(data.pickupNotes ?? "").trim() || "Pickup"
+                        : "-"}
+                    </span>
+                    <span className="text-[#6B7280]">Notes</span>
+                    <span className="text-[#111827]">{String(data.notes ?? "").trim() || "-"}</span>
+                    <span className="text-[#6B7280]">Created Date</span>
+                    <span className="text-[#111827]">
+                      {new Date(data.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
+                    </span>
+                    {data.fulfillmentMethod === "DELIVERY" ? (
+                      <>
+                        <span className="text-[#6B7280]">Delivery Address</span>
+                        <span className="text-[#111827]">
+                          {[
+                            data.deliveryAddress1,
+                            data.deliveryAddress2,
+                            data.deliveryCity,
+                            data.deliveryState,
+                            data.deliveryZip,
+                          ]
+                            .filter((part) => String(part ?? "").trim())
+                            .join(", ") || "-"}
+                        </span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
               </div>
 
-              <div className="space-y-2 lg:justify-self-end lg:text-right">
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div>
-                    <p className="text-[#6B7280]">TOTAL</p>
-                    <p className="text-sm font-semibold text-[#111827]">${Number(data.total).toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[#6B7280]">PAID</p>
-                    <p className="text-sm font-semibold text-[#111827]">${Number(data.paidAmount).toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-[#6B7280]">BALANCE</p>
-                    <p className="text-base font-semibold text-[#111827]">${Number(data.balanceDue).toFixed(2)}</p>
+              <div className="space-y-3 lg:justify-self-end lg:w-full lg:max-w-[430px]">
+                <div className="rounded-xl border border-white/70 bg-white/55 p-3 backdrop-blur-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Order Summary</p>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-[#6B7280]">TOTAL</p>
+                      <p className="text-sm font-semibold text-[#111827]">${Number(liveTotal).toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[#6B7280]">PAID</p>
+                      <p className="text-sm font-semibold text-[#111827]">${Number(data.paidAmount).toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[#6B7280]">BALANCE</p>
+                      <p className="text-base font-semibold text-[#111827]">${Number(liveBalanceDue).toFixed(2)}</p>
+                    </div>
                   </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                  {mode === "view" ? (
-                    <button
-                      type="button"
-                      onClick={enterEditMode}
-                      className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-slate-50 px-3 text-xs font-medium text-[#374151] hover:bg-slate-100"
-                    >
-                      Edit
-                    </button>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => void saveEditMode()}
-                        className="inline-flex h-8 items-center rounded-md border border-emerald-200 bg-emerald-50 px-3 text-xs font-medium text-emerald-700 hover:bg-emerald-100"
-                      >
-                        Save Changes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void cancelEditMode()}
-                        className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-3 text-xs text-[#374151] hover:bg-slate-50"
-                      >
-                        Cancel
-                      </button>
-                    </>
-                  )}
-                  <Link
-                    href={`/orders/${data.id}/print`}
-                    className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-3 text-xs text-[#374151] hover:bg-slate-50"
-                  >
-                    Print
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPdfPreview({
-                        title: `${data.docType === "QUOTE" ? "Quote" : "Sales Order"} ${data.orderNumber}`,
-                        src: `/api/pdf/sales-order/${data.id}`,
-                      })
-                    }
-                    className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-3 text-xs text-[#374151] hover:bg-slate-50"
-                  >
-                    PDF
-                  </button>
-                  {data.docType === "SALES_ORDER" ? (
-                    invoiceId ? (
-                      <Link
-                        href={`/invoices/${invoiceId}`}
-                        className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-3 text-xs text-[#374151] hover:bg-slate-50"
-                      >
-                        Invoice
-                      </Link>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={createInvoiceFromSalesOrder}
-                        className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-3 text-xs text-[#374151] hover:bg-slate-50"
-                      >
-                        Invoice
-                      </button>
-                    )
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (mode === "edit" && hasUnsavedChanges) {
-                        const ok = window.confirm("You have unsaved changes. Leave this page?");
-                        if (!ok) return;
-                      }
-                      router.push("/orders");
-                    }}
-                    className="inline-flex h-8 items-center gap-1 rounded-md border border-[#E5E7EB] bg-white px-3 text-xs text-[#374151] hover:bg-slate-50"
-                  >
-                    <ArrowLeft className="h-3.5 w-3.5" />
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setOpenDetailsDrawer(true)}
-                    disabled={mode !== "edit"}
-                    className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-slate-50 px-3 text-xs font-medium text-[#374151] hover:bg-slate-100"
-                  >
-                    Edit Details
-                  </button>
+
+                <div className="rounded-xl border border-white/70 bg-white/55 p-3 backdrop-blur-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Actions</p>
+                  <div className="mt-2 space-y-3">
+                    <div>
+                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">Primary Action</p>
+                      <div className="flex flex-wrap gap-2">
+                        {data.docType === "SALES_ORDER" ? (
+                          <button
+                            type="button"
+                            onClick={createInvoiceFromSalesOrder}
+                            disabled={!isInvoiceCreateEligible}
+                            title={!isInvoiceCreateEligible ? "Confirm the sales order to create an invoice." : undefined}
+                            className="so-action-btn border-emerald-200/70 bg-emerald-50/80 text-emerald-700 hover:bg-emerald-100/90 disabled:opacity-50"
+                          >
+                            {invoiceId ? "View Invoice" : "Create Invoice"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">Secondary Actions</p>
+                      <div className="flex flex-wrap gap-2">
+                        {mode === "view" ? (
+                          <button type="button" onClick={enterEditMode} className="so-action-btn">
+                            Edit
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => void saveEditMode()}
+                              className="so-action-btn border-emerald-200/70 bg-emerald-50/80 text-emerald-700 hover:bg-emerald-100/90"
+                            >
+                              Save Changes
+                            </button>
+                            <button type="button" onClick={() => void cancelEditMode()} className="so-action-btn">
+                              Cancel
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (mode !== "edit") enterEditMode();
+                            setOpenDetailsDrawer(true);
+                          }}
+                          className="so-action-btn"
+                        >
+                          Edit Details
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (mode !== "edit") enterEditMode();
+                          }}
+                          className="so-action-btn"
+                        >
+                          Edit Items
+                        </button>
+                        <Link href={`/orders/${data.id}/print`} className="so-action-btn">
+                          Print
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPdfPreview({
+                              title: `${data.docType === "QUOTE" ? "Quote" : "Sales Order"} ${data.orderNumber}`,
+                              src: `/api/pdf/sales-order/${data.id}`,
+                            })
+                          }
+                          className="so-action-btn"
+                        >
+                          PDF
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">Workflow</p>
+                      <div className="flex flex-wrap gap-2">
+                        {data.docType === "SALES_ORDER" ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (activeFulfillment?.id) {
+                                router.push(`/fulfillment/${activeFulfillment.id}`);
+                                return;
+                              }
+                              setOpenStartFulfillmentDialog(true);
+                            }}
+                            disabled={!activeFulfillment && !canStartFulfillment}
+                            title={
+                              !activeFulfillment && !canStartFulfillment
+                                ? "Confirm the sales order before starting fulfillment."
+                                : undefined
+                            }
+                            className="so-action-btn disabled:opacity-50"
+                          >
+                            {activeFulfillment ? "View Fulfillment" : "Start Fulfillment"}
+                          </button>
+                        ) : null}
+                        {data.docType === "SALES_ORDER" ? (
+                          <button
+                            type="button"
+                            onClick={createReturnFromSalesOrder}
+                            disabled={creatingReturn}
+                            className="so-action-btn disabled:opacity-50"
+                          >
+                            {creatingReturn ? "Creating Return..." : "Create Return"}
+                          </button>
+                        ) : null}
+                        {data.docType === "SALES_ORDER" && hasRelatedReturns ? (
+                          <Link href={`/after-sales/returns?search=${encodeURIComponent(data.orderNumber)}`} className="so-action-btn">
+                            View Returns
+                          </Link>
+                        ) : null}
+                        {data.docType === "QUOTE" ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => updateStatus("DRAFT")}
+                              disabled={savingStatus}
+                              className="so-action-btn"
+                            >
+                              Save Draft
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateStatus("QUOTED")}
+                              disabled={savingStatus}
+                              className="so-action-btn"
+                            >
+                              Mark Quoted
+                            </button>
+                            <button
+                              type="button"
+                              onClick={convertQuote}
+                              disabled={savingStatus || data.status === "CANCELLED"}
+                              className="so-action-btn"
+                            >
+                              Convert
+                            </button>
+                          </>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div>
+                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">Navigation</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (mode === "edit" && hasUnsavedChanges) {
+                              const ok = window.confirm("You have unsaved changes. Leave this page?");
+                              if (!ok) return;
+                            }
+                            router.push("/orders");
+                          }}
+                          className="so-action-btn gap-1"
+                        >
+                          <ArrowLeft className="h-3.5 w-3.5" />
+                          Back
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
+                {data.docType === "SALES_ORDER" && !isInvoiceCreateEligible ? (
+                  <p className="text-[11px] text-slate-500">Confirm the sales order to create an invoice.</p>
+                ) : null}
+                {data.docType === "SALES_ORDER" && !activeFulfillment && !canStartFulfillment ? (
+                  <p className="text-[11px] text-slate-500">Confirm the sales order before starting fulfillment.</p>
+                ) : null}
               </div>
             </div>
           </div>
@@ -1431,23 +1870,63 @@ export default function SalesOrderDetailPage() {
 
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <label className="block space-y-1 md:col-span-2">
+                      <span className="text-xs text-[#6B7280]">Search Customer</span>
+                      <input
+                        value={customerQuery}
+                        onChange={(e) => setCustomerQuery(e.target.value)}
+                        placeholder="Name / phone / email"
+                        className="h-9 w-full rounded-md border border-[#E5E7EB] px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                      />
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-xs text-[#6B7280]">Customer</span>
+                      <select
+                        value={data.customer.id}
+                        onChange={(e) => {
+                          const customerId = e.target.value;
+                          const selectedCustomer = customers.find((customer) => customer.id === customerId);
+                          if (!selectedCustomer) return;
+                          setData((prev) => (prev ? applyCustomerToOrder(prev, selectedCustomer, true) : prev));
+                        }}
+                        className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                      >
+                        {walkInCustomerId ? <option value={walkInCustomerId}>Walk-in Customer</option> : null}
+                        {customerOptions.map((customer) => (
+                          <option key={customer.id} value={customer.id}>
+                            {customer.name}
+                            {customer.phone ? ` (${customer.phone})` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                     <label className="block space-y-1">
                       <span className="text-xs text-[#6B7280]">Project</span>
                       <input
                         value={data.projectName ?? ""}
+                        placeholder="Kitchen Renovation"
                         onChange={(e) => setData((prev) => (prev ? { ...prev, projectName: e.target.value } : prev))}
                         className="h-9 w-full rounded-md border border-[#E5E7EB] px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
                       />
                     </label>
                     <label className="block space-y-1">
                       <span className="text-xs text-[#6B7280]">Salesperson</span>
-                      <input
+                      <select
                         value={data.salespersonName ?? ""}
-                        onChange={(e) =>
-                          setData((prev) => (prev ? { ...prev, salespersonName: e.target.value } : prev))
-                        }
-                        className="h-9 w-full rounded-md border border-[#E5E7EB] px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
-                      />
+                        onChange={(e) => setData((prev) => (prev ? { ...prev, salespersonName: e.target.value } : prev))}
+                        className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                      >
+                        <option value="">Select salesperson</option>
+                        {data.salespersonName &&
+                        !salespeople.some((user) => user.name === data.salespersonName) ? (
+                          <option value={data.salespersonName}>{data.salespersonName}</option>
+                        ) : null}
+                        {salespeople.map((user) => (
+                          <option key={user.id} value={user.name}>
+                            {user.name}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                     <label className="block space-y-1">
                       <span className="text-xs text-[#6B7280]">Discount</span>
@@ -1456,19 +1935,62 @@ export default function SalesOrderDetailPage() {
                         min="0"
                         step="0.01"
                         value={data.discount}
-                        onChange={(e) => setData((prev) => (prev ? { ...prev, discount: e.target.value } : prev))}
+                        onChange={(e) =>
+                          setData((prev) => {
+                            if (!prev) return prev;
+                            const nextDiscount = e.target.value;
+                            const nextTax = calcTaxAmount(
+                              Number(prev.subtotal || 0),
+                              Number(nextDiscount || 0),
+                              Number(prev.taxRate ?? 0),
+                            );
+                            return { ...prev, discount: nextDiscount, tax: String(nextTax) };
+                          })
+                        }
                         className="h-9 w-full rounded-md border border-[#E5E7EB] px-2 text-right text-sm outline-none focus:ring-1 focus:ring-slate-300"
                       />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-xs text-[#6B7280]">Tax</span>
+                      <span className="text-xs text-[#6B7280]">
+                        Tax Rate{" "}
+                        {data.customer.taxExempt ? <span className="font-medium text-emerald-700">(Tax Exempt)</span> : null}
+                      </span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={data.customer.taxExempt ? "0" : String(data.taxRate ?? "0")}
+                          disabled={data.customer.taxExempt}
+                          onChange={(e) =>
+                            setData((prev) => {
+                              if (!prev) return prev;
+                              const nextRate = e.target.value;
+                              const nextTax = calcTaxAmount(
+                                Number(prev.subtotal || 0),
+                                Number(prev.discount || 0),
+                                Number(nextRate || 0),
+                              );
+                              return { ...prev, taxRate: nextRate, tax: String(nextTax) };
+                            })
+                          }
+                          className="h-9 w-full rounded-md border border-[#E5E7EB] px-2 pr-6 text-right text-sm outline-none focus:ring-1 focus:ring-slate-300 disabled:bg-slate-100"
+                        />
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#6B7280]">
+                          %
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#6B7280]">Tax Amount: ${Number(data.tax || 0).toFixed(2)}</p>
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="text-xs text-[#6B7280]">Tax Amount</span>
                       <input
                         type="number"
                         min="0"
                         step="0.01"
                         value={data.tax}
-                        onChange={(e) => setData((prev) => (prev ? { ...prev, tax: e.target.value } : prev))}
-                        className="h-9 w-full rounded-md border border-[#E5E7EB] px-2 text-right text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                        readOnly
+                        className="h-9 w-full rounded-md border border-[#E5E7EB] bg-slate-50 px-2 text-right text-sm text-[#6B7280]"
                       />
                     </label>
                   </div>
@@ -1567,8 +2089,173 @@ export default function SalesOrderDetailPage() {
                     </div>
                   ) : null}
 
+                  <div className="space-y-3 rounded-md border border-[#E5E7EB] bg-[#F8FAFC] p-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Fulfillment</h4>
+                    <label className="block space-y-1">
+                      <span className="text-xs text-[#6B7280]">Delivery Method</span>
+                      <select
+                        value={data.fulfillmentMethod ?? "PICKUP"}
+                        onChange={(e) =>
+                          setData((prev) =>
+                            prev
+                              ? (() => {
+                                  const nextMethod = e.target.value === "DELIVERY" ? "DELIVERY" : "PICKUP";
+                                  if (nextMethod !== "DELIVERY") {
+                                    return { ...prev, fulfillmentMethod: "PICKUP" };
+                                  }
+                                  const customerAddress = String(prev.customer.address ?? "").trim();
+                                  const parsed = customerAddress
+                                    .split(",")
+                                    .map((part) => part.trim())
+                                    .filter(Boolean);
+                                  return {
+                                    ...prev,
+                                    fulfillmentMethod: "DELIVERY",
+                                    deliveryName: prev.deliveryName || prev.customer.name || null,
+                                    deliveryPhone: prev.deliveryPhone || prev.customer.phone || null,
+                                    deliveryAddress1: prev.deliveryAddress1 || parsed[0] || customerAddress || null,
+                                    deliveryAddress2: prev.deliveryAddress2 || parsed[1] || null,
+                                  };
+                                })()
+                              : prev,
+                          )
+                        }
+                        className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                      >
+                        <option value="PICKUP">Pickup</option>
+                        <option value="DELIVERY">Delivery</option>
+                      </select>
+                    </label>
+
+                    {data.fulfillmentMethod === "DELIVERY" ? (
+                      <>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <label className="block space-y-1">
+                            <span className="text-xs text-[#6B7280]">Contact name</span>
+                            <input
+                              value={data.deliveryName ?? ""}
+                              onChange={(e) =>
+                                setData((prev) => (prev ? { ...prev, deliveryName: e.target.value } : prev))
+                              }
+                              className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            />
+                          </label>
+                          <label className="block space-y-1">
+                            <span className="text-xs text-[#6B7280]">Phone</span>
+                            <input
+                              value={data.deliveryPhone ?? ""}
+                              onChange={(e) =>
+                                setData((prev) => (prev ? { ...prev, deliveryPhone: e.target.value } : prev))
+                              }
+                              className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            />
+                          </label>
+                        </div>
+                        <label className="block space-y-1">
+                          <span className="text-xs text-[#6B7280]">Address 1 *</span>
+                          <input
+                            value={data.deliveryAddress1 ?? ""}
+                            onChange={(e) =>
+                              setData((prev) => (prev ? { ...prev, deliveryAddress1: e.target.value } : prev))
+                            }
+                            className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                          />
+                        </label>
+                        <label className="block space-y-1">
+                          <span className="text-xs text-[#6B7280]">Address 2</span>
+                          <input
+                            value={data.deliveryAddress2 ?? ""}
+                            onChange={(e) =>
+                              setData((prev) => (prev ? { ...prev, deliveryAddress2: e.target.value } : prev))
+                            }
+                            className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                          />
+                        </label>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                          <label className="block space-y-1">
+                            <span className="text-xs text-[#6B7280]">City *</span>
+                            <input
+                              value={data.deliveryCity ?? ""}
+                              onChange={(e) =>
+                                setData((prev) => (prev ? { ...prev, deliveryCity: e.target.value } : prev))
+                              }
+                              className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            />
+                          </label>
+                          <label className="block space-y-1">
+                            <span className="text-xs text-[#6B7280]">State *</span>
+                            <input
+                              value={data.deliveryState ?? ""}
+                              onChange={(e) =>
+                                setData((prev) => (prev ? { ...prev, deliveryState: e.target.value } : prev))
+                              }
+                              className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            />
+                          </label>
+                          <label className="block space-y-1">
+                            <span className="text-xs text-[#6B7280]">Zip *</span>
+                            <input
+                              value={data.deliveryZip ?? ""}
+                              onChange={(e) =>
+                                setData((prev) => (prev ? { ...prev, deliveryZip: e.target.value } : prev))
+                              }
+                              className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            />
+                          </label>
+                        </div>
+                        <label className="block space-y-1">
+                          <span className="text-xs text-[#6B7280]">Requested delivery date/time</span>
+                          <input
+                            type="datetime-local"
+                            value={
+                              data.requestedDeliveryAt
+                                ? new Date(data.requestedDeliveryAt).toISOString().slice(0, 16)
+                                : ""
+                            }
+                            onChange={(e) =>
+                              setData((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      requestedDeliveryAt: e.target.value
+                                        ? new Date(e.target.value).toISOString()
+                                        : null,
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                          />
+                        </label>
+                        <label className="block space-y-1">
+                          <span className="text-xs text-[#6B7280]">Delivery notes</span>
+                          <textarea
+                            value={data.deliveryNotes ?? ""}
+                            onChange={(e) =>
+                              setData((prev) => (prev ? { ...prev, deliveryNotes: e.target.value } : prev))
+                            }
+                            className="w-full rounded-md border border-[#E5E7EB] bg-white p-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            rows={2}
+                          />
+                        </label>
+                      </>
+                    ) : (
+                      <label className="block space-y-1">
+                        <span className="text-xs text-[#6B7280]">Pickup notes</span>
+                        <textarea
+                          value={data.pickupNotes ?? ""}
+                          onChange={(e) =>
+                            setData((prev) => (prev ? { ...prev, pickupNotes: e.target.value } : prev))
+                          }
+                          className="w-full rounded-md border border-[#E5E7EB] bg-white p-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                          rows={2}
+                        />
+                      </label>
+                    )}
+                  </div>
+
                   <label className="block space-y-1">
-                    <span className="text-xs text-[#6B7280]">Notes</span>
+                    <span className="text-xs text-[#6B7280]">Notes / 备注</span>
                     <textarea
                       value={data.notes ?? ""}
                       onChange={(e) => setData((prev) => (prev ? { ...prev, notes: e.target.value } : prev))}
@@ -1596,7 +2283,7 @@ export default function SalesOrderDetailPage() {
                       type="button"
                       disabled={savingHeader}
                       onClick={updateHeader}
-                      className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-3 text-xs text-[#374151] hover:bg-slate-50 disabled:opacity-60"
+                      className="so-action-btn"
                     >
                       {savingHeader ? "Saving..." : "Save Details"}
                     </button>
@@ -1604,7 +2291,7 @@ export default function SalesOrderDetailPage() {
                       type="button"
                       disabled={savingDeposit}
                       onClick={updateDepositRequired}
-                      className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-3 text-xs text-[#374151] hover:bg-slate-50 disabled:opacity-60"
+                      className="so-action-btn"
                     >
                       {savingDeposit ? "Saving..." : "Save Deposit"}
                     </button>
@@ -1614,8 +2301,8 @@ export default function SalesOrderDetailPage() {
             </div>
           ) : null}
 
-          <article className="overflow-hidden border-y border-[#E5E7EB] bg-white p-0">
-            <div className="border-b border-[#E5E7EB] px-3 py-2">
+          <article className="so-panel overflow-hidden p-0">
+            <div className="border-b border-white/70 px-3 py-2">
               {mode === "edit" ? (
                 <>
                 <div className="relative grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_86px_120px_92px]">
@@ -1656,7 +2343,7 @@ export default function SalesOrderDetailPage() {
                     }
                   }}
                   placeholder="Search SKU / title / size / color..."
-                  className="h-8 rounded-md border border-[#E5E7EB] bg-white px-2 text-xs text-[#111827] outline-none focus:ring-1 focus:ring-slate-300"
+                  className="ios-input h-9 rounded-xl px-2 text-xs text-[#111827]"
                 />
                 <input
                   type="number"
@@ -1664,9 +2351,9 @@ export default function SalesOrderDetailPage() {
                   step="1"
                   value={quickAddQty}
                   onChange={(e) => setQuickAddQty(e.target.value)}
-                  className="h-8 rounded-md border border-[#E5E7EB] bg-white px-2 text-right text-xs text-[#111827] outline-none focus:ring-1 focus:ring-slate-300"
+                  className="ios-input h-9 rounded-xl px-2 text-right text-xs text-[#111827]"
                 />
-                <div className="flex h-8 items-center rounded-md border border-[#E5E7EB] bg-slate-50 px-2 text-right text-xs text-[#6B7280]">
+                <div className="so-panel flex h-9 items-center rounded-xl px-2 text-right text-xs text-[#6B7280]">
                   {quickAddCandidates[quickAddActiveIndex]
                     ? `$${Number(quickAddCandidates[quickAddActiveIndex].price || 0).toFixed(2)}`
                     : "-"}
@@ -1678,12 +2365,15 @@ export default function SalesOrderDetailPage() {
                     if (!selected) return;
                     void quickAddVariant(selected, true);
                   }}
-                  className="inline-flex h-8 items-center justify-center rounded-md border border-[#E5E7EB] bg-white px-2.5 text-xs text-[#374151] hover:bg-slate-50"
+                  className="so-action-btn justify-center px-2.5"
                 >
                   + Add
                 </button>
+                {quickAddFlooringPlan ? (
+                  <div className="col-span-full text-[10px] text-slate-500">{quickAddFlooringPlan.label}</div>
+                ) : null}
                 {quickAddOpen ? (
-                  <div className="absolute left-0 right-0 top-9 z-20 max-h-64 overflow-y-auto rounded-md border border-[#E5E7EB] bg-white shadow-sm">
+                  <div className="so-panel absolute left-0 right-0 top-10 z-20 max-h-64 overflow-y-auto rounded-xl">
                     {quickAddCandidates.length === 0 ? (
                       <div className="px-3 py-2 text-xs text-[#6B7280]">No products found.</div>
                     ) : (
@@ -1714,7 +2404,8 @@ export default function SalesOrderDetailPage() {
                             <p className="truncate text-sm font-medium text-slate-900">{formattedName}</p>
                             <p className="text-xs text-slate-500">
                               SKU: {product.sku || "-"} · Stock {onHand.toFixed(2)} / {available.toFixed(2)} · $
-                              {Number(product.price || 0).toFixed(2)}
+                              {Number(product.price || 0).toFixed(2)} · Unit{" "}
+                              {formatUnitLabel(product.sellingUnit ?? resolveSellingUnit(product.category, product.unit))}
                             </p>
                           </button>
                         );
@@ -1724,7 +2415,7 @@ export default function SalesOrderDetailPage() {
                 ) : null}
                 </div>
                 {activeQuickAddProduct ? (
-                  <div className="mt-2 rounded-md border border-[#E5E7EB] bg-slate-50 px-3 py-2">
+                  <div className="so-panel mt-2 rounded-xl px-3 py-2">
                     <p className="text-xs font-semibold text-slate-700">Product Detail</p>
                     <p className="mt-0.5 text-xs text-slate-600">
                       {activeQuickAddProduct.name} · SKU: {activeQuickAddProduct.sku || "-"}
@@ -1752,7 +2443,7 @@ export default function SalesOrderDetailPage() {
                     value={itemSearchTerm}
                     onChange={(e) => setItemSearchTerm(e.target.value)}
                     placeholder="Search item / SKU / note"
-                    className="h-8 w-60 rounded-md border border-[#E5E7EB] bg-white px-2 text-xs text-[#111827] outline-none focus:ring-1 focus:ring-slate-300"
+                    className="ios-input h-9 w-60 rounded-xl px-2 text-xs text-[#111827]"
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1761,21 +2452,21 @@ export default function SalesOrderDetailPage() {
                 <button
                   type="button"
                   onClick={() => setAllFulfillQty("ALL")}
-                  className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-2.5 text-xs text-[#374151] hover:bg-slate-50"
+                  className="so-action-btn px-2.5"
                 >
                   Fulfill All
                 </button>
                 <button
                   type="button"
                   onClick={() => setAllFulfillQty("RESET")}
-                  className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-2.5 text-xs text-[#374151] hover:bg-slate-50"
+                  className="so-action-btn px-2.5"
                 >
                   Reset Fulfillment
                 </button>
                 <button
                   type="button"
                   onClick={addItem}
-                  className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] bg-white px-2.5 text-xs text-[#374151] hover:bg-slate-50"
+                  className="so-action-btn px-2.5"
                 >
                   <Plus className="mr-1 inline h-4 w-4" />
                   Add Item
@@ -1785,10 +2476,20 @@ export default function SalesOrderDetailPage() {
                 </div>
               </div>
             </div>
+            {["CONFIRMED", "READY", "PARTIALLY_FULFILLED"].includes(String(data.status)) ? (
+              (() => {
+                const reservedBoxes = getReservedFlooringBoxesFromItems(data.items);
+                return reservedBoxes > 0 ? (
+                  <div className="border-b border-emerald-200/60 bg-emerald-50/70 px-3 py-1.5 text-[11px] text-emerald-700 backdrop-blur-sm">
+                    Reserved: {reservedBoxes} boxes
+                  </div>
+                ) : null;
+              })()
+            ) : null}
 
             <div className="max-h-[calc(100vh-360px)] overflow-auto bg-white">
               <div
-                className={`sticky top-0 z-10 grid grid-cols-1 border-b border-[#E5E7EB] bg-[#F3F4F6] px-3 py-2 text-[10px] uppercase tracking-widest text-[#6B7280] ${
+                className={`sticky top-0 z-10 grid grid-cols-1 border-b border-white/70 bg-white/70 px-3 py-2 text-[10px] uppercase tracking-widest text-[#6B7280] backdrop-blur-sm ${
                   mode === "edit"
                     ? "md:grid-cols-[minmax(0,4fr)_84px_110px_84px_120px_172px]"
                     : "md:grid-cols-[minmax(0,4fr)_140px_84px_110px_84px_120px]"
@@ -1815,37 +2516,73 @@ export default function SalesOrderDetailPage() {
                 const renderVariantSku = item.variantId
                   ? variantSkuById.get(item.variantId) || item.productSku || "-"
                   : item.productSku || "-";
-                const displayName = formatLineItemTitle({
-                  productName: item.product?.name ?? null,
-                  variant: {
-                    title: item.productTitle,
-                    sku: renderVariantSku,
-                    detailText: item.lineDescription,
-                  },
-                });
-                const windowSummary =
-                  getInternalSpecLine(
-                    getEffectiveSpecs(
-                      {
-                        glassTypeDefault: item.product?.glassTypeDefault,
-                        glassFinishDefault: item.product?.glassFinishDefault,
-                        screenDefault: item.product?.screenDefault,
-                        openingTypeDefault: item.product?.openingTypeDefault,
-                      },
-                      {
-                        glassTypeOverride: item.variant?.glassTypeOverride,
-                        glassFinishOverride: item.variant?.glassFinishOverride,
-                        screenOverride: item.variant?.screenOverride,
-                        openingTypeOverride: item.variant?.openingTypeOverride,
-                      },
-                    ),
-                  ) || "";
+                const flooringSummary =
+                  formatFlooringSubtitle({
+                    flooringMaterial: item.product?.flooringMaterial,
+                    flooringWearLayer: item.product?.flooringWearLayer,
+                    flooringThicknessMm: item.product?.flooringThicknessMm,
+                    flooringPlankLengthIn: item.product?.flooringPlankLengthIn,
+                    flooringPlankWidthIn: item.product?.flooringPlankWidthIn,
+                    flooringCoreThicknessMm: item.product?.flooringCoreThicknessMm,
+                    flooringInstallation: item.product?.flooringInstallation,
+                    flooringUnderlayment: item.product?.flooringUnderlayment,
+                    flooringUnderlaymentType: item.product?.flooringUnderlaymentType,
+                    flooringUnderlaymentMm: item.product?.flooringUnderlaymentMm,
+                    flooringBoxCoverageSqft: item.product?.flooringBoxCoverageSqft,
+                  }) || "";
+                const displayName =
+                  flooringSummary
+                    ? String(item.variant?.displayName ?? item.productTitle ?? item.product?.name ?? "").trim() || "-"
+                    : formatLineItemTitle({
+                        productName: item.product?.name ?? null,
+                        variant: {
+                          title: item.productTitle,
+                          sku: renderVariantSku,
+                          detailText: item.lineDescription,
+                        },
+                      });
                 const structuredSpecs = getWindowSpecs(item.lineDescription);
                 const showFullSpecs = Boolean(expandedSpecsByItem[item.id]);
                 const qtyNum = Number(draft.quantity || 0);
                 const priceNum = Number(draft.unitPrice || 0);
                 const discountNum = Number(draft.lineDiscount || 0);
                 const liveLineTotal = qtyNum * priceNum - discountNum;
+                const flooringPlan = getFlooringShipmentPlan(
+                  qtyNum,
+                  Number(item.product?.flooringBoxCoverageSqft ?? 0),
+                );
+                const itemSellingUnit = flooringSummary
+                  ? "BOX"
+                  : resolveSellingUnit(null, item.product?.unit ?? null);
+                const windowSummary =
+                  flooringSummary
+                    ? mode === "view"
+                      ? flooringPlan?.label ?? ""
+                      : flooringSummary
+                    : getInternalSpecLine(
+                        getEffectiveSpecs(
+                          {
+                            frameMaterialDefault: item.product?.frameMaterialDefault,
+                            slidingConfigDefault: item.product?.slidingConfigDefault,
+                            glassTypeDefault: item.product?.glassTypeDefault,
+                            glassCoatingDefault: item.product?.glassCoatingDefault,
+                            glassThicknessMmDefault: item.product?.glassThicknessMmDefault,
+                            glassFinishDefault: item.product?.glassFinishDefault,
+                            screenDefault: item.product?.screenDefault,
+                            openingTypeDefault: item.product?.openingTypeDefault,
+                          },
+                          {
+                            glassTypeOverride: item.variant?.glassTypeOverride,
+                            slidingConfigOverride: item.variant?.slidingConfigOverride,
+                            glassCoatingOverride: item.variant?.glassCoatingOverride,
+                            glassThicknessMmOverride: item.variant?.glassThicknessMmOverride,
+                            glassFinishOverride: item.variant?.glassFinishOverride,
+                            screenOverride: item.variant?.screenOverride,
+                            openingTypeOverride: item.variant?.openingTypeOverride,
+                            detailText: item.lineDescription,
+                          },
+                        ),
+                      ) || "";
                 return (
                   <div
                     key={item.id}
@@ -1858,7 +2595,7 @@ export default function SalesOrderDetailPage() {
                         setActiveDrawerItemId(item.id);
                       }
                     }}
-                    className={`grid grid-cols-1 items-center border-b border-[#E5E7EB] px-3 py-2 text-sm transition-colors hover:bg-[#F3F4F6] ${
+                    className={`grid grid-cols-1 items-center border-b border-white/70 px-3 py-2 text-sm transition-colors hover:bg-white/70 ${
                       mode === "edit"
                         ? "md:grid-cols-[minmax(0,4fr)_84px_110px_84px_120px_172px]"
                         : "md:grid-cols-[minmax(0,4fr)_140px_84px_110px_84px_120px]"
@@ -1872,6 +2609,9 @@ export default function SalesOrderDetailPage() {
                       {windowSummary ? (
                         <p className="mt-0.5 truncate text-[11px] text-slate-500">{windowSummary}</p>
                       ) : null}
+                      <p className="mt-0.5 text-[11px] text-slate-500">
+                        Unit: {formatUnitLabel(itemSellingUnit)}
+                      </p>
                       <div className="mt-0.5 flex items-center gap-2">
                         <button
                           type="button"
@@ -1903,17 +2643,27 @@ export default function SalesOrderDetailPage() {
                     </div>
                     {mode === "view" ? <p className="truncate text-xs text-slate-500">SKU: {renderVariantSku}</p> : null}
                     {mode === "edit" ? (
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={draft.quantity}
-                        onClick={(e) => e.stopPropagation()}
-                        onChange={(e) => updateRowDraft(item.id, "quantity", e.target.value)}
-                        className="h-8 rounded-md border border-transparent bg-white px-2 text-right text-sm outline-none hover:bg-slate-100 focus:border-slate-200 focus:ring-1 focus:ring-sky-200"
-                      />
+                      <div className="space-y-1">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={draft.quantity}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) => updateRowDraft(item.id, "quantity", e.target.value)}
+                          className="h-8 w-full rounded-md border border-transparent bg-white px-2 text-right text-sm outline-none hover:bg-slate-100 focus:border-slate-200 focus:ring-1 focus:ring-sky-200"
+                        />
+                        <p className="truncate text-[10px] text-slate-500">
+                          {formatSellingUnitLabel(itemSellingUnit === "BOX" ? "BOX" : itemSellingUnit)}
+                        </p>
+                        {flooringPlan ? (
+                          <p className="truncate text-[10px] text-slate-500">{flooringPlan.label}</p>
+                        ) : null}
+                      </div>
                     ) : (
-                      <div className="px-2 text-right text-sm text-slate-700">{Number(item.quantity || 0).toFixed(2)}</div>
+                      <div className="px-2 text-right text-sm text-slate-700">
+                        {Number(item.quantity || 0).toFixed(2)}
+                      </div>
                     )}
                     {mode === "edit" ? (
                       <input
@@ -1980,7 +2730,7 @@ export default function SalesOrderDetailPage() {
               ) : null}
             </div>
 
-            <div className="flex justify-end border-t border-[#E5E7EB] px-3 py-2">
+            <div className="flex justify-end border-t border-white/70 px-3 py-2">
               <div className="w-full max-w-xs space-y-1 text-sm">
                 <div className="flex items-center justify-between text-[#6B7280]">
                   <span>Subtotal</span>
@@ -2023,18 +2773,44 @@ export default function SalesOrderDetailPage() {
                 <div className="flex-1 overflow-y-auto px-4 pb-24 pt-3">
 
                 <section className="space-y-1">
+                  {(() => {
+                    const drawerFlooringSummary = formatFlooringSubtitle({
+                      flooringMaterial: activeDrawerItem.product?.flooringMaterial,
+                      flooringWearLayer: activeDrawerItem.product?.flooringWearLayer,
+                      flooringThicknessMm: activeDrawerItem.product?.flooringThicknessMm,
+                      flooringPlankLengthIn: activeDrawerItem.product?.flooringPlankLengthIn,
+                      flooringPlankWidthIn: activeDrawerItem.product?.flooringPlankWidthIn,
+                      flooringCoreThicknessMm: activeDrawerItem.product?.flooringCoreThicknessMm,
+                      flooringInstallation: activeDrawerItem.product?.flooringInstallation,
+                      flooringUnderlayment: activeDrawerItem.product?.flooringUnderlayment,
+                      flooringUnderlaymentType: activeDrawerItem.product?.flooringUnderlaymentType,
+                      flooringUnderlaymentMm: activeDrawerItem.product?.flooringUnderlaymentMm,
+                      flooringBoxCoverageSqft: activeDrawerItem.product?.flooringBoxCoverageSqft,
+                    });
+                    return (
+                      <>
                   <p className="text-xs text-slate-500">Product</p>
                   <p className="text-sm font-semibold text-slate-900">
-                    {formatLineItemTitle({
-                      productName: activeDrawerItem.product?.name ?? null,
-                      variant: {
-                        title: activeDrawerItem.productTitle,
-                        sku: activeDrawerItem.productSku,
-                        detailText: activeDrawerItem.lineDescription,
-                      },
-                    })}
+                        {drawerFlooringSummary
+                          ? String(
+                              activeDrawerItem.variant?.displayName ??
+                                activeDrawerItem.productTitle ??
+                                activeDrawerItem.product?.name ??
+                                "",
+                            ).trim() || "-"
+                          : formatLineItemTitle({
+                              productName: activeDrawerItem.product?.name ?? null,
+                              variant: {
+                                title: activeDrawerItem.productTitle,
+                                sku: activeDrawerItem.productSku,
+                                detailText: activeDrawerItem.lineDescription,
+                              },
+                            })}
                   </p>
                   <p className="text-xs text-slate-500">SKU: {activeDrawerItem.productSku || "-"}</p>
+                      </>
+                    );
+                  })()}
                 </section>
 
                 <section className="mt-4 rounded-md border border-slate-100 p-2">
@@ -2175,7 +2951,7 @@ export default function SalesOrderDetailPage() {
             </div>
 
             {activeBottomTab === "PAYMENTS" ? (
-              <article className="bg-white p-3">
+              <article className="so-panel p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <h2 className="text-sm font-semibold text-slate-900">Payments</h2>
                   <button
@@ -2219,7 +2995,7 @@ export default function SalesOrderDetailPage() {
                             <td className="py-2 pr-4">${Number(payment.amount).toFixed(2)}</td>
                             <td className="py-2 pr-4">
                               <span
-                                className={`rounded px-2 py-0.5 text-xs font-semibold ${
+                                className={`so-chip ${
                                   payment.status === "VOIDED"
                                     ? "bg-slate-100 text-slate-500"
                                     : "bg-emerald-100 text-emerald-700"
@@ -2273,7 +3049,7 @@ export default function SalesOrderDetailPage() {
             ) : null}
 
             {activeBottomTab === "FULFILLMENT" ? (
-              <article className="bg-white p-3">
+              <article className="so-panel p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <h2 className="text-sm font-semibold text-slate-900">Fulfillment</h2>
                   <button
@@ -2299,7 +3075,7 @@ export default function SalesOrderDetailPage() {
                     {data.fulfillments.map((fulfillment) => (
                       <div
                         key={fulfillment.id}
-                        className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-sm"
+                        className="so-panel rounded-xl p-3 text-sm"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-slate-900">{fulfillment.type}</span>
@@ -2351,7 +3127,7 @@ export default function SalesOrderDetailPage() {
             ) : null}
 
             {activeBottomTab === "TICKETS" ? (
-              <article className="bg-white p-3">
+              <article className="so-panel p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <h2 className="text-sm font-semibold text-slate-900">Operational Tickets</h2>
                   <div className="flex items-center gap-2">
@@ -2386,7 +3162,7 @@ export default function SalesOrderDetailPage() {
                     {filteredTickets.map((ticket) => (
                       <div
                         key={ticket.id}
-                        className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-sm"
+                        className="so-panel rounded-xl p-3 text-sm"
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-semibold text-slate-900">{ticket.ticketType}</span>
@@ -2435,8 +3211,8 @@ export default function SalesOrderDetailPage() {
       )}
 
       {openPayment ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]">
-          <div className="w-full max-w-md rounded-md border border-[#E5E7EB] bg-white p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4 backdrop-blur-sm">
+          <div className="so-modal-shell w-full max-w-md p-6">
             <h3 className="text-base font-semibold text-slate-900">Add Payment</h3>
             <form className="mt-3 space-y-3" onSubmit={submitPayment}>
               <input
@@ -2503,7 +3279,7 @@ export default function SalesOrderDetailPage() {
                 placeholder="Notes"
                 value={paymentForm.notes}
                 onChange={(e) => setPaymentForm((p) => ({ ...p, notes: e.target.value }))}
-                className="w-full rounded-xl border border-slate-100 p-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                className="ios-input h-auto min-h-[84px] rounded-xl p-3 text-sm"
                 rows={3}
               />
               <div className="flex gap-2">
@@ -2526,8 +3302,8 @@ export default function SalesOrderDetailPage() {
         </div>
       ) : null}
       {openFulfillment ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]">
-          <div className="w-full max-w-md rounded-md border border-[#E5E7EB] bg-white p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4 backdrop-blur-sm">
+          <div className="so-modal-shell w-full max-w-md p-6">
             <h3 className="text-base font-semibold text-slate-900">Create Fulfillment</h3>
             <form className="mt-3 space-y-3" onSubmit={addFulfillment}>
               <select
@@ -2554,7 +3330,7 @@ export default function SalesOrderDetailPage() {
                 placeholder="Notes"
                 value={fulfillmentForm.notes}
                 onChange={(e) => setFulfillmentForm((p) => ({ ...p, notes: e.target.value }))}
-                className="w-full rounded-xl border border-slate-100 p-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                className="ios-input h-auto min-h-[84px] rounded-xl p-3 text-sm"
                 rows={3}
               />
               <label className="inline-flex items-center gap-2 text-sm text-slate-600">
@@ -2583,9 +3359,45 @@ export default function SalesOrderDetailPage() {
           </div>
         </div>
       ) : null}
+      {openStartFulfillmentDialog ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4 backdrop-blur-sm">
+          <div className="so-modal-shell w-full max-w-sm p-6">
+            <h3 className="text-base font-semibold text-slate-900">Start Fulfillment</h3>
+            <p className="mt-2 text-sm text-slate-500">
+              Choose fulfillment type for this sales order.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => void ensureFulfillment("DELIVERY")}
+                disabled={Boolean(startingFulfillmentType)}
+                className="ios-primary-btn h-11 text-sm disabled:opacity-60"
+              >
+                {startingFulfillmentType === "DELIVERY" ? "Creating..." : "Delivery"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void ensureFulfillment("PICKUP")}
+                disabled={Boolean(startingFulfillmentType)}
+                className="ios-primary-btn h-11 text-sm disabled:opacity-60"
+              >
+                {startingFulfillmentType === "PICKUP" ? "Creating..." : "Pickup"}
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setOpenStartFulfillmentDialog(false)}
+              disabled={Boolean(startingFulfillmentType)}
+              className="ios-secondary-btn mt-2 h-11 w-full text-sm disabled:opacity-60"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
       {openTicket ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]">
-          <div className="w-full max-w-md rounded-md border border-[#E5E7EB] bg-white p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4 backdrop-blur-sm">
+          <div className="so-modal-shell w-full max-w-md p-6">
             <h3 className="text-base font-semibold text-slate-900">Create Operational Ticket</h3>
             <form className="mt-3 space-y-3" onSubmit={addTicket}>
               <select
@@ -2629,7 +3441,7 @@ export default function SalesOrderDetailPage() {
                 placeholder="Notes"
                 value={ticketForm.notes}
                 onChange={(e) => setTicketForm((p) => ({ ...p, notes: e.target.value }))}
-                className="w-full rounded-xl border border-slate-100 p-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                className="ios-input h-auto min-h-[84px] rounded-xl p-3 text-sm"
                 rows={3}
               />
               <div className="flex gap-2">

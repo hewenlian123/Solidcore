@@ -40,13 +40,19 @@ function isOpenStatus(status: string) {
 }
 
 function computeDeliveryMeta(
-  fulfillments: Array<{ type: string; status: string; scheduledDate: Date }>,
+  fulfillments: Array<{ type: string; status: string; scheduledDate: Date | null }>,
 ): { deliveryRequired: boolean; deliveryDate: Date | null; deliveryStatus: string | null } {
   const deliveries = fulfillments.filter((item) => item.type === "DELIVERY");
   if (deliveries.length === 0) {
     return { deliveryRequired: false, deliveryDate: null, deliveryStatus: null };
   }
-  const earliest = deliveries.reduce((acc, cur) => (cur.scheduledDate < acc ? cur.scheduledDate : acc), deliveries[0].scheduledDate);
+  const scheduled = deliveries
+    .map((item) => item.scheduledDate)
+    .filter((value): value is Date => Boolean(value));
+  const earliest =
+    scheduled.length > 0
+      ? scheduled.reduce((acc, cur) => (cur < acc ? cur : acc), scheduled[0])
+      : null;
   const allCompleted = deliveries.every((item) => item.status === "COMPLETED");
   const hasInProgress = deliveries.some((item) => item.status === "IN_PROGRESS");
   const hasScheduled = deliveries.some((item) => item.status === "SCHEDULED");

@@ -8,6 +8,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:fulfillment-rules": "node scripts/test-fulfillment-rules.mjs",
+    "test:fulfillment-inventory": "node scripts/test-fulfillment-inventory.mjs",
+    "test:fulfillment-pdf": "node scripts/test-fulfillment-pdf.mjs",
+    "test:fulfillment-e2e": "npm run test:fulfillment-rules && npm run test:fulfillment-inventory && npm run test:fulfillment-pdf",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },
@@ -21,11 +25,13 @@
     "@tanstack/query-sync-storage-persister": "^5.90.23",
     "@tanstack/react-query": "^5.90.21",
     "@tanstack/react-query-persist-client": "^5.90.23",
+    "framer-motion": "^12.34.5",
     "html5-qrcode": "^2.3.8",
     "jspdf": "^4.2.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "latest",
     "next": "latest",
+    "nextjs-toploader": "^3.9.17",
     "pdf-lib": "^1.17.1",
     "react": "latest",
     "react-dom": "latest",
@@ -34,11 +40,13 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "latest",
     "@types/react": "latest",
     "autoprefixer": "^10.4.27",
     "postcss": "^8.5.6",
     "prisma": "^6.19.2",
+    "puppeteer": "^24.37.5",
     "tailwindcss": "^3.4.19",
     "typescript": "latest"
   }

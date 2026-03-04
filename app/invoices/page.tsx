@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRole } from "@/components/layout/role-provider";
+import { PDFPreviewModal } from "@/components/pdf/PDFPreviewModal";
 
 type InvoiceRow = {
   id: string;
@@ -37,6 +38,7 @@ export default function InvoicesPage() {
   const [statusFilter, setStatusFilter] = useState<"ALL" | "UNPAID" | "OVERDUE" | "PAID">("ALL");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [pdfPreview, setPdfPreview] = useState<{ title: string; src: string } | null>(null);
 
   const load = async () => {
     try {
@@ -217,13 +219,19 @@ export default function InvoicesPage() {
                       >
                         View
                       </Link>
-                      <Link
-                        href={`/invoices/${row.id}`}
+                      <button
+                        type="button"
                         className="ios-secondary-btn h-8 px-2 text-xs"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPdfPreview({
+                            title: `Invoice ${row.invoiceNumber} · PDF`,
+                            src: `/api/pdf/invoice/${row.id}`,
+                          });
+                        }}
                       >
                         Print
-                      </Link>
+                      </button>
                       <span
                         className="ml-auto inline-flex items-center text-slate-400 opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
                         aria-hidden="true"
@@ -238,6 +246,12 @@ export default function InvoicesPage() {
           </tbody>
         </table>
       </div>
+      <PDFPreviewModal
+        open={Boolean(pdfPreview)}
+        title={pdfPreview?.title ?? "PDF Preview"}
+        src={pdfPreview?.src ?? ""}
+        onClose={() => setPdfPreview(null)}
+      />
     </section>
   );
 }
