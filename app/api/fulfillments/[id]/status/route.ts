@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deductInventoryForFulfillment, InventoryDeductionError, isFinalFulfillmentStatus } from "@/lib/fulfillment-inventory";
-import { syncSalesOutboundQueue } from "@/lib/sales-orders";
+import { syncSalesOutboundQueue, syncSalesOrderFulfillmentFromFulfillment } from "@/lib/sales-orders";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = { params: Promise<{ id: string }> };
@@ -38,6 +38,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       if (isFinalFulfillmentStatus(next.status)) {
         await deductInventoryForFulfillment(tx, { fulfillmentId: next.id, operator: role });
       }
+      await syncSalesOrderFulfillmentFromFulfillment(tx, next.id);
       await syncSalesOutboundQueue(tx, next.salesOrderId);
       return next;
     });

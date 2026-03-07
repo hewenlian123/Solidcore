@@ -164,7 +164,7 @@ export default function AfterSalesStoreCreditPlaceholderPage() {
               </div>
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                  <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
                     <TableHead>Credit ID</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead className="text-right">Used</TableHead>
@@ -178,7 +178,7 @@ export default function AfterSalesStoreCreditPlaceholderPage() {
                 </TableHeader>
                 <TableBody>
                   {group.rows.map((row) => (
-                    <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/30">
+                    <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/10">
                       <TableCell className="font-medium text-slate-900">{row.id.slice(0, 8)}</TableCell>
                       <TableCell className="text-right">{formatMoney(row.amount)}</TableCell>
                       <TableCell className="text-right">{formatMoney(row.usedAmount)}</TableCell>

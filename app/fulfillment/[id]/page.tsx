@@ -11,6 +11,11 @@ type FulfillmentDetail = {
   id: string;
   type: "PICKUP" | "DELIVERY";
   status: string;
+  createdAt?: string;
+  updatedAt?: string;
+  markedOutAt?: string | null;
+  markedDoneAt?: string | null;
+  inventoryDeductedAt?: string | null;
   scheduledAt: string | null;
   scheduledDate: string | null;
   timeWindow: string | null;
@@ -144,6 +149,58 @@ export default function FulfillmentDetailPage() {
     }
     return { allCompleted, hasPartial, anyFulfilled };
   }, [data?.items, itemDrafts]);
+
+  const itemProgress = useMemo(() => {
+    const rows = data?.items ?? [];
+    const total = rows.length;
+    if (total === 0) return { total: 0, completed: 0, percent: 0 };
+    let completed = 0;
+    for (const row of rows) {
+      const draft = itemDrafts[row.id];
+      const fulfilled = Number(draft?.fulfilledQty ?? row.fulfilledQty ?? 0);
+      const ordered = Number(row.orderedQty ?? 0);
+      if (Number.isFinite(fulfilled) && Number.isFinite(ordered) && fulfilled >= ordered) completed += 1;
+    }
+    const percent = Math.round((completed / total) * 100);
+    return { total, completed, percent };
+  }, [data?.items, itemDrafts]);
+
+  const fmtDateTime = (value: string | Date | null | undefined) => {
+    if (!value) return "—";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString("en-US", {
+      timeZone: "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const timeline = useMemo(() => {
+    const status = String(data?.status ?? "").toUpperCase();
+    const hasAnyPicked = completionInfo.anyFulfilled;
+    const isPackingOrBeyond = ["PACKING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "PICKED_UP", "COMPLETED", "PARTIAL"].includes(status);
+    const isReadyOrBeyond = ["READY", "OUT_FOR_DELIVERY", "DELIVERED", "PICKED_UP", "COMPLETED"].includes(status);
+    const isOutOrPicked = ["OUT_FOR_DELIVERY", "OUT", "IN_PROGRESS"].includes(status) || Boolean(data?.markedOutAt);
+    const isDone = ["DELIVERED", "PICKED_UP", "COMPLETED"].includes(status) || Boolean(data?.markedDoneAt);
+
+    return [
+      { key: "created", label: "Created", done: true, when: fmtDateTime(data?.createdAt) },
+      { key: "picking", label: "Picking started", done: hasAnyPicked, when: "— (not tracked)" },
+      { key: "packing", label: "Packing started", done: isPackingOrBeyond, when: status === "PACKING" ? "— (not tracked)" : isPackingOrBeyond ? "—" : "—" },
+      { key: "ready", label: "Ready", done: isReadyOrBeyond, when: isReadyOrBeyond ? "— (not tracked)" : "—" },
+      {
+        key: "out",
+        label: data?.type === "DELIVERY" ? "Out for delivery" : "Picked up",
+        done: isOutOrPicked,
+        when: data?.markedOutAt ? fmtDateTime(data.markedOutAt) : "—",
+      },
+      { key: "done", label: "Completed", done: isDone, when: data?.markedDoneAt ? fmtDateTime(data.markedDoneAt) : "—" },
+    ];
+  }, [completionInfo.anyFulfilled, data?.createdAt, data?.markedDoneAt, data?.markedOutAt, data?.status, data?.type]);
 
   const canEditShipto = useMemo(() => {
     const key = String(data?.status ?? "").toUpperCase();
@@ -294,31 +351,73 @@ export default function FulfillmentDetailPage() {
     return "bg-slate-100 text-slate-700";
   };
 
-  if (loading) return <div className="linear-card p-8 text-sm text-slate-500">Loading fulfillment...</div>;
-  if (!data) return <div className="linear-card p-8 text-sm text-slate-500">Fulfillment not found.</div>;
+  if (loading) return <div className="glass-card p-8 text-sm text-slate-400">Loading fulfillment...</div>;
+  if (!data) return <div className="glass-card p-8 text-sm text-slate-400">Fulfillment not found.</div>;
 
   return (
     <section className="space-y-6">
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
       ) : null}
       {success ? (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div>
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div>
       ) : null}
-      <div className="linear-card p-8">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="glass-card p-8">
+        <div className="glass-card-content flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-              Fulfillment · {data.id}
-            </h1>
-            <p className="mt-2 text-sm text-slate-500">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Fulfillment · {data.id}</h1>
+            <p className="mt-2 text-sm text-slate-400">
               SO: {data.salesOrder.orderNumber} · Customer: {data.salesOrder.customer?.name ?? "-"} · {data.type}
             </p>
-            <span className={`mt-2 inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${statusBadge(data.status)}`}>
-              {data.status}
-            </span>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className={`inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${statusBadge(data.status)}`}>
+                {data.status}
+              </span>
+              {completionInfo.hasPartial ? (
+                <span className="inline-flex rounded-lg border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-xs font-semibold text-amber-200">
+                  Partial fulfillment
+                </span>
+              ) : null}
+              <span className="text-xs text-slate-400">
+                {itemProgress.completed}/{itemProgress.total} items complete · {itemProgress.percent}%
+              </span>
+            </div>
+            <div className="mt-2 h-2 w-full max-w-[360px] overflow-hidden rounded-full bg-white/10">
+              <div
+                className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500"
+                style={{ width: `${Math.min(Math.max(itemProgress.percent, 0), 100)}%` }}
+              />
+            </div>
+            <div className="mt-3 grid gap-x-6 gap-y-1 text-xs text-slate-400 sm:grid-cols-2">
+              <p>
+                <span className="font-semibold text-white/80">Scheduled:</span>{" "}
+                {fmtDateTime(data.scheduledAt ?? data.scheduledDate)}{" "}
+                {data.timeWindow ? `(${data.timeWindow})` : ""}
+              </p>
+              {data.type === "DELIVERY" ? (
+                <p>
+                  <span className="font-semibold text-white/80">Driver:</span> {data.driverName || "—"}
+                </p>
+              ) : (
+                <p>
+                  <span className="font-semibold text-white/80">Pickup contact:</span>{" "}
+                  {data.pickupContact || "—"} {data.shiptoPhone ? `(${data.shiptoPhone})` : ""}
+                </p>
+              )}
+              {data.type === "DELIVERY" ? (
+                <p className="sm:col-span-2">
+                  <span className="font-semibold text-white/80">Delivery notes:</span>{" "}
+                  {data.shiptoNotes || "—"}
+                </p>
+              ) : (
+                <p className="sm:col-span-2">
+                  <span className="font-semibold text-white/80">Pickup notes:</span>{" "}
+                  {data.notes || "—"}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() =>
@@ -331,6 +430,14 @@ export default function FulfillmentDetailPage() {
             >
               Pick List (PDF)
             </button>
+            <a
+              href={`/api/fulfillments/${data.id}/pdf?type=pick&download=true`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ios-secondary-btn h-9 px-3 text-xs"
+            >
+              Download Pick List
+            </a>
             <button
               type="button"
               onClick={() =>
@@ -343,6 +450,14 @@ export default function FulfillmentDetailPage() {
             >
               {data.type === "DELIVERY" ? "Delivery Slip (PDF)" : "Pickup Slip (PDF)"}
             </button>
+            <a
+              href={`/api/fulfillments/${data.id}/pdf?type=slip&download=true`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ios-secondary-btn h-9 px-3 text-xs"
+            >
+              Download {data.type === "DELIVERY" ? "Delivery" : "Pickup"} Slip
+            </a>
             <Link href={`/sales-orders/${data.salesOrder.id}`} className="ios-secondary-btn h-9 px-3 text-xs">
               View Sales Order
             </Link>
@@ -358,9 +473,39 @@ export default function FulfillmentDetailPage() {
         </div>
       </div>
 
-      <div className="linear-card p-8">
+      <div className="glass-card p-8">
+        <div className="glass-card-content">
+          <h2 className="text-base font-semibold text-white">Timeline</h2>
+          <p className="mt-1 text-xs text-slate-400">
+            Best-effort history based on stored timestamps; some events are not timestamped in the current data model.
+          </p>
+          <div className="mt-4 grid gap-2">
+            {timeline.map((step) => (
+              <div
+                key={step.key}
+                className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 px-4 py-3 ${
+                  step.done ? "bg-white/[0.04]" : "bg-transparent"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`h-2.5 w-2.5 rounded-full ${
+                      step.done ? "bg-emerald-400" : "bg-slate-600"
+                    }`}
+                  />
+                  <span className="text-sm font-semibold text-white">{step.label}</span>
+                </div>
+                <span className="text-xs text-slate-400">{step.when}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="glass-card p-8">
+        <div className="glass-card-content">
         <div className="grid gap-3 md:grid-cols-2">
-          <label className="block text-xs text-slate-500">
+          <label className="block text-xs text-slate-400">
             Scheduled At
             <input
               type="datetime-local"
@@ -369,7 +514,7 @@ export default function FulfillmentDetailPage() {
               className="ios-input mt-1 h-10 px-3 text-sm"
             />
           </label>
-          <label className="block text-xs text-slate-500">
+          <label className="block text-xs text-slate-400">
             Time Window
             <input
               value={metaForm.timeWindow}
@@ -378,7 +523,7 @@ export default function FulfillmentDetailPage() {
               placeholder="8-10am"
             />
           </label>
-          <label className="block text-xs text-slate-500">
+          <label className="block text-xs text-slate-400">
             Driver
             <input
               value={metaForm.driverName}
@@ -387,7 +532,7 @@ export default function FulfillmentDetailPage() {
             />
           </label>
           {data.type === "PICKUP" ? (
-            <label className="block text-xs text-slate-500">
+            <label className="block text-xs text-slate-400">
               Pickup Contact
               <input
                 value={metaForm.pickupContact}
@@ -396,7 +541,7 @@ export default function FulfillmentDetailPage() {
               />
             </label>
           ) : (
-            <label className="block text-xs text-slate-500">
+            <label className="block text-xs text-slate-400">
               Ship-to Name
               <input
                 value={metaForm.shiptoName}
@@ -408,7 +553,7 @@ export default function FulfillmentDetailPage() {
           )}
           {data.type === "DELIVERY" ? (
             <>
-              <label className="block text-xs text-slate-500">
+              <label className="block text-xs text-slate-400">
                 Ship-to Phone
                 <input
                   value={metaForm.shiptoPhone}
@@ -417,7 +562,7 @@ export default function FulfillmentDetailPage() {
                   className="ios-input mt-1 h-10 px-3 text-sm"
                 />
               </label>
-              <label className="block text-xs text-slate-500">
+              <label className="block text-xs text-slate-400">
                 Address 1
                 <input
                   value={metaForm.shiptoAddress1}
@@ -426,7 +571,7 @@ export default function FulfillmentDetailPage() {
                   className="ios-input mt-1 h-10 px-3 text-sm"
                 />
               </label>
-              <label className="block text-xs text-slate-500">
+              <label className="block text-xs text-slate-400">
                 Address 2
                 <input
                   value={metaForm.shiptoAddress2}
@@ -436,7 +581,7 @@ export default function FulfillmentDetailPage() {
                 />
               </label>
               <div className="grid grid-cols-3 gap-2 md:col-span-2">
-                <label className="block text-xs text-slate-500">
+                <label className="block text-xs text-slate-400">
                   City
                   <input
                     value={metaForm.shiptoCity}
@@ -445,7 +590,7 @@ export default function FulfillmentDetailPage() {
                     className="ios-input mt-1 h-10 px-3 text-sm"
                   />
                 </label>
-                <label className="block text-xs text-slate-500">
+                <label className="block text-xs text-slate-400">
                   State
                   <input
                     value={metaForm.shiptoState}
@@ -454,7 +599,7 @@ export default function FulfillmentDetailPage() {
                     className="ios-input mt-1 h-10 px-3 text-sm"
                   />
                 </label>
-                <label className="block text-xs text-slate-500">
+                <label className="block text-xs text-slate-400">
                   Zip
                   <input
                     value={metaForm.shiptoZip}
@@ -464,7 +609,7 @@ export default function FulfillmentDetailPage() {
                   />
                 </label>
               </div>
-              <label className="block text-xs text-slate-500 md:col-span-2">
+              <label className="block text-xs text-slate-400 md:col-span-2">
                 Ship-to Notes
                 <input
                   value={metaForm.shiptoNotes}
@@ -475,7 +620,7 @@ export default function FulfillmentDetailPage() {
               </label>
             </>
           ) : null}
-          <label className="block text-xs text-slate-500 md:col-span-2">
+          <label className="block text-xs text-slate-400 md:col-span-2">
             Notes
             <textarea
               value={metaForm.notes}
@@ -520,21 +665,23 @@ export default function FulfillmentDetailPage() {
             Cancel Fulfillment
           </button>
         </div>
+        </div>
       </div>
 
-      <div className="linear-card overflow-hidden p-0">
-        <div className="border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-slate-900">Fulfillment Items</h2>
+      <div className="glass-card overflow-hidden p-0">
+        <div className="glass-card-content">
+        <div className="border-b border-white/10 px-6 py-4">
+          <h2 className="text-base font-semibold text-white">Fulfillment Items</h2>
         </div>
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
-              <TableHead>Title</TableHead>
-              <TableHead>SKU</TableHead>
-              <TableHead className="text-right">Ordered</TableHead>
-              <TableHead className="text-right">Fulfilled</TableHead>
-              <TableHead className="text-right">Remaining</TableHead>
-              <TableHead>Notes</TableHead>
+            <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
+              <TableHead className="text-slate-400">Title</TableHead>
+              <TableHead className="text-slate-400">SKU</TableHead>
+              <TableHead className="text-right text-slate-400">Ordered</TableHead>
+              <TableHead className="text-right text-slate-400">Fulfilled</TableHead>
+              <TableHead className="text-right text-slate-400">Remaining</TableHead>
+              <TableHead className="text-slate-400">Notes</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -544,12 +691,12 @@ export default function FulfillmentDetailPage() {
               const fulfilled = Number(draft.fulfilledQty || 0);
               const remaining = Math.max(ordered - fulfilled, 0);
               return (
-                <TableRow key={item.id} className="odd:bg-white even:bg-slate-50/40">
-                  <TableCell className="font-medium text-slate-900">
+                <TableRow key={item.id} className="border-white/10 text-slate-300 transition-colors hover:bg-white/[0.06]">
+                  <TableCell className="font-medium text-white">
                     {item.title}
-                    <span className="ml-1 text-xs text-slate-500">({item.unit})</span>
+                    <span className="ml-1 text-xs text-slate-400">({item.unit})</span>
                   </TableCell>
-                  <TableCell className="text-xs text-slate-500">{item.sku || "-"}</TableCell>
+                  <TableCell className="text-xs text-slate-400">{item.sku || "-"}</TableCell>
                   <TableCell className="text-right">{ordered.toFixed(2)}</TableCell>
                   <TableCell className="text-right">
                     <input
@@ -584,18 +731,25 @@ export default function FulfillmentDetailPage() {
             })}
           </TableBody>
         </Table>
-        <div className="border-t border-slate-100 px-6 py-4">
+        <div className="border-t border-white/10 px-6 py-4">
           <button type="button" onClick={saveItems} disabled={saving} className="ios-primary-btn h-9 px-3 text-xs disabled:opacity-60">
             Save Items
           </button>
-          <p className="mt-2 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-slate-400">
             Saving items auto-updates status to <span className="font-semibold">partial</span> or{" "}
             <span className="font-semibold">completed</span> based on fulfilled quantity.
           </p>
         </div>
       </div>
-      <div className="linear-card p-4 text-xs text-slate-500">
-        Link back: <Link href={`/sales-orders/${data.salesOrder.id}`} className="font-medium text-slate-700 underline">Sales Order</Link>
+      </div>
+
+      <div className="glass-card p-4 text-xs text-slate-400">
+        <div className="glass-card-content">
+          Link back:{" "}
+          <Link href={`/sales-orders/${data.salesOrder.id}`} className="font-medium text-white underline">
+            Sales Order
+          </Link>
+        </div>
       </div>
       <PDFPreviewModal
         open={Boolean(pdfPreview)}

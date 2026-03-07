@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useRole } from "@/components/layout/role-provider";
@@ -36,6 +37,7 @@ export default function InventoryReorderPage() {
   const [exportingSupplierKey, setExportingSupplierKey] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [createdPos, setCreatedPos] = useState<Array<{ id: string; poNumber: string; supplierId: string }>>([]);
 
   const reorderQuery = useQuery({
     queryKey: ["reorder-list", role, supplierId, lowOnly, query],
@@ -173,6 +175,7 @@ export default function InventoryReorderPage() {
       setSubmitting(true);
       setError(null);
       setNotice(null);
+      setCreatedPos([]);
       const selectedRows = rows.filter((row) => selectedSet.has(row.id) && row.supplierId);
       if (selectedRows.length === 0) {
         setError("Select at least one supplier-linked row first.");
@@ -196,7 +199,15 @@ export default function InventoryReorderPage() {
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? "Failed to create draft purchase order");
-      setNotice(`Draft PO created: ${Number(payload?.data?.createdCount ?? 0)} supplier draft(s).`);
+      const nextPos = Array.isArray(payload?.data?.purchaseOrders) ? payload.data.purchaseOrders : [];
+      setCreatedPos(
+        nextPos.map((po: any) => ({
+          id: String(po.id),
+          poNumber: String(po.poNumber),
+          supplierId: String(po.supplierId ?? ""),
+        })),
+      );
+      setNotice(`Draft PO created: ${Number(payload?.data?.createdCount ?? nextPos.length ?? 0)} supplier draft(s).`);
       setSelectedIds([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create draft purchase order");
@@ -207,16 +218,16 @@ export default function InventoryReorderPage() {
 
   return (
     <section className="space-y-8">
-      <div className="linear-card p-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Reorder List</h1>
-        <p className="mt-2 text-sm text-slate-500">
+      <div className="glass-card p-6">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">Reorder List</h1>
+        <p className="mt-2 text-sm txt-secondary">
           Suggested replenishment by supplier, based on available boxes and reorder levels.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <select
             value={supplierId}
             onChange={(e) => setSupplierId(e.target.value)}
-            className="ios-input h-9 min-w-[220px] bg-white px-3 text-sm"
+            className="ios-input h-9 min-w-[220px] px-3 text-sm"
           >
             <option value="ALL">All suppliers</option>
             {(reorderQuery.data?.meta?.supplierOptions ?? []).map((item) => (
@@ -225,7 +236,7 @@ export default function InventoryReorderPage() {
               </option>
             ))}
           </select>
-          <label className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+          <label className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm txt-secondary backdrop-blur-xl">
             <input type="checkbox" checked={lowOnly} onChange={(e) => setLowOnly(e.target.checked)} />
             Low only
           </label>
@@ -245,12 +256,31 @@ export default function InventoryReorderPage() {
           </button>
         </div>
         {notice ? (
-          <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+          <div className="mt-3 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
             {notice}
+            {createdPos.length > 0 ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {createdPos.map((po) => (
+                  <Link
+                    key={po.id}
+                    href={`/purchasing/orders/${po.id}`}
+                    className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2 py-1 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20"
+                  >
+                    Open {po.poNumber}
+                  </Link>
+                ))}
+                <Link
+                  href="/purchasing/orders"
+                  className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1 text-xs text-white/80 hover:bg-white/[0.06]"
+                >
+                  View all Purchase Orders
+                </Link>
+              </div>
+            ) : null}
           </div>
         ) : null}
         {error ? (
-          <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          <div className="mt-3 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
             {error}
           </div>
         ) : null}
@@ -258,9 +288,9 @@ export default function InventoryReorderPage() {
 
       <div className="space-y-4">
         {reorderQuery.isLoading ? (
-          <div className="linear-card p-6 text-sm text-slate-500">Loading reorder list...</div>
+          <div className="glass-card p-6 text-sm txt-muted">Loading reorder list...</div>
         ) : grouped.length === 0 ? (
-          <div className="linear-card p-6 text-sm text-slate-500">No reorder rows found.</div>
+          <div className="glass-card p-6 text-sm txt-muted">No reorder rows found.</div>
         ) : (
           grouped.map((group) => {
             const selectedRows = group.rows.filter((row) => selectedSet.has(row.id));
@@ -270,11 +300,11 @@ export default function InventoryReorderPage() {
               0,
             );
             return (
-              <div key={group.key} className="linear-card overflow-hidden p-0">
-                <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-4 py-3">
+              <div key={group.key} className="glass-card overflow-hidden p-0">
+                <div className="flex items-center justify-between border-b border-white/10 bg-white/5 px-4 py-3 backdrop-blur-xl">
                   <div>
-                    <p className="text-sm font-semibold text-slate-900">{group.supplierName}</p>
-                    <p className="text-xs text-slate-600">
+                    <p className="text-sm font-semibold text-white">{group.supplierName}</p>
+                    <p className="text-xs txt-secondary">
                       Selected: {subtotalBoxes.toFixed(0)} boxes
                       {subtotalCost > 0 ? ` · $${subtotalCost.toFixed(2)}` : ""}
                     </p>
@@ -307,22 +337,22 @@ export default function InventoryReorderPage() {
                 </div>
                 <div className="overflow-auto">
                   <table className="w-full min-w-[1180px] table-fixed text-sm">
-                    <thead className="bg-white">
+                    <thead className="border-white/10 bg-white/[0.06]">
                       <tr>
-                        <th className="w-[56px] px-3 py-2 text-left font-medium text-slate-600">Select</th>
-                        <th className="w-[220px] px-3 py-2 text-left font-medium text-slate-600">Variant</th>
-                        <th className="w-[180px] px-3 py-2 text-left font-medium text-slate-600">SKU</th>
-                        <th className="w-[130px] px-3 py-2 text-right font-medium text-slate-600">Available</th>
-                        <th className="w-[150px] px-3 py-2 text-right font-medium text-slate-600">Reorder Level</th>
-                        <th className="w-[160px] px-3 py-2 text-right font-medium text-slate-600">Suggested Order</th>
-                        <th className="w-[150px] px-3 py-2 text-right font-medium text-slate-600">Suggested sqft</th>
-                        <th className="w-[120px] px-3 py-2 text-right font-medium text-slate-600">Unit Cost</th>
-                        <th className="px-3 py-2 text-left font-medium text-slate-600">Line Notes</th>
+                        <th className="w-[56px] px-3 py-2 text-left font-medium text-white/70">Select</th>
+                        <th className="w-[220px] px-3 py-2 text-left font-medium text-white/70">Variant</th>
+                        <th className="w-[180px] px-3 py-2 text-left font-medium text-white/70">SKU</th>
+                        <th className="w-[130px] px-3 py-2 text-right font-medium text-white/70">Available</th>
+                        <th className="w-[150px] px-3 py-2 text-right font-medium text-white/70">Reorder Level</th>
+                        <th className="w-[160px] px-3 py-2 text-right font-medium text-white/70">Suggested Order</th>
+                        <th className="w-[150px] px-3 py-2 text-right font-medium text-white/70">Suggested sqft</th>
+                        <th className="w-[120px] px-3 py-2 text-right font-medium text-white/70">Unit Cost</th>
+                        <th className="px-3 py-2 text-left font-medium text-white/70">Line Notes</th>
                       </tr>
                     </thead>
                     <tbody>
                       {group.rows.map((row) => (
-                        <tr key={row.id} className="border-t border-slate-100">
+                        <tr key={row.id} className="border-t border-white/10 hover:bg-white/[0.06] transition-colors">
                           <td className="px-3 py-2">
                             <input
                               type="checkbox"
@@ -331,11 +361,11 @@ export default function InventoryReorderPage() {
                               onChange={(e) => toggleRow(row.id, e.target.checked)}
                             />
                           </td>
-                          <td className="px-3 py-2 text-slate-800">{row.variantName}</td>
-                          <td className="px-3 py-2 text-slate-700">{row.sku}</td>
+                          <td className="px-3 py-2 text-white/90">{row.variantName}</td>
+                          <td className="px-3 py-2 txt-secondary">{row.sku}</td>
                           <td className="px-3 py-2 text-right">{row.availableBoxes.toFixed(2)}</td>
                           <td className="px-3 py-2 text-right">{row.reorderLevelBoxes.toFixed(2)}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-slate-900">
+                          <td className="px-3 py-2 text-right font-semibold text-white">
                             {row.suggestedQtyBoxes.toFixed(0)}
                           </td>
                           <td className="px-3 py-2 text-right">

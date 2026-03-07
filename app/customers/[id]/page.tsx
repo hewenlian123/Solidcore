@@ -387,18 +387,18 @@ export default function CustomerDetailPage() {
           </div>
 
           <div className="linear-card p-4">
-            <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+            <div className="mb-3 inline-flex rounded-xl border border-white/10 bg-white/5 p-1 backdrop-blur-xl">
               <button
                 type="button"
                 onClick={() => setActiveTab("ORDERS")}
-                className={`rounded-md px-3 py-1.5 text-xs ${activeTab === "ORDERS" ? "bg-white text-slate-900" : "text-slate-600"}`}
+                className={`rounded-lg px-3 py-1.5 text-xs ${activeTab === "ORDERS" ? "so-chip-active" : "so-chip"}`}
               >
                 Orders
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("NOTES")}
-                className={`rounded-md px-3 py-1.5 text-xs ${activeTab === "NOTES" ? "bg-white text-slate-900" : "text-slate-600"}`}
+                className={`rounded-lg px-3 py-1.5 text-xs ${activeTab === "NOTES" ? "so-chip-active" : "so-chip"}`}
               >
                 Notes / Activity
               </button>
@@ -423,7 +423,7 @@ export default function CustomerDetailPage() {
                       className={`rounded-xl px-3 py-1.5 text-xs ${
                         orderFilter === key
                           ? "bg-slate-900 text-white"
-                          : "bg-slate-100 text-slate-600"
+                          : "so-chip"
                       }`}
                     >
                       {label}
@@ -433,7 +433,7 @@ export default function CustomerDetailPage() {
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
-                      <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                      <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
                         <TableHead>Order #</TableHead>
                         <TableHead>Created</TableHead>
                         <TableHead>Status</TableHead>
@@ -453,7 +453,7 @@ export default function CustomerDetailPage() {
                         </TableRow>
                       ) : (
                         orders.map((order) => (
-                          <TableRow key={order.id} className="odd:bg-white even:bg-slate-50/40">
+                          <TableRow key={order.id} className="border-white/10 transition-colors hover:bg-white/10">
                             <TableCell>
                               <Link
                                 href={`/sales-orders/${order.id}`}
@@ -507,7 +507,7 @@ export default function CustomerDetailPage() {
                   <p className="text-sm text-slate-500">No activity notes yet.</p>
                 ) : (
                   notes.map((note) => (
-                    <div key={note.id} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
+                    <div key={note.id} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-xl">
                       <p className="text-xs text-slate-500">
                         {new Date(note.createdAt).toLocaleString("en-US", { timeZone: "UTC" })}
                         {note.createdBy ? ` · ${note.createdBy}` : ""}
@@ -530,7 +530,7 @@ export default function CustomerDetailPage() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                  <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
                     <TableHead>Date</TableHead>
                     <TableHead>Invoice #</TableHead>
                     <TableHead>Status</TableHead>
@@ -560,7 +560,7 @@ export default function CustomerDetailPage() {
                             router.push(`/invoices/${row.id}`);
                           }
                         }}
-                        className="cursor-pointer odd:bg-white even:bg-slate-50/40 hover:bg-slate-100/70"
+                        className="cursor-pointer border-white/10 text-slate-300 transition-colors hover:bg-white/10"
                       >
                         <TableCell>
                           {new Date(row.issueDate || row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
@@ -595,7 +595,7 @@ export default function CustomerDetailPage() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                  <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
                     <TableHead>Return #</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Status</TableHead>
@@ -612,7 +612,7 @@ export default function CustomerDetailPage() {
                     </TableRow>
                   ) : (
                     returns.map((row) => (
-                      <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
+                      <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/10">
                         <TableCell className="font-medium text-slate-900">{row.id.slice(0, 8)}</TableCell>
                         <TableCell>
                           {new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
@@ -642,7 +642,7 @@ export default function CustomerDetailPage() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                  <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
                     <TableHead>Credit #</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
@@ -659,7 +659,7 @@ export default function CustomerDetailPage() {
                     </TableRow>
                   ) : (
                     openCredits.map((row) => (
-                      <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
+                      <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/10">
                         <TableCell className="font-medium text-slate-900">{row.id.slice(0, 8)}</TableCell>
                         <TableCell>
                           {new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
@@ -686,7 +686,7 @@ export default function CustomerDetailPage() {
             <button
               type="button"
               onClick={() => setReminderFilter("PENDING_DELIVERY")}
-              className="flex w-full items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-left hover:bg-slate-100"
+              className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-slate-300 transition hover:bg-white/10 backdrop-blur-xl"
             >
               <span className="text-slate-700">Pending Delivery</span>
               <span className="font-semibold text-slate-900">{summary?.pendingDeliveryCount ?? 0}</span>
@@ -694,7 +694,7 @@ export default function CustomerDetailPage() {
             <button
               type="button"
               onClick={() => setReminderFilter("SPECIAL_ORDER")}
-              className="flex w-full items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-left hover:bg-slate-100"
+              className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-slate-300 transition hover:bg-white/10 backdrop-blur-xl"
             >
               <span className="text-slate-700">Special Orders</span>
               <span className="font-semibold text-slate-900">{summary?.specialOrderCount ?? 0}</span>
@@ -702,7 +702,7 @@ export default function CustomerDetailPage() {
             <button
               type="button"
               onClick={() => setReminderFilter("UNPAID")}
-              className="flex w-full items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-left hover:bg-slate-100"
+              className="flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-slate-300 transition hover:bg-white/10 backdrop-blur-xl"
             >
               <span className="text-slate-700">Unpaid</span>
               <span className="font-semibold text-slate-900">{summary?.unpaidCount ?? 0}</span>

@@ -136,6 +136,21 @@ type SalesOrderDetail = {
   } | null;
 };
 
+type FulfillmentDetailPreview = {
+  id: string;
+  type: "PICKUP" | "DELIVERY";
+  status: string;
+  scheduledAt: string | null;
+  scheduledDate: string | null;
+  timeWindow: string | null;
+  driverName: string | null;
+  pickupContact: string | null;
+  items: Array<{
+    orderedQty: string;
+    fulfilledQty: string;
+  }>;
+};
+
 type SalesProduct = {
   id: string;
   productId: string;
@@ -452,6 +467,7 @@ export default function SalesOrderDetailPage() {
   const [hasRelatedReturns, setHasRelatedReturns] = useState(false);
   const [openTicket, setOpenTicket] = useState(false);
   const [pdfPreview, setPdfPreview] = useState<{ title: string; src: string } | null>(null);
+  const [activeFulfillmentDetail, setActiveFulfillmentDetail] = useState<FulfillmentDetailPreview | null>(null);
   const quickAddSearchRef = useRef<HTMLInputElement | null>(null);
   const [paymentQuickHint, setPaymentQuickHint] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({
@@ -944,6 +960,51 @@ export default function SalesOrderDetailPage() {
     () => data?.fulfillments.find((item) => item.status !== "CANCELLED") ?? null,
     [data?.fulfillments],
   );
+
+  useEffect(() => {
+    const fulfillmentId = activeFulfillment?.id;
+    if (!fulfillmentId) {
+      setActiveFulfillmentDetail(null);
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const res = await fetch(`/api/fulfillments/${fulfillmentId}`, {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        });
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.error ?? "Failed to load fulfillment detail");
+        if (cancelled) return;
+        setActiveFulfillmentDetail(payload.data as FulfillmentDetailPreview);
+      } catch {
+        if (!cancelled) setActiveFulfillmentDetail(null);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFulfillment?.id, role]);
+
+  const activeFulfillmentProgress = useMemo(() => {
+    const rows = activeFulfillmentDetail?.items ?? [];
+    const total = rows.length;
+    if (total === 0) return { total: 0, completed: 0, percent: 0, anyFulfilled: false, partial: false };
+    let completed = 0;
+    let anyFulfilled = false;
+    for (const row of rows) {
+      const ordered = Number(row.orderedQty ?? 0);
+      const fulfilled = Number(row.fulfilledQty ?? 0);
+      if (fulfilled > 0) anyFulfilled = true;
+      if (fulfilled >= ordered) completed += 1;
+    }
+    const percent = Math.round((completed / total) * 100);
+    const partial = anyFulfilled && completed < total;
+    return { total, completed, percent, anyFulfilled, partial };
+  }, [activeFulfillmentDetail]);
+
   const canStartFulfillment = useMemo(() => {
     const status = String(data?.status ?? "").toUpperCase();
     return ["CONFIRMED", "READY", "PARTIALLY_FULFILLED"].includes(status);
@@ -1617,6 +1678,75 @@ export default function SalesOrderDetailPage() {
                   <div className="mt-2 grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
                     <span className="text-[#6B7280]">Fulfillment Type</span>
                     <span className="text-[#111827]">{data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"}</span>
+                    <span className="text-[#6B7280]">Fulfillment Status</span>
+                    <span className="text-[#111827]">
+                      {activeFulfillmentDetail ? (
+                        <span className="inline-flex items-center gap-2">
+                          <span className="so-chip bg-slate-200 text-slate-700">{activeFulfillmentDetail.status}</span>
+                          {activeFulfillmentProgress.partial ? (
+                            <span className="so-chip border border-amber-200/60 bg-amber-50/70 text-amber-700">
+                              Partial
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : activeFulfillment ? (
+                        activeFulfillment.status
+                      ) : (
+                        "-"
+                      )}
+                    </span>
+                    <span className="text-[#6B7280]">Progress</span>
+                    <span className="text-[#111827]">
+                      {activeFulfillmentDetail ? (
+                        <span className="inline-flex items-center gap-2">
+                          <span>
+                            {activeFulfillmentProgress.completed}/{activeFulfillmentProgress.total} items ·{" "}
+                            {activeFulfillmentProgress.percent}%
+                          </span>
+                          <span className="h-2 w-32 overflow-hidden rounded-full bg-slate-200">
+                            <span
+                              className="block h-2 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500"
+                              style={{ width: `${Math.min(Math.max(activeFulfillmentProgress.percent, 0), 100)}%` }}
+                            />
+                          </span>
+                        </span>
+                      ) : (
+                        "-"
+                      )}
+                    </span>
+                    <span className="text-[#6B7280]">Documents</span>
+                    <span className="flex flex-wrap gap-2">
+                      {activeFulfillment ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPdfPreview({
+                                title: `Pick List ${activeFulfillment.id.slice(0, 8)}`,
+                                src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=pick`,
+                              })
+                            }
+                            className="so-action-btn px-2.5"
+                          >
+                            Pick List
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPdfPreview({
+                                title: `${data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"} Slip ${activeFulfillment.id.slice(0, 8)}`,
+                                src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=slip`,
+                              })
+                            }
+                            className="so-action-btn px-2.5"
+                          >
+                            {data.fulfillmentMethod === "DELIVERY" ? "Delivery Slip" : "Pickup Slip"}
+                          </button>
+                        </>
+                      ) : (
+                        "-"
+                      )}
+                    </span>
                     <span className="text-[#6B7280]">Pickup</span>
                     <span className="text-[#111827]">
                       {data.fulfillmentMethod === "PICKUP"
@@ -1691,39 +1821,23 @@ export default function SalesOrderDetailPage() {
                     <div>
                       <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">Secondary Actions</p>
                       <div className="flex flex-wrap gap-2">
-                        {mode === "view" ? (
-                          <button type="button" onClick={enterEditMode} className="so-action-btn">
-                            Edit
-                          </button>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => void saveEditMode()}
-                              className="so-action-btn border-emerald-200/70 bg-emerald-50/80 text-emerald-700 hover:bg-emerald-100/90"
-                            >
-                              Save Changes
-                            </button>
-                            <button type="button" onClick={() => void cancelEditMode()} className="so-action-btn">
-                              Cancel
-                            </button>
-                          </>
-                        )}
                         <button
                           type="button"
-                          onClick={() => {
-                            if (mode !== "edit") enterEditMode();
-                            setOpenDetailsDrawer(true);
-                          }}
+                          onClick={() => router.push(`/sales-orders/edit/${data.id}`)}
+                          className="so-action-btn"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => router.push(`/sales-orders/edit/${data.id}`)}
                           className="so-action-btn"
                         >
                           Edit Details
                         </button>
                         <button
                           type="button"
-                          onClick={() => {
-                            if (mode !== "edit") enterEditMode();
-                          }}
+                          onClick={() => router.push(`/sales-orders/edit/${data.id}`)}
                           className="so-action-btn"
                         >
                           Edit Items

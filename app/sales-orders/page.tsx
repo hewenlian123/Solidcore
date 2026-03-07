@@ -6,6 +6,7 @@ import { ChevronRight, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRole } from "@/components/layout/role-provider";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableSkeletonRows } from "@/components/ui/table-skeleton";
 import {
   SALES_ORDER_STATUSES,
   getSalesOrderStatusBadge,
@@ -80,27 +81,35 @@ export default function SalesOrdersPage() {
       <div className="linear-card p-8">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Sales Orders</h1>
-            <p className="mt-2 text-sm text-slate-500">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Sales Orders</h1>
+            <p className="mt-2 text-sm txt-secondary">
               Manage building-supply sales orders, payments, and balances.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={openNewSalesOrder}
-            disabled={creating}
-            className="ios-primary-btn inline-flex h-12 items-center gap-2 px-4"
-          >
-            <Plus className="h-4 w-4" />
-            {creating ? "Creating..." : "New Sales Order"}
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/sales-orders/pos"
+              className="ios-secondary-btn inline-flex h-12 items-center gap-2 px-4 border border-white/20"
+            >
+              POS 开单
+            </Link>
+            <button
+              type="button"
+              onClick={openNewSalesOrder}
+              disabled={creating}
+              className="ios-primary-btn inline-flex h-12 items-center gap-2 px-4"
+            >
+              <Plus className="h-4 w-4" />
+              {creating ? "Creating..." : "New Sales Order"}
+            </button>
+          </div>
         </div>
       </div>
 
       <div className="linear-card p-6">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="relative w-full md:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-white/60" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -116,8 +125,8 @@ export default function SalesOrdersPage() {
                 onClick={() => setStatusFilter(status)}
                 className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
                   statusFilter === status
-                    ? "bg-slate-900 text-white"
-                    : "bg-slate-100 text-slate-600"
+                    ? "so-chip-active"
+                    : "so-chip"
                 }`}
               >
                 {status === "ALL" ? "All" : getSalesOrderStatusLabel(status)}
@@ -136,7 +145,7 @@ export default function SalesOrdersPage() {
       <div className="linear-card overflow-hidden p-0">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+            <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
               <TableHead>Order #</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Project</TableHead>
@@ -150,14 +159,10 @@ export default function SalesOrdersPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center text-slate-500">
-                  Loading sales orders...
-                </TableCell>
-              </TableRow>
+              <TableSkeletonRows columns={9} rows={8} />
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-slate-500">
+                <TableCell colSpan={9} className="text-center txt-muted">
                   No sales orders yet
                 </TableCell>
               </TableRow>
@@ -167,7 +172,7 @@ export default function SalesOrdersPage() {
                   key={row.id}
                   role="button"
                   tabIndex={0}
-                  className="group h-14 cursor-pointer odd:bg-white even:bg-slate-50/40 transition-colors duration-200 hover:bg-slate-100/70"
+                  className="group h-14 cursor-pointer border-white/10 txt-secondary transition-colors duration-200 hover:bg-white/[0.06]"
                   onClick={() => {
                     router.push(`/sales-orders/${row.id}`);
                   }}
@@ -178,7 +183,7 @@ export default function SalesOrdersPage() {
                     }
                   }}
                 >
-                  <TableCell className="font-bold text-slate-900 group-hover:rounded-l-lg">
+                  <TableCell className="font-bold text-white group-hover:rounded-l-lg">
                     <Link
                       href={`/sales-orders/${row.id}`}
                       className="underline-offset-2 hover:underline"
@@ -204,8 +209,8 @@ export default function SalesOrdersPage() {
                     <span
                       className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
                         Number(row.balanceDue) <= 0
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-amber-100 text-amber-700"
+                          ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
+                          : "bg-amber-500/20 text-amber-300 border border-amber-400/30"
                       }`}
                     >
                       {Number(row.balanceDue) <= 0
@@ -218,7 +223,7 @@ export default function SalesOrdersPage() {
                   </TableCell>
                   <TableCell className="text-right group-hover:rounded-r-lg">
                     <span
-                      className="inline-flex items-center text-slate-400 opacity-20 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
+                      className="inline-flex items-center text-white/40 opacity-20 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
                       aria-hidden="true"
                     >
                       <ChevronRight className="h-4 w-4" />

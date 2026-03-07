@@ -380,8 +380,8 @@ export default function InvoiceDetailPage() {
     return () => window.clearTimeout(timer);
   }, [openStoreCredit, data, role, storeCreditForm.amount]);
 
-  if (loading) return <div className="linear-card p-8 text-sm text-slate-500">Loading invoice...</div>;
-  if (!data) return <div className="linear-card p-8 text-sm text-slate-500">Invoice not found.</div>;
+  if (loading) return <div className="glass-card p-8 text-sm text-slate-400">Loading invoice...</div>;
+  if (!data) return <div className="glass-card p-8 text-sm text-slate-400">Invoice not found.</div>;
 
   return (
     <section className="space-y-8">
@@ -401,8 +401,8 @@ export default function InvoiceDetailPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{data.status}</span>
-            <span className="rounded bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">{paymentStatus}</span>
+            <span className="rounded border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-slate-300 backdrop-blur-xl">{data.status}</span>
+            <span className="rounded border border-emerald-400/30 bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-200">{paymentStatus}</span>
             <button
               type="button"
               onClick={() =>
@@ -513,7 +513,7 @@ export default function InvoiceDetailPage() {
                       )
                     : null;
                 return (
-              <div key={item.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3 text-sm">
+<div key={item.id} className="rounded-xl border border-white/10 bg-white/5 p-3 text-sm backdrop-blur-xl">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="font-medium text-slate-900">
@@ -571,7 +571,7 @@ export default function InvoiceDetailPage() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-slate-500">
+                <tr className="border-b border-white/10 text-left text-slate-400">
                   <th className="py-2 pr-4">Date</th>
                   <th className="py-2 pr-4">Method</th>
                   <th className="py-2 pr-4">Type</th>
@@ -583,7 +583,7 @@ export default function InvoiceDetailPage() {
               </thead>
               <tbody>
                 {data.payments.map((payment) => (
-                  <tr key={payment.id} className="border-b border-slate-100">
+                  <tr key={payment.id} className="border-b border-white/10">
                     <td className="py-2 pr-4">{new Date(payment.receivedAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</td>
                     <td className="py-2 pr-4">{payment.method}</td>
                     <td className="py-2 pr-4">{payment.paymentType}</td>
@@ -630,7 +630,7 @@ export default function InvoiceDetailPage() {
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100 text-left text-slate-500">
+                <tr className="border-b border-white/10 text-left text-slate-400">
                   <th className="py-2 pr-4">Date</th>
                   <th className="py-2 pr-4">Credit #</th>
                   <th className="py-2 pr-4">Amount</th>
@@ -639,7 +639,7 @@ export default function InvoiceDetailPage() {
               </thead>
               <tbody>
                 {data.storeCreditApplications.map((row) => (
-                  <tr key={row.id} className="border-b border-slate-100">
+                  <tr key={row.id} className="border-b border-white/10">
                     <td className="py-2 pr-4">
                       {new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
                     </td>
@@ -660,7 +660,7 @@ export default function InvoiceDetailPage() {
 
       {openPayment ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/25 p-4">
-          <form onSubmit={addPayment} className="w-full max-w-md rounded-xl border border-slate-100 bg-white p-5">
+          <form onSubmit={addPayment} className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-5 shadow-xl backdrop-blur-xl">
             <h3 className="text-base font-semibold text-slate-900">Add Payment</h3>
             <div className="mt-3 space-y-3">
               <label className="block space-y-1">
@@ -677,7 +677,7 @@ export default function InvoiceDetailPage() {
               ) : null}
               <label className="block space-y-1">
                 <span className="text-xs text-slate-500">Method</span>
-                <select className="ios-input h-10 w-full bg-white px-3 text-sm" value={paymentForm.method} onChange={(e) => setPaymentForm((prev) => ({ ...prev, method: e.target.value }))}>
+                <select className="ios-input h-10 w-full px-3 text-sm" value={paymentForm.method} onChange={(e) => setPaymentForm((prev) => ({ ...prev, method: e.target.value }))}>
                   <option value="CASH">Cash</option>
                   <option value="CHECK">Check</option>
                   <option value="CARD">Card</option>
@@ -687,7 +687,7 @@ export default function InvoiceDetailPage() {
               </label>
               <label className="block space-y-1">
                 <span className="text-xs text-slate-500">Type</span>
-                <select className="ios-input h-10 w-full bg-white px-3 text-sm" value={paymentForm.type} onChange={(e) => setPaymentForm((prev) => ({ ...prev, type: e.target.value }))}>
+                <select className="ios-input h-10 w-full px-3 text-sm" value={paymentForm.type} onChange={(e) => setPaymentForm((prev) => ({ ...prev, type: e.target.value }))}>
                   <option value="DEPOSIT">Deposit</option>
                   <option value="FINAL">Final</option>
                   <option value="REFUND">Refund</option>
@@ -715,7 +715,7 @@ export default function InvoiceDetailPage() {
       ) : null}
       {openStoreCredit ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/25 p-4">
-          <form onSubmit={applyStoreCredit} className="w-full max-w-md rounded-xl border border-slate-100 bg-white p-5">
+          <form onSubmit={applyStoreCredit} className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-5 shadow-xl backdrop-blur-xl">
             <h3 className="text-base font-semibold text-slate-900">Apply Store Credit</h3>
             <div className="mt-3 space-y-3">
               <p className="text-xs text-slate-500">
@@ -737,7 +737,7 @@ export default function InvoiceDetailPage() {
                   required
                 />
               </label>
-              <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-700">Credit Breakdown Preview</h4>
                 {previewLoading ? (
                   <p className="mt-2 text-xs text-slate-500">Calculating preview...</p>
@@ -752,10 +752,10 @@ export default function InvoiceDetailPage() {
                       <span>Open Credit: ${Number(storeCreditPreview?.openCreditBalance ?? 0).toFixed(2)}</span>
                       <span>Will Apply: ${Number(storeCreditPreview?.previewAmount ?? 0).toFixed(2)}</span>
                     </div>
-                    <div className="max-h-40 overflow-y-auto rounded-lg border border-slate-100 bg-white">
+                    <div className="max-h-40 overflow-y-auto rounded-xl border border-white/10 bg-white/5 backdrop-blur-xl">
                       <table className="min-w-full text-xs">
                         <thead>
-                          <tr className="border-b border-slate-100 text-left text-slate-500">
+                          <tr className="border-b border-white/10 text-left text-slate-400">
                             <th className="px-2 py-1.5">Credit #</th>
                             <th className="px-2 py-1.5">Source</th>
                             <th className="px-2 py-1.5 text-right">Remaining</th>
@@ -764,7 +764,7 @@ export default function InvoiceDetailPage() {
                         </thead>
                         <tbody>
                           {(storeCreditPreview?.allocations ?? []).map((row) => (
-                            <tr key={`${row.creditId}-${row.sourceReturnId ?? "none"}`} className="border-b border-slate-100">
+                            <tr key={`${row.creditId}-${row.sourceReturnId ?? "none"}`} className="border-b border-white/10">
                               <td className="px-2 py-1.5">{row.creditId.slice(0, 8)}</td>
                               <td className="px-2 py-1.5">
                                 {row.sourceReturnId ? (

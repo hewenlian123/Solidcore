@@ -39,9 +39,9 @@ const COLUMNS: Array<{ key: Ticket["status"]; label: string }> = [
 ];
 
 const PRIORITY_CLASS = {
-  LOW: "bg-slate-100 text-slate-700",
-  MEDIUM: "bg-amber-100 text-amber-800",
-  HIGH: "bg-rose-100 text-rose-800",
+  LOW: "border border-white/10 bg-white/[0.04] text-white/80",
+  MEDIUM: "border border-amber-400/30 bg-amber-500/15 text-amber-200",
+  HIGH: "border border-rose-400/30 bg-rose-500/15 text-rose-200",
 };
 
 export default function AfterSalesPage() {
@@ -167,11 +167,11 @@ export default function AfterSalesPage() {
 
   return (
     <section className="space-y-8">
-      <div className="linear-card p-8">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <header className="glass-card p-8">
+        <div className="glass-card-content flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">After-Sales Ticket Board</h1>
-            <p className="mt-2 text-sm text-slate-500">Use priority and ticket status to close after-sales issues faster.</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">After-Sales Ticket Board</h1>
+            <p className="mt-2 text-sm text-slate-400">Use priority and ticket status to close after-sales issues faster.</p>
           </div>
           <button
             type="button"
@@ -182,17 +182,18 @@ export default function AfterSalesPage() {
             Create Ticket
           </button>
         </div>
-      </div>
+      </header>
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
       ) : null}
 
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
           {grouped.map((column) => (
-            <div key={column.key} className="linear-card p-4">
-              <h2 className="mb-3 text-sm font-semibold text-slate-900">{column.label}</h2>
+            <div key={column.key} className="glass-card p-4">
+              <div className="glass-card-content">
+              <h2 className="mb-3 text-sm font-semibold text-white">{column.label}</h2>
               <SortableContext items={column.items.map((item) => item.id)} strategy={rectSortingStrategy}>
                 <div className="space-y-2">
                   {column.items.map((ticket) => (
@@ -200,17 +201,19 @@ export default function AfterSalesPage() {
                   ))}
                 </div>
               </SortableContext>
+              </div>
             </div>
           ))}
         </div>
       </DndContext>
 
-      <div className="linear-card p-8">
-        <h2 className="text-base font-semibold text-slate-900">Maintenance History</h2>
-        <div className="mt-3 overflow-hidden rounded-xl bg-white">
+      <div className="glass-card p-8">
+        <div className="glass-card-content">
+        <h2 className="text-base font-semibold text-white">Maintenance History</h2>
+            <div className="glass-card mt-3 overflow-hidden p-0">
           <Table>
             <TableHeader>
-              <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+              <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
                 <TableHead>Customer</TableHead>
                 <TableHead>Order</TableHead>
                 <TableHead>Technician</TableHead>
@@ -222,34 +225,36 @@ export default function AfterSalesPage() {
             <TableBody>
               {records.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-slate-500">
+                  <TableCell colSpan={6} className="text-center text-slate-400">
                     No maintenance history
                   </TableCell>
                 </TableRow>
               ) : (
                 records.map((row) => (
-                  <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
-                    <TableCell>{row.customerName}</TableCell>
-                    <TableCell>{row.orderNo}</TableCell>
-                    <TableCell>{row.technician}</TableCell>
-                    <TableCell>{row.notes}</TableCell>
-                    <TableCell className="font-semibold text-slate-900">${Number(row.cost).toFixed(2)}</TableCell>
-                    <TableCell>{new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</TableCell>
+                  <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/10">
+                    <TableCell className="text-slate-300">{row.customerName}</TableCell>
+                    <TableCell className="text-slate-300">{row.orderNo}</TableCell>
+                    <TableCell className="text-slate-300">{row.technician}</TableCell>
+                    <TableCell className="text-slate-300">{row.notes}</TableCell>
+                    <TableCell className="font-semibold text-white">${Number(row.cost).toFixed(2)}</TableCell>
+                    <TableCell className="text-slate-400">{new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
         </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {tickets.map((ticket) => (
-          <div key={ticket.id} className="linear-card p-6">
-            <p className="text-sm font-semibold text-slate-900">
+          <div key={ticket.id} className="glass-card p-6">
+            <div className="glass-card-content">
+            <p className="text-sm font-semibold text-white">
               {ticket.order.orderNo} · {ticket.customer.name}
             </p>
-            <p className="mt-1 text-xs text-slate-500">Add maintenance notes</p>
+            <p className="mt-1 text-xs text-slate-400">Add maintenance notes</p>
             <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-[1fr_120px_90px]">
               <input
                 value={maintenanceForm[ticket.id]?.notes ?? ""}
@@ -281,17 +286,19 @@ export default function AfterSalesPage() {
                 Save
               </button>
             </div>
+            </div>
           </div>
         ))}
       </div>
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]">
-          <div className="linear-card w-full max-w-lg p-8">
-            <h3 className="text-base font-semibold text-slate-900">CreateAfter-Sales Tickets</h3>
+          <div className="glass-card w-full max-w-lg p-8">
+            <div className="glass-card-content">
+            <h3 className="text-base font-semibold text-white">Create After-Sales Ticket</h3>
             <form className="mt-4 space-y-3" onSubmit={createTicket}>
               <label className="block space-y-1">
-                <span className="text-sm text-slate-600">Related Order</span>
+                <span className="text-sm text-slate-300">Related Order</span>
                 <select
                   value={form.orderId}
                   onChange={(e) => setForm((p) => ({ ...p, orderId: e.target.value }))}
@@ -307,17 +314,17 @@ export default function AfterSalesPage() {
                 </select>
               </label>
               <label className="block space-y-1">
-                <span className="text-sm text-slate-600">Issue Description</span>
+                <span className="text-sm text-slate-300">Issue Description</span>
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-100 p-3 text-sm outline-none transition focus:ring-2 focus:ring-slate-200"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white placeholder:text-white/40 backdrop-blur-xl outline-none transition focus:ring-2 focus:ring-white/20"
                   required
                 />
               </label>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 <label className="block space-y-1">
-                  <span className="text-sm text-slate-600">Priority</span>
+                  <span className="text-sm text-slate-300">Priority</span>
                   <select
                     value={form.priority}
                     onChange={(e) => setForm((p) => ({ ...p, priority: e.target.value }))}
@@ -329,7 +336,7 @@ export default function AfterSalesPage() {
                   </select>
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-sm text-slate-600">Appointment</span>
+                  <span className="text-sm text-slate-300">Appointment</span>
                   <input
                     type="datetime-local"
                     value={form.appointmentAt}
@@ -339,7 +346,7 @@ export default function AfterSalesPage() {
                 </label>
               </div>
               <label className="block space-y-1">
-                <span className="text-sm text-slate-600">Assign Technician</span>
+                <span className="text-sm text-slate-300">Assign Technician</span>
                 <input
                   value={form.assignedTechnician}
                   onChange={(e) => setForm((p) => ({ ...p, assignedTechnician: e.target.value }))}
@@ -355,6 +362,7 @@ export default function AfterSalesPage() {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       ) : null}
@@ -382,16 +390,16 @@ function TicketCard({ ticket }: { ticket: Ticket }) {
       style={style}
       {...attributes}
       {...listeners}
-      className="cursor-grab rounded-xl border border-slate-100 bg-slate-50/70 p-3 active:cursor-grabbing"
+      className="cursor-grab rounded-xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur-xl active:cursor-grabbing"
     >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-slate-900">{ticket.customer.name}</p>
+        <p className="text-sm font-semibold text-white">{ticket.customer.name}</p>
         <span className={`rounded-xl px-2 py-0.5 text-[11px] font-semibold ${PRIORITY_CLASS[ticket.priority]}`}>
           {ticket.priority === "HIGH" ? "High" : ticket.priority === "MEDIUM" ? "Medium" : "Low"}
         </span>
       </div>
-      <p className="mt-1 line-clamp-2 text-xs text-slate-700">{ticket.description}</p>
-      <p className="mt-2 text-[11px] text-slate-500">Waiting {waitingDays} days · Owner: {ticket.assignedTechnician || "Unassigned"}</p>
+      <p className="mt-1 line-clamp-2 text-xs text-slate-300">{ticket.description}</p>
+      <p className="mt-2 text-[11px] text-slate-400">Waiting {waitingDays} days · Owner: {ticket.assignedTechnician || "Unassigned"}</p>
     </article>
   );
 }

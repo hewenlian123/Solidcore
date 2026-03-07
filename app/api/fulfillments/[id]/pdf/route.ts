@@ -54,6 +54,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     driverName: fulfillment.driverName,
     pickupContact: fulfillment.pickupContact,
     address,
+    shiptoNotes: fulfillment.shiptoNotes,
     notes: fulfillment.notes,
     items: fulfillment.items.map((item) => ({
       title: item.variant?.displayName || item.title || "Item",
@@ -61,6 +62,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       orderedQty: Number(item.orderedQty || 0),
       fulfilledQty: Number(item.fulfilledQty || 0),
       unit: item.unit,
+      notes: item.notes,
     })),
   });
 

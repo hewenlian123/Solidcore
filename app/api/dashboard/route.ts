@@ -213,8 +213,13 @@ export async function GET(request: NextRequest) {
     const categorySales: Record<ProductCategory, number> = {
       WINDOW: 0,
       FLOOR: 0,
+      FLOOR_ACCESSORIES: 0,
       MIRROR: 0,
+      LED_MIRROR: 0,
       DOOR: 0,
+      TILE_EDGE: 0,
+      SHAMPOO_NICHE: 0,
+      SHOWER_DOOR: 0,
       WAREHOUSE_SUPPLY: 0,
       OTHER: 0,
     };

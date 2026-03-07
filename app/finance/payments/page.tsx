@@ -74,15 +74,15 @@ export default function FinancePaymentsPage() {
 
   return (
     <section className="space-y-8">
-      <div className="linear-card p-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Payments Overview</h1>
-        <p className="mt-2 text-sm text-slate-500">
+      <div className="glass-card p-8">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">Payments Overview</h1>
+        <p className="mt-2 text-sm txt-secondary">
           Daily and monthly payment performance with outstanding balances.
         </p>
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
           {error}
         </div>
       ) : null}
@@ -104,37 +104,48 @@ export default function FinancePaymentsPage() {
             <MetricCard title="Total Outstanding Balance" value={data.kpis.totalOutstandingBalance} tone="rose" />
           </div>
 
-          <article className="linear-card p-8">
-            <h2 className="text-base font-semibold text-slate-900">Payment Trend (Last 30 Days)</h2>
+          <article className="glass-card p-8">
+            <h2 className="text-base font-semibold text-white">Payment Trend (Last 30 Days)</h2>
             <div className="mt-4 h-[320px]">
               {mounted ? (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                   <LineChart data={data.paymentTrend}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                    <XAxis dataKey="date" tick={{ fill: "#64748B", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "#64748B", fontSize: 11 }} />
-                    <Tooltip />
+                    <CartesianGrid strokeDasharray="4 4" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                    <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                    <YAxis tickLine={false} axisLine={false} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                    <Tooltip
+                      cursor={{ stroke: "rgba(255,255,255,0.12)", strokeWidth: 1, strokeDasharray: "3 4" }}
+                      contentStyle={{
+                        background: "linear-gradient(to bottom, rgba(255,255,255,0.10), rgba(255,255,255,0.03))",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                        borderRadius: 16,
+                        color: "rgba(255,255,255,0.90)",
+                        backdropFilter: "blur(16px)",
+                      }}
+                      labelStyle={{ color: "rgba(255,255,255,0.70)" }}
+                      itemStyle={{ color: "rgba(255,255,255,0.85)" }}
+                    />
                     <Line
                       type="monotone"
                       dataKey="amount"
-                      stroke="#0F172A"
+                      stroke="#06B6D4"
                       strokeWidth={2}
                       dot={false}
                     />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full w-full rounded-lg bg-slate-50" />
+                <div className="h-full w-full rounded-lg border border-white/10 bg-white/5 backdrop-blur-xl" />
               )}
             </div>
           </article>
 
-          <article className="linear-card p-8">
-            <h2 className="text-base font-semibold text-slate-900">Top Customers by Outstanding</h2>
-            <div className="mt-3 overflow-hidden rounded-xl bg-white">
+          <article className="glass-card p-8">
+            <h2 className="text-base font-semibold text-white">Top Customers by Outstanding</h2>
+            <div className="glass-card mt-3 overflow-hidden p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                  <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
                     <TableHead>Customer</TableHead>
                     <TableHead>Outstanding</TableHead>
                   </TableRow>
@@ -142,15 +153,15 @@ export default function FinancePaymentsPage() {
                 <TableBody>
                   {data.topCustomersByOutstanding.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={2} className="text-center text-slate-500">
+                      <TableCell colSpan={2} className="text-center txt-muted">
                         No outstanding balances.
                       </TableCell>
                     </TableRow>
                   ) : (
                     data.topCustomersByOutstanding.map((row) => (
-                      <TableRow key={row.customerId} className="odd:bg-white even:bg-slate-50/40">
-                        <TableCell className="font-semibold text-slate-900">{row.customerName}</TableCell>
-                        <TableCell className="font-semibold text-rose-700">${row.balance.toFixed(2)}</TableCell>
+                      <TableRow key={row.customerId} className="border-white/10 transition-colors hover:bg-white/[0.06]">
+                        <TableCell className="font-semibold text-white">{row.customerName}</TableCell>
+                        <TableCell className="font-semibold text-rose-300">${row.balance.toFixed(2)}</TableCell>
                       </TableRow>
                     ))
                   )}
@@ -159,12 +170,12 @@ export default function FinancePaymentsPage() {
             </div>
           </article>
 
-          <article className="linear-card p-8">
-            <h2 className="text-base font-semibold text-slate-900">Recent Payments</h2>
-            <div className="mt-3 overflow-hidden rounded-xl bg-white">
+          <article className="glass-card p-8">
+            <h2 className="text-base font-semibold text-white">Recent Payments</h2>
+            <div className="glass-card mt-3 overflow-hidden p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                  <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
                     <TableHead>Date/Time</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Related</TableHead>
@@ -176,41 +187,41 @@ export default function FinancePaymentsPage() {
                 <TableBody>
                   {data.recentPayments.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-slate-500">
+                      <TableCell colSpan={6} className="text-center txt-muted">
                         No posted payments yet.
                       </TableCell>
                     </TableRow>
                   ) : (
                     data.recentPayments.map((row) => (
-                      <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
+                      <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/[0.06]">
                         <TableCell>
                           {new Date(row.dateTime).toLocaleString("en-US", { timeZone: "UTC" })}
                         </TableCell>
-                        <TableCell className="font-semibold text-slate-900">{row.customerName}</TableCell>
+                        <TableCell className="font-semibold text-white">{row.customerName}</TableCell>
                         <TableCell>
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs txt-muted">
                             {row.relatedType === "INVOICE" ? "Invoice" : "Sales Order"}:
                           </span>{" "}
                           {row.relatedType === "INVOICE" ? (
                             <Link
                               href={`/invoices/${row.relatedId}`}
-                              className="text-slate-900 underline-offset-2 hover:underline"
+                              className="text-white underline-offset-2 hover:underline"
                             >
                               {row.relatedNumber}
                             </Link>
                           ) : (
                             <Link
                               href={`/sales-orders/${row.relatedId}`}
-                              className="text-slate-900 underline-offset-2 hover:underline"
+                              className="text-white underline-offset-2 hover:underline"
                             >
                               {row.relatedNumber}
                             </Link>
                           )}
                         </TableCell>
                         <TableCell>{row.method}</TableCell>
-                        <TableCell className="font-semibold text-slate-900">${row.amount.toFixed(2)}</TableCell>
+                        <TableCell className="font-semibold text-white">${row.amount.toFixed(2)}</TableCell>
                         <TableCell>
-                          <span className="rounded px-2 py-1 text-xs font-semibold bg-emerald-100 text-emerald-700">
+                          <span className="rounded border border-emerald-400/30 bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-300">
                             {row.status}
                           </span>
                         </TableCell>
@@ -236,10 +247,10 @@ function MetricCard({
   value: number;
   tone?: "slate" | "rose";
 }) {
-  const cls = tone === "rose" ? "text-rose-700" : "text-slate-900";
+  const cls = tone === "rose" ? "text-rose-300" : "text-white";
   return (
-    <article className="linear-card p-8">
-      <p className="text-xs text-slate-400">{title}</p>
+    <article className="glass-card p-8">
+      <p className="text-xs txt-muted">{title}</p>
       <p className={`mt-2 text-2xl font-semibold tracking-tight ${cls}`}>${value.toFixed(2)}</p>
     </article>
   );
@@ -247,9 +258,9 @@ function MetricCard({
 
 function CountCard({ title, value }: { title: string; value: number }) {
   return (
-    <article className="linear-card p-8">
-      <p className="text-xs text-slate-400">{title}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
+    <article className="glass-card p-8">
+      <p className="text-xs txt-muted">{title}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-white">{value}</p>
     </article>
   );
 }

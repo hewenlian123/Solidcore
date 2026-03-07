@@ -124,6 +124,9 @@ export async function GET(request: NextRequest) {
                 .join(", ") || row.address,
             status: row.status,
             driver: row.driverName ?? null,
+            timeWindow: row.timeWindow ?? null,
+            notes: row.notes ?? null,
+            shiptoNotes: row.shiptoNotes ?? null,
           })),
           todayPickups: todayPickups.map((row) => ({
             id: row.id,
@@ -132,6 +135,10 @@ export async function GET(request: NextRequest) {
             orderNumber: row.salesOrder.orderNumber,
             customer: row.salesOrder.customer?.name ?? "-",
             status: row.status,
+            timeWindow: row.timeWindow ?? null,
+            pickupContact: row.pickupContact ?? null,
+            phone: row.shiptoPhone ?? null,
+            notes: row.notes ?? null,
           })),
           overdueDeliveries: overdueDeliveries.map((row) => ({
             id: row.id,
@@ -144,6 +151,9 @@ export async function GET(request: NextRequest) {
                 .filter(Boolean)
                 .join(", ") || row.address,
             status: row.status,
+            timeWindow: row.timeWindow ?? null,
+            notes: row.notes ?? null,
+            shiptoNotes: row.shiptoNotes ?? null,
           })),
         },
       },

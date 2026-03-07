@@ -22,25 +22,37 @@ export function canViewPath(role: Role, path: string) {
   if (role === "ADMIN") return true;
   if (role === "SALES")
     return (
-      path.startsWith("/reports") ||
-      path.startsWith("/customers") ||
-      path.startsWith("/orders") ||
+      path.startsWith("/dashboard") ||
       path.startsWith("/sales-orders") ||
-      path.startsWith("/special-orders") ||
+      path.startsWith("/orders") ||
+      path.startsWith("/invoices") ||
+      path.startsWith("/finance") ||
+      path.startsWith("/returns") ||
+      path.startsWith("/inventory") ||
+      path.startsWith("/products") ||
+      path.startsWith("/warehouses") ||
+      path.startsWith("/purchasing") ||
       path.startsWith("/suppliers") ||
+      path.startsWith("/customers") ||
+      path.startsWith("/store-credit") ||
+      path.startsWith("/price-list") ||
+      path.startsWith("/price-management") ||
+      path.startsWith("/analytics") ||
+      path.startsWith("/reports") ||
+      path.startsWith("/reconciliation") ||
       path.startsWith("/after-sales")
     );
   if (role === "WAREHOUSE")
     return (
+      path.startsWith("/dashboard") ||
       path.startsWith("/inventory") ||
-      path.startsWith("/inventory/reorder") ||
-      path.startsWith("/inventory/movements") ||
       path.startsWith("/products") ||
-      path.startsWith("/outbound") ||
+      path.startsWith("/warehouses") ||
+      path.startsWith("/warehouse") ||
       path.startsWith("/fulfillment") ||
+      path.startsWith("/outbound") ||
       path.startsWith("/delivery") ||
-      path.startsWith("/special-orders") ||
-      path.startsWith("/warehouses")
+      path.startsWith("/special-orders")
     );
   return false;
 }

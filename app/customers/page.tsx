@@ -5,6 +5,8 @@ import { ChevronRight, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRole } from "@/components/layout/role-provider";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableSkeletonRows } from "@/components/ui/table-skeleton";
+import { Spinner } from "@/components/ui/spinner";
 
 type Customer = {
   id: string;
@@ -28,6 +30,7 @@ export default function CustomersPage() {
   const router = useRouter();
   const { role } = useRole();
   const [rows, setRows] = useState<Customer[]>([]);
+  const [loadingRows, setLoadingRows] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [openCreateModal, setOpenCreateModal] = useState(false);
@@ -54,6 +57,8 @@ export default function CustomersPage() {
 
   const loadRows = async (search = query) => {
     try {
+      setLoadingRows(true);
+      setError(null);
       const params = new URLSearchParams();
       if (search.trim()) params.set("q", search.trim());
       const qs = params.toString();
@@ -66,6 +71,8 @@ export default function CustomersPage() {
       setRows(payload.data ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch customers");
+    } finally {
+      setLoadingRows(false);
     }
   };
 
@@ -147,33 +154,35 @@ export default function CustomersPage() {
   });
 
   return (
-    <section className="space-y-8">
-      <div className="linear-card flex items-center justify-between gap-3 p-8">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Customer Management</h1>
-          <p className="mt-2 text-sm text-slate-500">View customer records and open warranty/statement pages.</p>
+    <section className="space-y-6">
+      <div className="glass-card p-6">
+        <div className="glass-card-content flex items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Customer Management</h1>
+            <p className="mt-2 text-sm text-slate-400">View customer records and open warranty/statement pages.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setOpenCreateModal(true)}
+            className="ios-primary-btn inline-flex h-10 items-center gap-2 px-4 text-sm"
+          >
+            <Plus className="h-4 w-4" />
+            Add Customer
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setOpenCreateModal(true)}
-          className="ios-primary-btn inline-flex h-10 items-center gap-2 px-4 text-sm"
-        >
-          <Plus className="h-4 w-4" />
-          Add Customer
-        </button>
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
       ) : null}
       {toast ? (
-        <div className="fixed right-6 top-20 z-50 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-700 shadow">
+        <div className="fixed right-6 top-20 z-50 rounded-xl border border-emerald-400/30 bg-emerald-500/20 px-4 py-2 text-sm text-emerald-200 shadow-lg backdrop-blur-xl">
           {toast}
         </div>
       ) : null}
 
-      <div className="linear-card space-y-3 p-4">
-        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+      <div className="glass-card p-4">
+        <div className="glass-card-content flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
@@ -192,9 +201,7 @@ export default function CustomersPage() {
                 key={key}
                 type="button"
                 onClick={() => setDetailFilter(key)}
-                className={`rounded-xl px-3 py-1.5 text-xs ${
-                  detailFilter === key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
-                }`}
+                className={detailFilter === key ? "so-chip-active" : "so-chip"}
               >
                 {label}
               </button>
@@ -203,20 +210,22 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      <div className="linear-card overflow-hidden p-0">
+      <div className="glass-card overflow-hidden p-0">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
-              <TableHead>Customer</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Install Address</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+            <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
+              <TableHead className="text-slate-400">Customer</TableHead>
+              <TableHead className="text-slate-400">Phone</TableHead>
+              <TableHead className="text-slate-400">Email</TableHead>
+              <TableHead className="text-slate-400">Install Address</TableHead>
+              <TableHead className="text-right text-slate-400">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {displayRows.length === 0 ? (
-              <TableRow>
+            {loadingRows && rows.length === 0 ? (
+              <TableSkeletonRows columns={5} rows={8} rowClassName="border-white/10" />
+            ) : displayRows.length === 0 ? (
+              <TableRow className="border-white/10">
                 <TableCell colSpan={5} className="py-10 text-center">
                   <p className="text-sm text-slate-500">
                     {rows.length === 0 ? "No customers yet" : "No customers match current filter"}
@@ -236,7 +245,7 @@ export default function CustomersPage() {
                   key={item.id}
                   role="button"
                   tabIndex={0}
-                  className="group h-14 cursor-pointer odd:bg-white even:bg-slate-50/40 transition-colors duration-200 hover:bg-slate-100/70"
+                  className="group cursor-pointer border-white/10 text-slate-300 transition-colors duration-200 hover:bg-white/[0.06]"
                   onClick={() => router.push(`/customers/${item.id}`)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -245,12 +254,12 @@ export default function CustomersPage() {
                     }
                   }}
                 >
-                  <TableCell className="font-semibold text-slate-900 group-hover:rounded-l-lg">
+                  <TableCell className="font-semibold text-white group-hover:rounded-l-lg">
                     {item.name}
                   </TableCell>
-                  <TableCell>{item.phone || "-"}</TableCell>
-                  <TableCell>{item.email || "-"}</TableCell>
-                  <TableCell>{item.installAddress || "-"}</TableCell>
+                  <TableCell className="text-slate-400">{item.phone || "-"}</TableCell>
+                  <TableCell className="text-slate-400">{item.email || "-"}</TableCell>
+                  <TableCell className="text-slate-400">{item.installAddress || "-"}</TableCell>
                   <TableCell className="text-right group-hover:rounded-r-lg">
                     <div className="inline-flex w-full items-center justify-end gap-2">
                       <button
@@ -274,7 +283,7 @@ export default function CustomersPage() {
                         New Order
                       </button>
                       <span
-                        className="ml-1 inline-flex items-center text-slate-400 opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
+                        className="ml-1 inline-flex items-center text-slate-500 opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
                         aria-hidden="true"
                       >
                         <ChevronRight className="h-4 w-4" />
@@ -341,7 +350,7 @@ export default function CustomersPage() {
                 onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, companyName: value }))}
               />
               <label className="block space-y-1">
-                <span className="text-sm text-slate-600">Customer Type</span>
+                <span className="text-sm text-slate-400">Customer Type</span>
                 <select
                   value={newCustomerForm.customerType}
                   onChange={(event) =>
@@ -357,7 +366,7 @@ export default function CustomersPage() {
                   <option value="CONTRACTOR">Contractor</option>
                 </select>
               </label>
-              <label className="flex items-center gap-2 rounded-lg border border-slate-100 px-3 py-2">
+              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-xl">
                 <input
                   type="checkbox"
                   checked={newCustomerForm.taxExempt}
@@ -370,10 +379,10 @@ export default function CustomersPage() {
                   }
                   className="h-4 w-4"
                 />
-                <span className="text-sm text-slate-700">Tax Exempt</span>
+                <span className="text-sm text-slate-300">Tax Exempt</span>
               </label>
               <label className="block space-y-1">
-                <span className="text-sm text-slate-600">Tax Rate</span>
+                <span className="text-sm text-slate-400">Tax Rate</span>
                 <div className="relative">
                   <input
                     type="number"
@@ -384,7 +393,7 @@ export default function CustomersPage() {
                     onChange={(event) =>
                       setNewCustomerForm((prev) => ({ ...prev, taxRate: event.target.value }))
                     }
-                    className="ios-input h-11 w-full px-3 pr-8 text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                    className="ios-input h-11 w-full px-3 pr-8 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                   <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
                     %
@@ -402,7 +411,7 @@ export default function CustomersPage() {
                 onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, notes: value }))}
               />
             </div>
-            <div className="sticky bottom-0 mt-3 flex gap-2 border-t border-slate-100 bg-white pt-3">
+            <div className="sticky bottom-0 mt-3 flex gap-2 border-t border-white/10 bg-white/5 pt-3 backdrop-blur-xl">
               <button
                 type="button"
                 onClick={() => setOpenCreateModal(false)}
@@ -415,7 +424,10 @@ export default function CustomersPage() {
                 disabled={submittingCreate}
                 className="ios-primary-btn h-10 flex-1 text-sm disabled:opacity-60"
               >
-                {submittingCreate ? "Creating..." : "Create Customer"}
+                <span className="inline-flex items-center justify-center gap-2">
+                  {submittingCreate ? <Spinner className="text-white/80" /> : null}
+                  {submittingCreate ? "Creating..." : "Create Customer"}
+                </span>
               </button>
             </div>
           </form>
@@ -435,14 +447,14 @@ function Modal({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]">
-      <div className="w-full max-w-lg rounded-lg border border-slate-200/80 bg-white p-6 shadow-md max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="so-modal-shell w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold tracking-tight text-slate-900">{title}</h3>
+          <h3 className="text-base font-semibold tracking-tight text-white">{title}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="h-10 rounded-lg px-3 text-sm text-slate-500 hover:bg-slate-100"
+            className="h-10 rounded-xl px-3 text-sm text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
           >
             Close
           </button>
@@ -466,7 +478,7 @@ function InputField({
 }) {
   return (
     <label className="block space-y-1">
-      <span className="text-sm text-slate-600">{label}</span>
+      <span className="text-sm text-slate-400">{label}</span>
       <input
         value={value}
         onChange={(event) => onChange(event.target.value)}
@@ -488,12 +500,12 @@ function TextareaField({
 }) {
   return (
     <label className="block space-y-1">
-      <span className="text-sm text-slate-600">{label}</span>
+      <span className="text-sm text-slate-400">{label}</span>
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
         rows={3}
-        className="w-full rounded-xl border border-slate-100 p-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+        className="ios-input min-h-[80px] w-full resize-y rounded-xl px-3 py-3 text-sm"
       />
     </label>
   );

@@ -1011,13 +1011,13 @@ export default function ProductDetailPage() {
 
   return (
     <section className="space-y-4">
-      <div className="linear-card flex items-start justify-between p-5">
+      <div className="glass-card flex items-start justify-between p-5">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">{productQuery.data?.name ?? "Product"}</h1>
-          <p className="mt-1 text-sm text-slate-600">
+          <h1 className="text-2xl font-semibold text-white">{productQuery.data?.name ?? "Product"}</h1>
+          <p className="mt-1 text-sm text-white/70">
             Category: {productQuery.data?.category ?? "-"} · SKU Prefix: {productQuery.data?.skuPrefix ?? "-"}
           </p>
-          <p className="mt-1 text-sm text-slate-600">
+          <p className="mt-1 text-sm text-white/70">
             Preferred Supplier: {productQuery.data?.supplier?.name ?? "-"}
           </p>
         </div>
@@ -1025,79 +1025,83 @@ export default function ProductDetailPage() {
           <button
             type="button"
             onClick={() => setShowArchived((prev) => !prev)}
-            className="ios-secondary-btn h-9 px-3 text-sm"
+            className="ios-secondary-btn h-9 px-3 text-sm font-semibold"
           >
             {showArchived ? "Hide Archived" : "Show Archived"}
           </button>
-          <button type="button" onClick={openBulkCreate} className="ios-secondary-btn h-9 px-3 text-sm">
+          <button type="button" onClick={openBulkCreate} className="ios-secondary-btn h-9 px-3 text-sm font-semibold">
             + Bulk Add Variants
           </button>
-          <button type="button" onClick={openCreateVariant} className="ios-primary-btn h-9 px-3 text-sm">
+          <button type="button" onClick={openCreateVariant} className="ios-primary-btn h-9 px-3 text-sm font-semibold">
             + Add Variant
           </button>
-          <button type="button" onClick={() => router.push("/products")} className="ios-secondary-btn h-9 px-3 text-sm">
+          <button
+            type="button"
+            onClick={() => router.push("/products")}
+            className="ios-secondary-btn h-9 px-3 text-sm font-semibold"
+          >
             Back to Products
           </button>
         </div>
       </div>
 
-      {error ? <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</div> : null}
+      {error ? (
+        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</div>
+      ) : null}
       {notice ? (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{notice}</div>
+        <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+          {notice}
+        </div>
       ) : null}
       {uploadToast ? (
-        <div className="fixed bottom-4 right-4 z-[60] rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 shadow">
+        <div className="fixed bottom-4 right-4 z-[60] rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs font-medium text-rose-200 shadow">
           {uploadToast}
         </div>
       ) : null}
       {validationWarnings.length > 0 ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Validation warnings: {validationWarnings.join(" ")}
+        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          <span className="font-medium text-white/70">Validation warnings:</span> {validationWarnings.join(" ")}
         </div>
       ) : null}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-6">
-        <article className="linear-card p-3">
-          <p className="text-[11px] text-slate-500">Total Variants</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
+        <article className="glass-card p-3">
+          <p className="text-[11px] text-white/60">Total Variants</p>
+          <p className="mt-1 text-lg font-semibold text-white/90">
             {formatQuantity(summaryStats.totalVariants)} variants
           </p>
         </article>
-        <article className="linear-card p-3">
-          <p className="text-[11px] text-slate-500">Total Stock</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">
+        <article className="glass-card p-3">
+          <p className="text-[11px] text-white/60">Total Stock</p>
+          <p className="mt-1 text-lg font-semibold text-white/90">
             {formatStockWithUnit(summaryStats.totalStock, productQuery.data?.unit)}
           </p>
         </article>
-        <article className="linear-card p-3">
-          <p className="text-[11px] text-slate-500">Total Cost Value</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">{formatMoney(summaryStats.totalCostValue)}</p>
+        <article className="glass-card p-3">
+          <p className="text-[11px] text-white/60">Total Cost Value</p>
+          <p className="mt-1 text-lg font-semibold text-white/90">{formatMoney(summaryStats.totalCostValue)}</p>
         </article>
-        <article className="linear-card p-3">
-          <p className="text-[11px] text-slate-500">Total Retail Value</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">{formatMoney(summaryStats.totalRetailValue)}</p>
+        <article className="glass-card p-3">
+          <p className="text-[11px] text-white/60">Total Retail Value</p>
+          <p className="mt-1 text-lg font-semibold text-white/90">{formatMoney(summaryStats.totalRetailValue)}</p>
         </article>
-        <article className="linear-card p-3">
-          <p className="text-[11px] text-slate-500">Avg Margin %</p>
-          <p className="mt-1 text-lg font-semibold text-slate-900">{formatPercent(summaryStats.avgMarginPct)}</p>
+        <article className="glass-card p-3">
+          <p className="text-[11px] text-white/60">Avg Margin %</p>
+          <p className="mt-1 text-lg font-semibold text-white/90">{formatPercent(summaryStats.avgMarginPct)}</p>
         </article>
         <article
           className={`p-3 ${
             summaryStats.lowStockVariants > 0
-              ? "linear-card border-amber-200 bg-amber-50/70"
-              : "linear-card"
+              ? "glass-card border-amber-400/30 bg-amber-500/10"
+              : "glass-card"
           }`}
         >
-          <p
-            className={`text-[11px] ${
-              summaryStats.lowStockVariants > 0 ? "text-amber-700" : "text-slate-500"
-            }`}
-          >
+          <p className="text-[11px] text-white/60">
             Low Stock Variants
           </p>
           <p
             className={`mt-1 text-lg font-semibold ${
-              summaryStats.lowStockVariants > 0 ? "text-amber-800" : "text-slate-900"
+              summaryStats.lowStockVariants > 0 ? "text-amber-200" : "text-white/90"
             }`}
           >
             {formatQuantity(summaryStats.lowStockVariants)} low stock
@@ -1105,11 +1109,11 @@ export default function ProductDetailPage() {
         </article>
       </div>
 
-      <div className="linear-card overflow-hidden p-0">
+      <div className="glass-card overflow-hidden p-0">
         <div className="max-h-[calc(100vh-260px)] overflow-auto">
           <Table>
-            <TableHeader className="sticky top-0 z-20 bg-white">
-              <TableRow className="bg-white shadow-[inset_0_-1px_0_0_#E5E7EB] hover:bg-white">
+            <TableHeader className="sticky top-0 z-20">
+              <TableRow className="border-b border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
                 <TableHead className="w-[64px]">Image</TableHead>
                 <TableHead>Variant Name</TableHead>
                 <TableHead>SKU</TableHead>
@@ -1126,11 +1130,11 @@ export default function ProductDetailPage() {
             <TableBody>
               {!hydrated || variantsQuery.isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center text-slate-500">Loading variants...</TableCell>
+                  <TableCell colSpan={11} className="text-center text-white/50">Loading variants...</TableCell>
                 </TableRow>
               ) : variants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center text-slate-500">No variants.</TableCell>
+                  <TableCell colSpan={11} className="text-center text-white/50">No variants.</TableCell>
                 </TableRow>
               ) : (
                 variants.map((variant) => (
@@ -1138,7 +1142,7 @@ export default function ProductDetailPage() {
                     key={variant.id}
                     role="button"
                     tabIndex={0}
-                    className="cursor-pointer hover:bg-slate-50"
+                    className="cursor-pointer border-b border-white/[0.08] transition-colors hover:bg-white/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/30"
                     onClick={() => openVariant(variant)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
@@ -1149,10 +1153,10 @@ export default function ProductDetailPage() {
                   >
                     <TableCell>
                       <label
-                        className={`relative inline-flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-slate-50 ${
+                        className={`relative inline-flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-md border bg-white/[0.04] ${
                           dragOverVariantId === variant.id
                             ? "border-sky-400 ring-2 ring-sky-300"
-                            : "border-slate-200"
+                            : "border-white/[0.10]"
                         }`}
                         onClick={(e) => e.stopPropagation()}
                         onDragEnter={(e) => {
@@ -1186,7 +1190,7 @@ export default function ProductDetailPage() {
                         {variant.imageUrl ? (
                           <img src={variant.imageUrl} alt={variant.displayName ?? variant.sku} className="h-full w-full object-cover" />
                         ) : (
-                          <Camera className="h-4 w-4 text-slate-400" />
+                          <Camera className="h-4 w-4 text-white/50" />
                         )}
                         <input
                           type="file"
@@ -1206,14 +1210,14 @@ export default function ProductDetailPage() {
                         />
                       </label>
                     </TableCell>
-                    <TableCell className="font-semibold text-slate-900">
+                    <TableCell className="font-semibold text-white/90">
                       {toVariantName(productQuery.data?.name ?? "Product", variant, productQuery.data?.category)}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <span>{variant.sku}</span>
+                        <span className="text-white/70">{variant.sku}</span>
                         {variant.archivedAt ? (
-                          <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-700">
+                          <span className="rounded border border-white/[0.10] bg-white/[0.05] px-1.5 py-0.5 text-[10px] font-medium text-white/70">
                             Archived
                           </span>
                         ) : null}
@@ -1236,10 +1240,10 @@ export default function ProductDetailPage() {
                         const stockState = getStockAlertState(variant.available, variant.reorderLevel);
                         const numberClass =
                           stockState === "LOW"
-                            ? "text-rose-700"
+                            ? "text-rose-300"
                             : stockState === "WARNING"
-                              ? "text-amber-700"
-                              : "text-slate-900";
+                              ? "text-amber-300"
+                              : "text-white/90";
                         return (
                           <div className="inline-flex flex-col items-end gap-1">
                             <span className={`font-medium ${numberClass}`}>
@@ -1249,8 +1253,8 @@ export default function ProductDetailPage() {
                               <span
                                 className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${
                                   stockState === "LOW"
-                                    ? "bg-rose-100 text-rose-700"
-                                    : "bg-amber-100 text-amber-700"
+                                    ? "border border-rose-400/30 bg-rose-500/20 text-rose-300"
+                                    : "border border-amber-400/30 bg-amber-500/20 text-amber-300"
                                 }`}
                               >
                                 {stockState}
@@ -1267,7 +1271,7 @@ export default function ProductDetailPage() {
                           e.stopPropagation();
                           openVariant(variant);
                         }}
-                        className="ios-secondary-btn h-8 px-2 text-xs"
+                        className="ios-secondary-btn h-8 px-3 text-xs font-semibold hover:bg-white/[0.08]"
                       >
                         Details
                       </button>

@@ -61,7 +61,7 @@ export default function SpecialOrdersPage() {
       <div className="linear-card overflow-hidden p-0">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+            <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
               <TableHead>Sales Order #</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Product</TableHead>
@@ -84,7 +84,7 @@ export default function SpecialOrdersPage() {
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
+                <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/10">
                   <TableCell className="font-semibold text-slate-900">{row.salesOrderNumber}</TableCell>
                   <TableCell>{row.customer}</TableCell>
                   <TableCell>{row.product}</TableCell>

@@ -69,21 +69,20 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="rounded-full p-2 text-slate-500 hover:bg-[rgba(15,23,42,0.04)] md:hidden"
+            className="rounded-full p-2 text-white/70 hover:bg-white/[0.06] md:hidden"
             onClick={onOpenSidebar}
             aria-label="Open sidebar"
           >
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="text-sm font-semibold tracking-tight text-slate-700 md:text-base">overview</h1>
+          <h1 className="text-sm font-semibold tracking-tight text-white/80 md:text-base">overview</h1>
         </div>
 
         <div className="flex items-center gap-2">
           <select
             value={role}
             onChange={(event) => setRole(event.target.value as Role)}
-            className="h-9 rounded-full border bg-white px-3 text-xs text-slate-600 outline-none transition focus:ring-2 focus:ring-slate-300/60"
-            style={{ borderColor: "var(--border)" }}
+            className="h-9 rounded-full border border-white/[0.10] bg-white/[0.05] px-3 text-xs text-white outline-none backdrop-blur-xl transition focus:ring-2 focus:ring-cyan-400/30"
           >
             <option value="ADMIN">ADMIN</option>
             <option value="SALES">SALES</option>
@@ -94,7 +93,7 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="relative rounded-full p-2 text-slate-500 hover:bg-[rgba(15,23,42,0.04)]"
+                className="relative rounded-full p-2 text-white/70 hover:bg-white/[0.06]"
                 aria-label="Notifications"
               >
                 <Bell className="h-5 w-5" />
@@ -110,37 +109,45 @@ export function TopBar({ onOpenSidebar }: TopBarProps) {
             </PopoverTrigger>
             <PopoverContent
               align="end"
-              className="w-[360px] border bg-white backdrop-blur-sm"
-              style={{ borderColor: "var(--border)", boxShadow: "var(--shadow)" }}
+              className="w-[360px] p-4"
             >
               <div className="space-y-3">
-                <h3 className="text-sm font-semibold text-slate-900">Notifications</h3>
+                <h3 className="text-sm font-semibold text-white">Notifications</h3>
                 <div className="grid grid-cols-3 gap-2 text-xs">
-                  <Link href="/products?lowStockOnly=true" className="rounded-lg bg-slate-50 px-2 py-1 text-center text-slate-700 hover:bg-slate-100">
+                  <Link
+                    href="/products?lowStockOnly=true"
+                    className="rounded-xl border border-white/[0.10] bg-white/[0.05] px-2 py-1 text-center text-white/80 transition hover:bg-white/[0.06]"
+                  >
                     Low Stock
-                    <div className="mt-0.5 font-semibold">{alerts.lowStockCount}</div>
+                    <div className="mt-0.5 font-semibold text-white">{alerts.lowStockCount}</div>
                   </Link>
-                  <Link href="/fulfillment" className="rounded-lg bg-slate-50 px-2 py-1 text-center text-slate-700 hover:bg-slate-100">
+                  <Link
+                    href="/fulfillment"
+                    className="rounded-xl border border-white/[0.10] bg-white/[0.05] px-2 py-1 text-center text-white/80 transition hover:bg-white/[0.06]"
+                  >
                     Overdue
-                    <div className="mt-0.5 font-semibold">{alerts.overdueDeliveriesCount}</div>
+                    <div className="mt-0.5 font-semibold text-white">{alerts.overdueDeliveriesCount}</div>
                   </Link>
-                  <Link href="/dashboard" className="rounded-lg bg-slate-50 px-2 py-1 text-center text-slate-700 hover:bg-slate-100">
+                  <Link
+                    href="/dashboard"
+                    className="rounded-xl border border-white/[0.10] bg-white/[0.05] px-2 py-1 text-center text-white/80 transition hover:bg-white/[0.06]"
+                  >
                     Follow-up
-                    <div className="mt-0.5 font-semibold">{alerts.specialOrdersFollowupCount}</div>
+                    <div className="mt-0.5 font-semibold text-white">{alerts.specialOrdersFollowupCount}</div>
                   </Link>
                 </div>
                 <div className="max-h-56 space-y-2 overflow-y-auto">
                   {alerts.lowStockTop.length === 0 ? (
-                    <p className="text-xs text-slate-500">No low-stock variant alerts.</p>
+                    <p className="text-xs text-white/40">No low-stock variant alerts.</p>
                   ) : (
                     alerts.lowStockTop.map((item) => (
                       <Link
                         key={item.id}
                         href="/products?lowStockOnly=true"
-                        className="block rounded-lg bg-rose-50/70 px-3 py-2 text-xs text-slate-700 hover:bg-rose-100/70"
+                        className="block rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 transition hover:bg-rose-500/20"
                       >
-                        <p className="font-semibold text-slate-900">{item.productName}</p>
-                        <p className="mt-0.5">
+                        <p className="font-semibold text-white">{item.productName}</p>
+                        <p className="mt-0.5 text-white/50">
                           SKU {item.sku} · Available {item.available} / Reorder {item.reorderLevel}
                         </p>
                       </Link>

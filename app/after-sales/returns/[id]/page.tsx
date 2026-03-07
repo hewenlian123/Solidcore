@@ -165,28 +165,28 @@ export default function AfterSalesReturnDetailPage() {
     }
   };
 
-  if (loading) return <div className="linear-card p-8 text-sm text-slate-500">Loading return...</div>;
-  if (!data) return <div className="linear-card p-8 text-sm text-slate-500">Return not found.</div>;
+  if (loading) return <div className="glass-card p-8 text-sm text-slate-400">Loading return...</div>;
+  if (!data) return <div className="glass-card p-8 text-sm text-slate-400">Return not found.</div>;
 
   return (
     <section className="space-y-6">
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
       ) : null}
 
-      <div className="linear-card p-6">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="glass-card p-6">
+        <div className="glass-card-content flex flex-wrap items-start justify-between gap-3">
           <div>
-            <Link href="/after-sales/returns" className="text-xs text-slate-500 hover:text-slate-700">
+            <Link href="/after-sales/returns" className="text-xs text-slate-400 hover:text-white">
               ← Back to Returns
             </Link>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{data.returnNumber}</h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">{data.returnNumber}</h1>
+            <p className="mt-1 text-sm text-slate-400">
               Customer: {data.customer.name} · SO: {data.salesOrder?.orderNumber ?? "-"} · Invoice: {data.invoice?.invoiceNumber ?? "-"}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{data.status}</span>
+            <span className="rounded border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-slate-300 backdrop-blur-xl">{data.status}</span>
             <button type="button" onClick={() => setOpenEdit(true)} className="ios-secondary-btn h-9 px-3 text-xs" disabled={saving}>
               Edit
             </button>
@@ -202,30 +202,33 @@ export default function AfterSalesReturnDetailPage() {
         </div>
       </div>
 
-      <div className="linear-card p-6">
+      <div className="glass-card p-6">
+        <div className="glass-card-content">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <p className="text-xs text-slate-500">Type</p>
-            <p className="text-sm font-medium text-slate-900">{data.type}</p>
+            <p className="text-xs text-slate-400">Type</p>
+            <p className="text-sm font-medium text-white">{data.type}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500">Refund Method</p>
-            <p className="text-sm font-medium text-slate-900">{data.refundMethod}</p>
+            <p className="text-xs text-slate-400">Refund Method</p>
+            <p className="text-sm font-medium text-white">{data.refundMethod}</p>
           </div>
           <div>
-            <p className="text-xs text-slate-500">Refund Total</p>
-            <p className="text-sm font-semibold text-slate-900">${Number(data.refundTotal).toFixed(2)}</p>
+            <p className="text-xs text-slate-400">Refund Total</p>
+            <p className="text-sm font-semibold text-white">${Number(data.refundTotal).toFixed(2)}</p>
           </div>
         </div>
-        <p className="mt-3 text-sm text-slate-600">{data.notes || "No notes."}</p>
+        <p className="mt-3 text-sm text-slate-300">{data.notes || "No notes."}</p>
+        </div>
       </div>
 
-      <div className="linear-card p-6">
-        <h2 className="mb-3 text-base font-semibold text-slate-900">Items</h2>
+      <div className="glass-card p-6">
+        <div className="glass-card-content">
+        <h2 className="mb-3 text-base font-semibold text-white">Items</h2>
         <div className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 text-left text-slate-500">
+              <tr className="border-b border-white/10 text-left text-slate-400">
                 <th className="py-2 pr-4">Title</th>
                 <th className="py-2 pr-4">SKU</th>
                 <th className="py-2 pr-4 text-right">Qty Purchased</th>
@@ -239,13 +242,13 @@ export default function AfterSalesReturnDetailPage() {
             <tbody>
               {data.items.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-3 text-center text-slate-500">
+                  <td colSpan={8} className="py-3 text-center text-slate-400">
                     No return items.
                   </td>
                 </tr>
               ) : (
                 data.items.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-100">
+                  <tr key={item.id} className="border-b border-white/10 text-slate-300">
                     <td className="py-2 pr-4">{item.title}</td>
                     <td className="py-2 pr-4">{item.sku || "-"}</td>
                     <td className="py-2 pr-4 text-right">{Number(item.qtyPurchased ?? 0).toFixed(2)}</td>
@@ -260,20 +263,21 @@ export default function AfterSalesReturnDetailPage() {
             </tbody>
           </table>
         </div>
+        </div>
       </div>
 
       {openEdit ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/30">
-          <div className="h-full w-full max-w-2xl overflow-y-auto bg-white p-5 shadow-xl">
+          <div className="so-modal-shell h-full w-full max-w-2xl overflow-y-auto p-5">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-900">Edit Return</h3>
+              <h3 className="text-base font-semibold text-white">Edit Return</h3>
               <button type="button" onClick={() => setOpenEdit(false)} className="ios-secondary-btn h-9 px-3 text-sm">
                 Close
               </button>
             </div>
             <form className="space-y-3" onSubmit={saveEditViaApiReturns}>
               {itemDrafts.map((item, idx) => (
-                <div key={item.id} className="rounded-lg border border-slate-100 p-3">
+                <div key={item.id} className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
                   <p className="text-xs text-slate-500">Item {idx + 1}</p>
                   <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-4">
                     <input
@@ -331,7 +335,7 @@ export default function AfterSalesReturnDetailPage() {
                   value={notesDraft}
                   onChange={(event) => setNotesDraft(event.target.value)}
                   rows={3}
-                  className="w-full rounded-xl border border-slate-100 p-3 text-sm"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white placeholder:text-white/40 backdrop-blur-xl"
                 />
               </label>
               <div className="flex justify-end gap-2">

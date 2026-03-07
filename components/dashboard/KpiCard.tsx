@@ -8,28 +8,28 @@ import { CalendarDays, DollarSign, Lock, Search } from "lucide-react";
 
 const accentMap = {
   blue: {
-    color: "#3B82F6",
-    iconBg: "linear-gradient(135deg, rgba(59,130,246,0.30), rgba(99,102,241,0.24))",
-    bg: "bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.15))]",
-    hoverGlow: "hover:shadow-[0_0_0_1px_rgba(59,130,246,0.10),0_18px_45px_rgba(59,130,246,0.10)]",
+    color: "#94a3b8",
+    iconBg: "linear-gradient(135deg, rgba(100,116,139,0.35), rgba(71,85,105,0.3))",
+    bg: "bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))]",
+    hoverGlow: "hover:shadow-[0_0_0_1px_rgba(148,163,184,0.15),0_18px_45px_rgba(0,0,0,0.25)]",
   },
   orange: {
-    color: "#F59E0B",
-    iconBg: "linear-gradient(135deg, rgba(20,184,166,0.28), rgba(45,212,191,0.22))",
-    bg: "bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.15))]",
-    hoverGlow: "hover:shadow-[0_0_0_1px_rgba(245,158,11,0.10),0_18px_45px_rgba(245,158,11,0.10)]",
+    color: "#fbbf24",
+    iconBg: "linear-gradient(135deg, rgba(148,163,184,0.3), rgba(100,116,139,0.25))",
+    bg: "bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))]",
+    hoverGlow: "hover:shadow-[0_0_0_1px_rgba(251,191,36,0.15),0_18px_45px_rgba(0,0,0,0.25)]",
   },
   green: {
-    color: "#10B981",
-    iconBg: "linear-gradient(135deg, rgba(16,185,129,0.30), rgba(52,211,153,0.24))",
-    bg: "bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.15))]",
-    hoverGlow: "hover:shadow-[0_0_0_1px_rgba(16,185,129,0.10),0_18px_45px_rgba(16,185,129,0.10)]",
+    color: "#34d399",
+    iconBg: "linear-gradient(135deg, rgba(100,116,139,0.35), rgba(71,85,105,0.3))",
+    bg: "bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))]",
+    hoverGlow: "hover:shadow-[0_0_0_1px_rgba(52,211,153,0.15),0_18px_45px_rgba(0,0,0,0.25)]",
   },
   amber: {
-    color: "#D97706",
-    iconBg: "linear-gradient(135deg, rgba(37,99,235,0.28), rgba(14,165,233,0.24))",
-    bg: "bg-[linear-gradient(180deg,rgba(255,255,255,0.55),rgba(255,255,255,0.15))]",
-    hoverGlow: "hover:shadow-[0_0_0_1px_rgba(217,119,6,0.10),0_18px_45px_rgba(217,119,6,0.10)]",
+    color: "#f59e0b",
+    iconBg: "linear-gradient(135deg, rgba(148,163,184,0.3), rgba(100,116,139,0.25))",
+    bg: "bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02))]",
+    hoverGlow: "hover:shadow-[0_0_0_1px_rgba(245,158,11,0.15),0_18px_45px_rgba(0,0,0,0.25)]",
   },
 };
 
@@ -63,12 +63,12 @@ export function KpiCard({ item }: { item: KpiItem }) {
           : Lock;
   const iconColor =
     item.title === "Today Sales"
-      ? "#2563EB"
+      ? "#94a3b8"
       : item.title === "Orders Today"
-        ? "#0D9488"
+        ? "#94a3b8"
         : item.title === "Payments Collected"
-          ? "#16A34A"
-          : "#2563EB";
+          ? "#34d399"
+          : "#94a3b8";
 
   useEffect(() => {
     if (!parsed) {
@@ -102,15 +102,15 @@ export function KpiCard({ item }: { item: KpiItem }) {
     >
       <div className="glass-card-content flex items-start justify-between gap-3">
         <div className="min-h-[88px]">
-          <p className="text-[12px] font-medium text-slate-500">{item.title}</p>
-          <p className="mt-2.5 text-[31px] font-semibold leading-none tracking-tight text-slate-900">{displayValue}</p>
-          <p className={`mt-2 text-[12px] font-semibold ${item.positive ? "text-emerald-600" : "text-rose-600"}`}>
-            {item.delta} <span className="font-medium text-slate-500">vs yesterday</span>
+          <p className="text-[12px] font-medium txt-muted">{item.title}</p>
+          <p className="mt-2.5 text-[31px] font-semibold leading-none tracking-tight text-white">{displayValue}</p>
+          <p className={`mt-2 text-[12px] font-semibold ${item.positive ? "text-emerald-400" : "text-rose-400"}`}>
+            {item.delta} <span className="font-medium txt-disabled">vs yesterday</span>
           </p>
         </div>
 
         <span
-          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/70 text-slate-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 text-white/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
           style={{ background: accent.iconBg }}
         >
           <Icon className="h-4 w-4" style={{ color: iconColor }} />
@@ -118,7 +118,7 @@ export function KpiCard({ item }: { item: KpiItem }) {
       </div>
 
       {item.sparkline ? (
-        <div className="glass-card-content mt-2 h-14 w-full rounded-xl bg-white/55 px-2 py-1.5">
+        <div className="glass-card-content mt-2 h-14 w-full rounded-xl bg-white/[0.05] px-2 py-1.5 border border-white/[0.06]">
           <SparklineAnimated
             id={item.title.replace(/\s+/g, "-").toLowerCase()}
             values={item.sparkline}
@@ -135,7 +135,7 @@ export function KpiCard({ item }: { item: KpiItem }) {
         </div>
       ) : null}
 
-      {item.warning ? <p className="glass-card-content mt-3 border-t border-amber-200 border-dashed pt-2 text-xs font-medium text-amber-700">{item.warning}</p> : null}
+      {item.warning ? <p className="glass-card-content mt-3 border-t border-amber-500/30 border-dashed pt-2 text-xs font-medium text-amber-400">{item.warning}</p> : null}
     </article>
   );
 }

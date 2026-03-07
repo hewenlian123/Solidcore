@@ -707,7 +707,9 @@ model SalesOrder {
   deliveryNotes   String?           @map("delivery_notes")
   pickupNotes     String?           @map("pickup_notes")
   requestedDeliveryAt DateTime?     @map("requested_delivery_at")
+  orderDate           DateTime?     @map("order_date")
   reservedAppliedAt DateTime?       @map("reserved_applied_at")
+  timeWindow         String?        @map("time_window")
   reservedReleasedAt DateTime?      @map("reserved_released_at")
   notes           String?
   createdAt       DateTime          @default(now()) @map("created_at")

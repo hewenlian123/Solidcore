@@ -25,8 +25,8 @@ export function TopProductsCard({ rows }: { rows: TopProductRow[] }) {
   return (
     <article className="glass-card glass-card-moderate px-5 py-5">
       <div className="glass-card-content mb-4 flex items-center justify-between">
-        <h3 className="text-[19px] font-semibold text-slate-900">Top Products</h3>
-        <button type="button" className="text-xs font-medium text-blue-600 hover:text-blue-700">
+        <h3 className="text-[19px] font-semibold text-white">Top Products</h3>
+        <button type="button" className="text-xs font-medium text-slate-400 hover:text-white">
           View All
         </button>
       </div>
@@ -39,17 +39,17 @@ export function TopProductsCard({ rows }: { rows: TopProductRow[] }) {
           <span />
         </div>
         {rows.map((row) => (
-          <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_86px_100px_62px] items-center gap-2 rounded-2xl border border-slate-100 bg-white px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.6)]">
+          <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_86px_100px_62px] items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
             <div className="flex min-w-0 items-center gap-3">
-              <img src={thumbSrc(`${row.name}-${row.sku}`)} alt={row.name} className="h-11 w-11 rounded-xl object-cover" />
+              <img src={thumbSrc(`${row.name}-${row.sku}`)} alt={row.name} className="h-11 w-11 rounded-xl object-cover ring-1 ring-white/10" />
               <div className="min-w-0">
-                <p className="truncate text-[13px] font-medium text-slate-900">{row.name}</p>
+                <p className="truncate text-[13px] font-medium text-white">{row.name}</p>
                 <p className="text-xs text-slate-500">SKU {row.sku}</p>
               </div>
             </div>
             <div className="text-right text-xs text-slate-500">Sales {row.sales.toLocaleString("en-US")}</div>
-            <div className="text-right text-[13px] font-semibold text-slate-900">{formatCurrency(row.revenue)}</div>
-            <span className="ml-2 inline-flex items-center justify-end gap-1 text-xs font-medium text-emerald-600">
+            <div className="text-right text-[13px] font-semibold text-white">{formatCurrency(row.revenue)}</div>
+            <span className="ml-2 inline-flex items-center justify-end gap-1 text-xs font-medium text-emerald-400">
               <Check className="h-3.5 w-3.5" />
               <ArrowUpRight className="h-3.5 w-3.5" />
               {row.trend}

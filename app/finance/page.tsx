@@ -59,9 +59,9 @@ export default function FinancePage() {
 
   return (
     <section className="space-y-8">
-      <div className="linear-card p-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Financial Summary</h1>
-        <p className="mt-2 text-sm text-slate-500">Monthly P&L, aging analysis, and cashflow overview.</p>
+      <div className="glass-card p-8">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">Financial Summary</h1>
+        <p className="mt-2 text-sm txt-secondary">Monthly P&L, aging analysis, and cashflow overview.</p>
       </div>
 
       {loading ? (
@@ -73,7 +73,7 @@ export default function FinancePage() {
       ) : null}
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
       ) : null}
 
       {data ? (
@@ -85,32 +85,43 @@ export default function FinancePage() {
             <MetricCard title="Net Profit" value={data.pnl.netProfit} tone={data.pnl.netProfit >= 0 ? "green" : "rose"} />
           </div>
 
-          <article className="linear-card p-8">
-            <h2 className="text-base font-semibold text-slate-900">12 -month cashflow comparison</h2>
+          <article className="glass-card p-8">
+            <h2 className="text-base font-semibold text-white">12-month cashflow comparison</h2>
             <div className="mt-4 h-[320px]">
               {mounted ? (
                 <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
                   <BarChart data={data.cashflow}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-                    <XAxis dataKey="month" tick={{ fill: "#64748B", fontSize: 11 }} />
-                    <YAxis tick={{ fill: "#64748B", fontSize: 11 }} />
-                    <Tooltip />
-                    <Bar dataKey="income" fill="#1E293B" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="expense" fill="#64748B" radius={[6, 6, 0, 0]} />
+                    <CartesianGrid strokeDasharray="4 4" stroke="rgba(255,255,255,0.06)" vertical={false} />
+                    <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                    <YAxis tickLine={false} axisLine={false} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />
+                    <Tooltip
+                      cursor={{ fill: "rgba(255,255,255,0.04)" }}
+                      contentStyle={{
+                        background: "linear-gradient(to bottom, rgba(255,255,255,0.10), rgba(255,255,255,0.03))",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                        borderRadius: 16,
+                        color: "rgba(255,255,255,0.90)",
+                        backdropFilter: "blur(16px)",
+                      }}
+                      labelStyle={{ color: "rgba(255,255,255,0.70)" }}
+                      itemStyle={{ color: "rgba(255,255,255,0.85)" }}
+                    />
+                    <Bar dataKey="income" fill="rgba(6,182,212,0.60)" radius={[8, 8, 0, 0]} />
+                    <Bar dataKey="expense" fill="rgba(99,102,241,0.50)" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="h-full w-full rounded-lg bg-slate-50" />
+                <div className="h-full w-full rounded-xl border border-white/10 bg-white/[0.05] backdrop-blur-xl" />
               )}
             </div>
           </article>
 
-          <article className="linear-card p-8">
-            <h2 className="text-base font-semibold text-slate-900">Unpaid Balance (Aging)</h2>
-            <div className="mt-3 overflow-hidden rounded-xl bg-white">
+          <article className="glass-card p-8">
+            <h2 className="text-base font-semibold text-white">Unpaid Balance (Aging)</h2>
+            <div className="glass-card mt-3 overflow-hidden p-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+                  <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
                     <TableHead>Order #</TableHead>
                     <TableHead>Customer</TableHead>
                     <TableHead>Unpaid</TableHead>
@@ -129,13 +140,17 @@ export default function FinancePage() {
                     </TableRow>
                   ) : (
                     data.receivables.map((row) => (
-                      <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
-                        <TableCell className="font-semibold text-slate-900">{row.orderNo}</TableCell>
-                        <TableCell>{row.customer.name}</TableCell>
-                        <TableCell className="font-semibold text-slate-900">${row.unpaid.toFixed(2)}</TableCell>
+                      <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/[0.06]">
+                        <TableCell className="font-semibold text-white">{row.orderNo}</TableCell>
+                        <TableCell className="txt-secondary">{row.customer.name}</TableCell>
+                        <TableCell className="font-semibold text-white">${row.unpaid.toFixed(2)}</TableCell>
                         <TableCell>
                           <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                            row.agingDays > 60 ? "bg-rose-100 text-rose-800" : row.agingDays > 30 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"
+                            row.agingDays > 60
+                              ? "bg-rose-500/20 text-rose-300 border border-rose-400/30"
+                              : row.agingDays > 30
+                                ? "bg-amber-500/20 text-amber-300 border border-amber-400/30"
+                                : "bg-white/[0.05] text-white/70 border border-white/[0.10]"
                           }`}>
                             {row.agingDays} days
                           </span>
@@ -162,10 +177,10 @@ function MetricCard({
   value: number;
   tone?: "slate" | "green" | "rose";
 }) {
-  const cls = tone === "green" ? "text-emerald-700" : tone === "rose" ? "text-rose-700" : "text-slate-900";
+  const cls = tone === "green" ? "text-emerald-300" : tone === "rose" ? "text-rose-300" : "text-white";
   return (
-    <article className="linear-card p-8">
-      <p className="text-xs text-slate-400">{title.toLowerCase()}</p>
+    <article className="glass-card p-8">
+      <p className="text-xs txt-muted">{title.toLowerCase()}</p>
       <p className={`mt-2 text-2xl font-semibold tracking-tight ${cls}`}>${value.toFixed(2)}</p>
     </article>
   );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { syncSalesOutboundQueue } from "@/lib/sales-orders";
+import { syncSalesOutboundQueue, syncSalesOrderFulfillmentFromFulfillment } from "@/lib/sales-orders";
+import { deductInventoryForFulfillment, InventoryDeductionError, isFinalFulfillmentStatus } from "@/lib/fulfillment-inventory";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = {
@@ -66,10 +67,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       const isCanceled = fulfillment.status === "CANCELLED";
       if (!isCanceled) {
         if (allCompleted && fulfillment.status !== "COMPLETED") {
-          await tx.salesOrderFulfillment.update({
+          const updatedFulfillment = await tx.salesOrderFulfillment.update({
             where: { id: fulfillment.id },
             data: { status: "COMPLETED" },
           });
+          if (isFinalFulfillmentStatus(updatedFulfillment.status)) {
+            await deductInventoryForFulfillment(tx, { fulfillmentId: fulfillment.id, operator: role });
+          }
+          await syncSalesOrderFulfillmentFromFulfillment(tx, fulfillment.id);
         } else if (anyShort && anyFulfilled && fulfillment.status !== "PARTIAL") {
           await tx.salesOrderFulfillment.update({
             where: { id: fulfillment.id },
@@ -84,6 +89,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
     return NextResponse.json({ data: updated }, { status: 200 });
   } catch (error) {
+    if (error instanceof InventoryDeductionError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     if (error instanceof Error && error.message === "FULFILLMENT_ITEM_NOT_FOUND") {
       return NextResponse.json({ error: "Fulfillment item not found." }, { status: 404 });
     }

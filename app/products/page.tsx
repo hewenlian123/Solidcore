@@ -24,6 +24,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TableSkeletonRows } from "@/components/ui/table-skeleton";
+import { PageHeader } from "@/components/ui/page-header";
+import { Spinner } from "@/components/ui/spinner";
 
 type Warehouse = {
   id: string;
@@ -1826,8 +1829,10 @@ function ProductsPageContent() {
   if (!mounted) {
     return (
       <section className="mx-auto max-w-[1320px]">
-        <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-          <p className="text-sm text-slate-500">Loading product management...</p>
+        <div className="glass-card p-5">
+          <div className="glass-card-content">
+            <p className="text-sm text-white/50">Loading product management...</p>
+          </div>
         </div>
       </section>
     );
@@ -1835,12 +1840,13 @@ function ProductsPageContent() {
 
   return (
     <section className="mx-auto max-w-[1320px] space-y-4">
-      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-5 py-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900">Product Management</h1>
-          <p className="text-sm text-slate-500">Enterprise product master, pricing, and stock visibility.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="glass-card p-5">
+        <div className="glass-card-content">
+          <PageHeader
+            title="Product Management"
+            subtitle="Enterprise product master, pricing, and stock visibility."
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={runBatchGenerateSku}
@@ -1888,19 +1894,22 @@ function ProductsPageContent() {
             <Plus className="h-4 w-4" />
             Add Product
           </button>
+              </div>
+            }
+          />
         </div>
       </div>
 
-      <div className="linear-card p-0">
-        <div className="space-y-2 px-4 py-3">
+      <div className="glass-card p-0">
+        <div className="glass-card-content space-y-2 px-4 py-3">
           {searchParams?.get("category") ? (
             <div>
-              <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+              <span className="so-chip inline-flex items-center gap-2 rounded-full">
                 Category: {category}
                 <button
                   type="button"
                   onClick={clearCategoryFilterParam}
-                  className="rounded-full px-1 text-slate-500 transition hover:bg-slate-200 hover:text-slate-700"
+                  className="rounded-full px-1 text-white/60 transition hover:bg-white/[0.06] hover:text-white"
                   aria-label="Clear category filter"
                 >
                   x
@@ -1920,9 +1929,7 @@ function ProductsPageContent() {
                     if (item.value !== "OTHER") setCustomCategoryFilter("ALL");
                   }}
                   className={`h-8 rounded-full px-3 text-xs transition ${
-                    category === item.value
-                      ? "bg-slate-800 font-semibold text-white"
-                      : "bg-slate-100 font-medium text-slate-600 hover:bg-slate-200"
+                    category === item.value ? "so-chip-active" : "so-chip"
                   }`}
                 >
                   {item.label}
@@ -1942,8 +1949,8 @@ function ProductsPageContent() {
                 onClick={() => setLowStockFilter(lowStockOnly ? "all" : "low")}
                 className={`inline-flex h-8 shrink-0 items-center rounded-full px-3 text-xs font-medium transition ${
                   lowStockOnly
-                    ? "border border-rose-200 bg-rose-50 text-rose-700"
-                    : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    ? "border border-rose-400/30 bg-rose-500/15 text-rose-200 backdrop-blur-xl"
+                    : "so-chip"
                 }`}
               >
                 Low Stock
@@ -1965,12 +1972,12 @@ function ProductsPageContent() {
           </div>
 
           {openAdvancedFilters ? (
-            <div className="relative rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2">
+            <div className="relative rounded-xl border border-white/[0.10] bg-white/[0.05] px-3 py-2 backdrop-blur-xl">
               <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={groupFilter}
                   onChange={(e) => setGroupFilter(e.target.value)}
-                  className="ios-input h-8 min-w-[190px] bg-white px-3 text-sm"
+                  className="ios-input h-8 min-w-[190px] px-3 text-sm"
                 >
                   <option value="ALL">All Groups</option>
                   {(groupsQuery.data ?? []).map((group) => (
@@ -1986,7 +1993,7 @@ function ProductsPageContent() {
                     setCustomCategoryFilter(next);
                     if (next !== "ALL") setCategory("OTHER");
                   }}
-                  className="ios-input h-8 min-w-[220px] bg-white px-3 text-sm"
+                  className="ios-input h-8 min-w-[220px] px-3 text-sm"
                 >
                   <option value="ALL">All Custom Categories</option>
                   {customCategoryOptions.map((name) => (
@@ -2004,7 +2011,7 @@ function ProductsPageContent() {
                     Optional Columns ({optionalColumnCount})
                   </button>
                   {openColumnMenu ? (
-                    <div className="absolute right-0 z-20 mt-1 min-w-[220px] rounded-lg border border-slate-200 bg-white p-2 shadow">
+                    <div className="absolute right-0 z-20 mt-1 min-w-[220px] rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-2 shadow-[0_10px_40px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
                       {(
                         [
                           ["group", "Group"],
@@ -2016,7 +2023,7 @@ function ProductsPageContent() {
                           ["gallery", "Gallery"],
                         ] as const
                       ).map(([key, label]) => (
-                        <label key={key} className="flex items-center gap-2 px-2 py-1.5 text-sm text-slate-700">
+                        <label key={key} className="flex items-center gap-2 px-2 py-1.5 text-sm text-white/80">
                           <input
                             type="checkbox"
                             checked={showOptionalColumns[key]}
@@ -2039,13 +2046,13 @@ function ProductsPageContent() {
         </div>
 
         {selectedProductIds.length > 0 ? (
-          <div className="sticky top-0 z-10 border-y border-slate-200 bg-white/95 px-4 py-2 backdrop-blur-sm">
+          <div className="sticky top-0 z-10 border-y border-white/[0.10] bg-white/[0.04] px-4 py-2 backdrop-blur-2xl">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-slate-700">{selectedProductIds.length} selected</span>
+              <span className="text-sm font-medium text-white/80">{selectedProductIds.length} selected</span>
               <select
                 value={bulkCategory}
                 onChange={(e) => setBulkCategory(e.target.value)}
-                className="ios-input h-8 min-w-[210px] bg-white px-3 text-sm"
+                className="ios-input h-8 min-w-[210px] px-3 text-sm"
               >
                 {BULK_CATEGORY_OPTIONS.map((item) => (
                   <option key={item} value={item}>
@@ -2073,27 +2080,29 @@ function ProductsPageContent() {
         ) : null}
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+          {error}
+        </div>
       ) : null}
       {notice ? (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+        <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
           {notice}
         </div>
       ) : null}
       {validationWarnings.length > 0 ? (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           <p className="font-medium">Validation warnings</p>
           <p className="mt-1">{validationWarnings.join(" ")}</p>
         </div>
       ) : null}
 
-        <div className="border-t border-slate-100">
+        <div className="glass-card overflow-hidden p-0">
         <div className="hidden md:block">
           <div className="max-h-[calc(100vh-320px)] overflow-auto">
             <Table>
-              <TableHeader className="sticky top-0 z-20 bg-white">
-                <TableRow className="bg-white shadow-[inset_0_-1px_0_0_#E5E7EB] hover:bg-white">
-                  <TableHead className="w-12 bg-white">
+              <TableHeader className="sticky top-0 z-20">
+                <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
+                  <TableHead className="w-12">
                     <input
                       type="checkbox"
                       checked={allVisibleSelected}
@@ -2101,32 +2110,28 @@ function ProductsPageContent() {
                       aria-label="Select all visible products"
                     />
                   </TableHead>
-                  <TableHead className="bg-white">Product Name</TableHead>
-                  <TableHead className="bg-white">Category</TableHead>
-                  {showOptionalColumns.group ? <TableHead className="bg-white">Group</TableHead> : null}
-                  {showOptionalColumns.specification ? <TableHead className="bg-white">Specification</TableHead> : null}
-                  {showOptionalColumns.unit ? <TableHead className="bg-white">Unit</TableHead> : null}
-                  <TableHead className="bg-white text-right">Variants</TableHead>
-                  <TableHead className="bg-white text-right">Price Range</TableHead>
-                  {showOptionalColumns.onHand ? <TableHead className="bg-white text-right">On Hand</TableHead> : null}
-                  {showOptionalColumns.reserved ? <TableHead className="bg-white text-right">Reserved</TableHead> : null}
-                  <TableHead className="bg-white text-right">Available</TableHead>
-                  <TableHead className="bg-white">Warehouse</TableHead>
-                  {showOptionalColumns.supplier ? <TableHead className="bg-white">Preferred Supplier</TableHead> : null}
-                  {showOptionalColumns.gallery ? <TableHead className="bg-white">Gallery</TableHead> : null}
-                  <TableHead className="bg-white text-right">Actions</TableHead>
+                  <TableHead>Product Name</TableHead>
+                  <TableHead>Category</TableHead>
+                  {showOptionalColumns.group ? <TableHead>Group</TableHead> : null}
+                  {showOptionalColumns.specification ? <TableHead>Specification</TableHead> : null}
+                  {showOptionalColumns.unit ? <TableHead>Unit</TableHead> : null}
+                  <TableHead className="text-right">Variants</TableHead>
+                  <TableHead className="text-right">Price Range</TableHead>
+                  {showOptionalColumns.onHand ? <TableHead className="text-right">On Hand</TableHead> : null}
+                  {showOptionalColumns.reserved ? <TableHead className="text-right">Reserved</TableHead> : null}
+                  <TableHead className="text-right">Available</TableHead>
+                  <TableHead>Warehouse</TableHead>
+                  {showOptionalColumns.supplier ? <TableHead>Preferred Supplier</TableHead> : null}
+                  {showOptionalColumns.gallery ? <TableHead>Gallery</TableHead> : null}
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {productsQuery.isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7 + optionalColumnCount} className="text-center text-slate-500">
-                      Loading product data...
-                    </TableCell>
-                  </TableRow>
+                  <TableSkeletonRows columns={7 + optionalColumnCount} rows={10} rowClassName="border-white/10" />
                 ) : filteredRows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7 + optionalColumnCount} className="text-center text-slate-500">
+                    <TableCell colSpan={7 + optionalColumnCount} className="text-center text-white/50">
                       No products yet
                     </TableCell>
                   </TableRow>
@@ -2138,7 +2143,7 @@ function ProductsPageContent() {
                         key={product.id}
                         role="button"
                         tabIndex={0}
-                        className={`group h-12 cursor-pointer border-b border-slate-200/80 odd:bg-white even:bg-slate-50/50 transition-colors duration-150 hover:bg-slate-100/80 ${
+                        className={`group h-12 cursor-pointer border-white/10 txt-secondary transition-colors duration-150 hover:bg-white/[0.06] ${
                           highlightId === product.id ? "ring-2 ring-[#164E63]/30" : ""
                         }`}
                         onClick={() => {
@@ -2160,11 +2165,11 @@ function ProductsPageContent() {
                             aria-label={`Select ${product.name}`}
                           />
                         </TableCell>
-                        <TableCell className="font-semibold text-slate-900">
+                        <TableCell className="font-semibold text-white">
                           <div className="flex items-center gap-2">
                             <span>{product.name}</span>
                             {product.hasLowStock ? (
-                              <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                              <span className="rounded border border-rose-400/30 bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-200">
                                 LOW STOCK
                               </span>
                             ) : null}
@@ -2176,10 +2181,10 @@ function ProductsPageContent() {
                         {showOptionalColumns.unit ? (
                           <TableCell>{UNIT_LABEL_MAP[product.unit] ?? product.unit}</TableCell>
                         ) : null}
-                        <TableCell className="text-right font-semibold text-slate-900">
+                        <TableCell className="text-right font-semibold text-white">
                           {Number(product.variantCount ?? product.variants?.length ?? 0)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold text-slate-900">
+                        <TableCell className="text-right font-semibold text-white">
                           {product.priceMin != null && product.priceMax != null
                             ? product.priceMin === product.priceMax
                               ? `$${Number(product.priceMin).toFixed(2)}`
@@ -2201,8 +2206,8 @@ function ProductsPageContent() {
                         <TableCell
                           className={`text-right ${
                             Number(product.totalAvailable ?? product.stockSummary?.available ?? 0) <= 0
-                              ? "font-semibold text-rose-600"
-                              : "font-semibold text-emerald-700"
+                              ? "font-semibold text-rose-300"
+                              : "font-semibold text-emerald-300"
                           }`}
                         >
                           {formatStockByProductUnit(
@@ -2273,16 +2278,16 @@ function ProductsPageContent() {
                                 e.stopPropagation();
                                 void deleteProduct(product);
                               }}
-                              className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 opacity-0 transition hover:bg-rose-50 hover:text-rose-700 group-hover:opacity-100 disabled:opacity-40"
+                              className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-white/50 opacity-0 transition hover:bg-rose-500/20 hover:text-rose-300 group-hover:opacity-100 disabled:opacity-40"
                             >
                               {deletingProductId === product.id ? (
-                                <span className="text-[11px] font-medium">...</span>
+                                <Spinner className="h-4 w-4 text-rose-300" />
                               ) : (
                                 <Trash2 className="h-4 w-4" />
                               )}
                             </button>
                             <span
-                              className="ml-1 inline-flex items-center text-slate-400 opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
+                              className="ml-1 inline-flex items-center text-white/40 opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
                               aria-hidden="true"
                             >
                               <ChevronRight className="h-4 w-4" />
@@ -2315,24 +2320,24 @@ function ProductsPageContent() {
                     router.push(`/products/${product.id}`);
                   }
                 }}
-                className={`rounded-xl border border-slate-100 bg-white p-3 transition-colors duration-150 hover:bg-slate-50 ${
-                  highlightId === product.id ? "ring-2 ring-[#164E63]/30" : ""
+                className={`glass-card p-3 ${
+                  highlightId === product.id ? "ring-2 ring-cyan-400/30" : ""
                 }`}
               >
-                <div className="flex items-start justify-between">
-                  <h3 className="text-base font-semibold text-slate-900">
+                <div className="glass-card-content flex items-start justify-between">
+                  <h3 className="text-base font-semibold text-white">
                     {product.name}
                     {product.hasLowStock ? (
-                      <span className="ml-2 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                      <span className="ml-2 rounded border border-rose-400/30 bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-200">
                         LOW STOCK
                       </span>
                     ) : null}
                   </h3>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-white/50">
                     {getCategoryLabel(product)}
                   </span>
                 </div>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-1 text-sm text-white/70">
                   Variants: {Number(product.variantCount ?? product.variants?.length ?? 0)} · Price:{" "}
                   {product.priceMin != null && product.priceMax != null
                     ? product.priceMin === product.priceMax
@@ -2342,7 +2347,7 @@ function ProductsPageContent() {
                       ? "Spec Confirmed"
                       : `$${Number(product.salePrice).toFixed(2)}`}
                 </p>
-                <p className="mt-1 text-sm text-slate-600">
+                <p className="mt-1 text-sm text-white/70">
                   Stock: On Hand {formatStockByProductUnit(Number(product.stockSummary?.onHand ?? 0), product.unit)} /
                   Reserved {formatStockByProductUnit(Number(product.stockSummary?.reserved ?? 0), product.unit)} /
                   Available{" "}
@@ -2351,9 +2356,9 @@ function ProductsPageContent() {
                     product.unit,
                   )}
                 </p>
-                <p className="mt-1 text-sm text-slate-600">Warehouse: {product.warehouse?.name ?? "-"}</p>
+                <p className="mt-1 text-sm text-white/70">Warehouse: {product.warehouse?.name ?? "-"}</p>
                 {showOptionalColumns.supplier ? (
-                  <p className="mt-1 text-sm text-slate-600">Supplier: {product.supplier?.name ?? "-"}</p>
+                  <p className="mt-1 text-sm text-white/70">Supplier: {product.supplier?.name ?? "-"}</p>
                 ) : null}
                 {(product.category === "FLOOR" || product.category === "DOOR") && (
                   <div className="mt-2 flex items-center gap-2">
@@ -2406,10 +2411,10 @@ function ProductsPageContent() {
                         e.stopPropagation();
                         void deleteProduct(product);
                       }}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-700 disabled:opacity-40"
+                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-white/50 transition hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
                     >
                       {deletingProductId === product.id ? (
-                        <span className="text-[11px] font-medium">...</span>
+                        <Spinner className="h-4 w-4 text-rose-300" />
                       ) : (
                         <Trash2 className="h-4 w-4" />
                       )}
@@ -2438,7 +2443,7 @@ function ProductsPageContent() {
           maxWidthClass="max-w-4xl"
         >
           <form className="space-y-5" onSubmit={onCreateProduct}>
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-slate-400">
               {editingProductId
                 ? "Update product details, pricing, stock baseline, and mappings."
                 : "Build product and variants in a compact two-step flow."}
@@ -2446,12 +2451,14 @@ function ProductsPageContent() {
 
             {true ? (
               <>
-                <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                <div className="inline-flex rounded-xl border border-white/[0.12] bg-white/[0.05] p-1 backdrop-blur-xl">
                   <button
                     type="button"
                     onClick={() => setAddProductTab("GENERAL")}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                      addProductTab === "GENERAL" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                      addProductTab === "GENERAL"
+                        ? "bg-white/[0.10] text-white"
+                        : "text-white/70 hover:bg-white/[0.06] hover:text-white"
                     }`}
                   >
                     General
@@ -2459,8 +2466,10 @@ function ProductsPageContent() {
                   <button
                     type="button"
                     onClick={() => setAddProductTab("VARIANTS")}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                      addProductTab === "VARIANTS" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+                    className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
+                      addProductTab === "VARIANTS"
+                        ? "bg-white/[0.10] text-white"
+                        : "text-white/70 hover:bg-white/[0.06] hover:text-white"
                     }`}
                   >
                     Variants & Inventory
@@ -2468,8 +2477,8 @@ function ProductsPageContent() {
                 </div>
 
                 {addProductTab === "GENERAL" ? (
-                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-                    <h4 className="text-sm font-semibold text-slate-900">General</h4>
+                  <div className="glass-card-soft p-4">
+                    <h4 className="text-sm font-semibold text-white">General</h4>
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                       <InputField
                         label="Product Name"
@@ -2478,11 +2487,11 @@ function ProductsPageContent() {
                         required
                       />
                       <div className="space-y-2">
-                        <span className="text-sm text-slate-600">Category</span>
+                        <span className="text-sm text-slate-300">Category</span>
                         <select
                           value={customCategorySelectValue}
                           onChange={(event) => handleCategorySelectChange(event.target.value)}
-                          className="ios-input h-12 w-full bg-white px-3 text-sm"
+                          className="ios-input h-12 w-full px-3 text-sm"
                         >
                           {(templatesQuery.data ?? []).map((item) => (
                             <option key={item.id} value={item.categoryKey}>
@@ -2531,7 +2540,7 @@ function ProductsPageContent() {
                           placeholder="VWW"
                           required={newProductForm.category === "WINDOW"}
                         />
-                        <p className="text-xs text-slate-500">
+                        <p className="text-xs text-slate-400">
                           Used to auto-generate variant SKU. Example: VWW3636B. No hyphen.
                         </p>
                       </div>
@@ -2620,9 +2629,9 @@ function ProductsPageContent() {
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                  <div className="glass-card-soft p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h4 className="text-sm font-semibold text-slate-900">Variants & Inventory</h4>
+                      <h4 className="text-sm font-semibold text-white">Variants & Inventory</h4>
                       <div className="inline-flex items-center gap-2">
                         <button type="button" onClick={bulkAddVariantRows} className="ios-secondary-btn h-9 px-3 text-xs">
                           Bulk Add 3
@@ -2632,55 +2641,55 @@ function ProductsPageContent() {
                         </button>
                       </div>
                     </div>
-                    <div className="relative mt-3 rounded-lg border border-slate-200 bg-white">
+                    <div className="relative mt-3 rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl">
                       <div
                         ref={variantsScrollRef}
                         className="scroll-x w-full overflow-x-auto overflow-y-hidden [webkit-overflow-scrolling:touch]"
                       >
                       <table className="w-full min-w-[1460px] table-fixed border-collapse text-sm">
-                        <thead className="bg-slate-50">
+                        <thead className="bg-white/[0.06]">
                           <tr>
-                            <th className="sticky top-0 z-20 w-[280px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                            <th className="sticky top-0 z-20 w-[280px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
                               {newProductForm.category === "FLOOR" ? "Display Name *" : "Variant Title"}
                             </th>
                             {newProductForm.category === "FLOOR" ? (
                               <>
-                                <th className="sticky top-0 z-20 w-[120px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                                <th className="sticky top-0 z-20 w-[120px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
                                   SKU Prefix
                                 </th>
-                                <th className="sticky top-0 z-20 w-[160px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                                <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
                                   SKU Suffix *
                                 </th>
                               </>
                             ) : (
                               <>
-                                <th className="sticky top-0 z-20 w-[160px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                                <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
                                   Size (WxH)
                                 </th>
-                                <th className="sticky top-0 z-20 w-[160px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                                <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
                                   Color
                                 </th>
                               </>
                             )}
-                            <th className="sticky top-0 z-20 w-[160px] bg-white px-3 py-2 text-left font-medium text-slate-600">
+                            <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
                               {newProductForm.category === "FLOOR" ? "Effective SKU" : "SKU"}
                             </th>
-                            <th className="sticky top-0 z-20 w-[140px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                            <th className="sticky top-0 z-20 w-[140px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
                               Sale Price
                             </th>
-                            <th className="sticky top-0 z-20 w-[140px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                            <th className="sticky top-0 z-20 w-[140px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
                               Cost
                             </th>
-                            <th className="sticky top-0 z-20 w-[160px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                            <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
                               {newProductForm.category === "FLOOR" ? "Boxes On Hand" : "Opening Stock"}
                             </th>
-                            <th className="sticky top-0 z-20 w-[140px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                            <th className="sticky top-0 z-20 w-[140px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
                               Reorder Level
                             </th>
-                            <th className="sticky top-0 z-20 w-[150px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                            <th className="sticky top-0 z-20 w-[150px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
                               Available
                             </th>
-                            <th className="sticky top-0 z-20 w-[120px] bg-white px-3 py-2 text-right font-medium text-slate-600">
+                            <th className="sticky top-0 z-20 w-[120px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
                               Actions
                             </th>
                           </tr>

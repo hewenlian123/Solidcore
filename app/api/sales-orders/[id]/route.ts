@@ -328,6 +328,19 @@ export async function PATCH(request: NextRequest, { params }: Params) {
                 ? new Date(payload.requestedDeliveryAt)
                 : null
               : undefined,
+          orderDate:
+            payload.orderDate !== undefined
+              ? payload.orderDate
+                ? new Date(payload.orderDate)
+                : null
+              : undefined,
+          timeWindow:
+            payload.timeWindow !== undefined
+              ? (() => {
+                  const v = String(payload.timeWindow ?? "").trim();
+                  return v.length > 0 ? v : null;
+                })()
+              : undefined,
           salespersonName:
             payload.salespersonName !== undefined
               ? String(payload.salespersonName || "") || null
@@ -335,6 +348,19 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           notes: payload.notes !== undefined ? String(payload.notes || "") || null : undefined,
         },
       });
+      if (payload.timeWindow !== undefined) {
+        const fulfillment = await tx.salesOrderFulfillment.findFirst({
+          where: { salesOrderId: id },
+          select: { id: true },
+        });
+        if (fulfillment) {
+          const timeWindowValue = String(payload.timeWindow ?? "").trim();
+          await tx.salesOrderFulfillment.update({
+            where: { id: fulfillment.id },
+            data: { timeWindow: timeWindowValue.length > 0 ? timeWindowValue : null },
+          });
+        }
+      }
       await recalculateSalesOrder(tx, row.id);
       return tx.salesOrder.findUnique({
         where: { id: row.id },

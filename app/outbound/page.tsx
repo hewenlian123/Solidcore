@@ -121,7 +121,7 @@ export default function OutboundPage() {
       <div className="linear-card overflow-hidden p-0">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+            <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
               <TableHead>Order #</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Spec Confirmed</TableHead>
@@ -141,7 +141,7 @@ export default function OutboundPage() {
               orders.map((order) => {
                 const item = order.items[0];
                 return (
-                  <TableRow key={order.id} className="odd:bg-white even:bg-slate-50/40">
+                  <TableRow key={order.id} className="border-white/10 transition-colors hover:bg-white/10">
                     <TableCell className="font-semibold text-slate-900">{order.orderNo}</TableCell>
                     <TableCell>{order.customer?.name ?? "-"}</TableCell>
                     <TableCell className="font-medium text-slate-800">
@@ -177,7 +177,7 @@ export default function OutboundPage() {
       <div className="linear-card overflow-hidden p-0">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+            <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
               <TableHead>Order #</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Type</TableHead>
@@ -195,7 +195,7 @@ export default function OutboundPage() {
               </TableRow>
             ) : (
               salesQueue.map((row) => (
-                <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
+                <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/10">
                   <TableCell className="font-semibold text-slate-900">
                     {row.salesOrder.orderNumber}
                   </TableCell>

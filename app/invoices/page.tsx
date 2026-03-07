@@ -6,6 +6,7 @@ import { ChevronRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRole } from "@/components/layout/role-provider";
 import { PDFPreviewModal } from "@/components/pdf/PDFPreviewModal";
+import { Spinner } from "@/components/ui/spinner";
 
 type InvoiceRow = {
   id: string;
@@ -22,17 +23,18 @@ type InvoiceRow = {
 };
 
 function getStatusBadgeClass(status: string) {
-  if (status === "paid") return "bg-emerald-100 text-emerald-700";
-  if (status === "partially_paid") return "bg-amber-100 text-amber-700";
-  if (status === "void") return "bg-slate-200 text-slate-600";
-  if (status === "sent") return "bg-blue-100 text-blue-700";
-  return "bg-slate-100 text-slate-700";
+  if (status === "paid") return "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30";
+  if (status === "partially_paid") return "bg-amber-500/20 text-amber-300 border border-amber-400/30";
+  if (status === "void") return "bg-white/10 text-slate-400 border border-white/10";
+  if (status === "sent") return "bg-blue-500/20 text-blue-300 border border-blue-400/30";
+  return "bg-white/5 text-slate-300 border border-white/10";
 }
 
 export default function InvoicesPage() {
   const router = useRouter();
   const { role } = useRole();
   const [rows, setRows] = useState<InvoiceRow[]>([]);
+  const [loadingRows, setLoadingRows] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "UNPAID" | "OVERDUE" | "PAID">("ALL");
@@ -42,6 +44,7 @@ export default function InvoicesPage() {
 
   const load = async () => {
     try {
+      setLoadingRows(true);
       setError(null);
       const params = new URLSearchParams();
       if (search.trim()) params.set("search", search.trim());
@@ -57,6 +60,8 @@ export default function InvoicesPage() {
       setRows(payload.data ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch invoices");
+    } finally {
+      setLoadingRows(false);
     }
   };
 
@@ -82,18 +87,31 @@ export default function InvoicesPage() {
     });
   }, [rows, statusFilter]);
 
+  const renderSkeletonRows = (count: number) =>
+    Array.from({ length: count }).map((_, idx) => (
+      <tr key={`sk-${idx}`} className="h-14 border-b border-white/10">
+        {Array.from({ length: 10 }).map((__, cIdx) => (
+          <td key={`sk-${idx}-${cIdx}`} className="px-4 py-3">
+            <div className="relative h-4 w-full overflow-hidden rounded-md bg-white/[0.06]">
+              <div className="absolute inset-0 -translate-x-[130%] bg-gradient-to-r from-transparent via-white/[0.08] to-transparent animate-[dashboardShimmer_1.6s_ease-in-out_infinite]" />
+            </div>
+          </td>
+        ))}
+      </tr>
+    ));
+
   return (
     <section className="space-y-8">
-      <div className="linear-card p-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Invoices</h1>
-        <p className="mt-2 text-sm text-slate-500">Invoice v1 generated from sales orders, with payment tracking.</p>
+      <div className="glass-card p-8">
+        <h1 className="text-2xl font-semibold tracking-tight text-white">Invoices</h1>
+        <p className="mt-2 text-sm text-slate-400">Invoice v1 generated from sales orders, with payment tracking.</p>
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
       ) : null}
 
-      <div className="linear-card flex flex-wrap items-end gap-3 p-6">
+      <div className="glass-card flex flex-wrap items-end gap-3 p-6">
         <label className="block">
           <span className="mb-1 block text-xs text-slate-500">Search</span>
           <input
@@ -121,30 +139,31 @@ export default function InvoicesPage() {
             className="ios-input h-10 px-3 text-sm"
           />
         </label>
-        <button type="button" onClick={load} className="ios-secondary-btn h-10 px-4 text-sm">
-          Apply
+        <button type="button" onClick={load} disabled={loadingRows} className="ios-secondary-btn h-10 px-4 text-sm">
+          <span className="inline-flex items-center gap-2">
+            {loadingRows ? <Spinner className="text-white/60" /> : null}
+            {loadingRows ? "Loading..." : "Apply"}
+          </span>
         </button>
       </div>
 
-      <div className="linear-card flex flex-wrap gap-2 p-4">
+      <div className="glass-card flex flex-wrap gap-2 p-4">
         {(["ALL", "UNPAID", "OVERDUE", "PAID"] as const).map((value) => (
           <button
             key={value}
             type="button"
             onClick={() => setStatusFilter(value)}
-            className={`h-9 rounded-lg px-3 text-xs ${
-              statusFilter === value ? "bg-slate-200 font-semibold text-slate-900" : "bg-slate-50 text-slate-600"
-            }`}
+            className={statusFilter === value ? "so-chip-active" : "so-chip"}
           >
             {value}
           </button>
         ))}
       </div>
 
-      <div className="linear-card overflow-x-auto p-0">
+      <div className="glass-card overflow-x-auto p-0">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b border-slate-100 bg-slate-50/70 text-left text-slate-500">
+            <tr className="border-b border-white/10 bg-white/5 text-left text-slate-400">
               <th className="px-4 py-3">Invoice #</th>
               <th className="px-4 py-3">Order #</th>
               <th className="px-4 py-3">Customer</th>
@@ -158,7 +177,9 @@ export default function InvoicesPage() {
             </tr>
           </thead>
           <tbody>
-            {filteredRows.length === 0 ? (
+            {loadingRows && rows.length === 0 ? (
+              renderSkeletonRows(8)
+            ) : filteredRows.length === 0 ? (
               <tr>
                 <td colSpan={10} className="px-4 py-8 text-center text-slate-500">
                   No invoices found.
@@ -170,7 +191,7 @@ export default function InvoicesPage() {
                   key={row.id}
                   role="button"
                   tabIndex={0}
-                  className="group h-14 cursor-pointer border-b border-slate-100 transition-colors duration-200 hover:bg-slate-100/70"
+                  className="group h-14 cursor-pointer border-b border-white/10 text-slate-300 transition-colors duration-200 hover:bg-white/10"
                   onClick={() => router.push(`/invoices/${row.id}`)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -179,14 +200,14 @@ export default function InvoicesPage() {
                     }
                   }}
                 >
-                  <td className="px-4 py-3 font-semibold text-slate-900 group-hover:rounded-l-lg">
+                  <td className="px-4 py-3 font-semibold text-white group-hover:rounded-l-lg">
                     {row.invoiceNumber}
                   </td>
                   <td className="px-4 py-3 group-hover:rounded-r-lg">
                     {row.salesOrderNumber ? (
                       <Link
                         href={`/invoices/${row.id}`}
-                        className="text-slate-900 underline-offset-2 hover:underline"
+                        className="text-white underline-offset-2 hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {row.salesOrderNumber}

@@ -26,6 +26,7 @@ export async function ensureFulfillmentFromSalesOrder(
       customerId: true,
       fulfillmentMethod: true,
       requestedDeliveryAt: true,
+      timeWindow: true,
       deliveryName: true,
       deliveryPhone: true,
       deliveryAddress1: true,
@@ -133,6 +134,7 @@ export async function ensureFulfillmentFromSalesOrder(
                     .join(", ") || null
                 : undefined,
             notes: canOverwriteSnapshot ? shiptoSnapshot.shiptoNotes : undefined,
+            timeWindow: canOverwriteSnapshot && salesOrder.timeWindow != null ? salesOrder.timeWindow : undefined,
             pickupContact: canOverwriteSnapshot && type === "PICKUP" ? toNullableText(salesOrder.customer?.name) : undefined,
           },
         });
@@ -167,6 +169,7 @@ export async function ensureFulfillmentFromSalesOrder(
                   .join(", ") || null
               : null,
           notes: shiptoSnapshot.shiptoNotes,
+          timeWindow: toNullableText(salesOrder.timeWindow),
           pickupContact: type === "PICKUP" ? toNullableText(salesOrder.customer?.name) : null,
         },
       });

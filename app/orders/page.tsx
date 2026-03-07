@@ -6,6 +6,7 @@ import { ChevronRight, Plus, Search, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useRole } from "@/components/layout/role-provider";
+import { Spinner } from "@/components/ui/spinner";
 import {
   SALES_ORDER_STATUSES,
   getSalesOrderStatusBadge,
@@ -19,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TableSkeletonRows } from "@/components/ui/table-skeleton";
 
 type Row = {
   id: string;
@@ -167,13 +169,13 @@ export default function OrdersPage() {
 
   return (
     <section className="space-y-4">
-      <div className="border-b border-slate-200 pb-3">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="glass-card p-6">
+        <div className="glass-card-content flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
               Order Management
             </h1>
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-slate-400">
               Manage quotes and sales orders with quick conversion actions.
             </p>
           </div>
@@ -199,72 +201,74 @@ export default function OrdersPage() {
           </div>
         </div>
         <div
-          className={`mt-3 grid grid-cols-1 gap-2 border-t border-slate-100 pt-3 text-sm sm:grid-cols-2 ${
+          className={`glass-card-content mt-4 grid grid-cols-1 gap-2 border-t border-white/10 pt-4 text-sm sm:grid-cols-2 ${
             hasMonthData ? "xl:grid-cols-5" : "xl:grid-cols-3"
           }`}
         >
-          <div className="rounded-md bg-white px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">This Month Sales</p>
-            <p className="text-lg font-semibold text-slate-900">${Number(snapshot?.monthSales ?? 0).toFixed(2)}</p>
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 backdrop-blur-xl transition-colors hover:bg-white/[0.06]">
+            <p className="text-[11px] uppercase tracking-wide text-white/40">This Month Sales</p>
+            <p className="text-lg font-semibold text-white">${Number(snapshot?.monthSales ?? 0).toFixed(2)}</p>
           </div>
-          <div className="rounded-md bg-white px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-slate-500">Orders Count</p>
-            <p className="text-lg font-semibold text-slate-900">{snapshot?.monthOrders ?? 0}</p>
+          <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 backdrop-blur-xl transition-colors hover:bg-white/[0.06]">
+            <p className="text-[11px] uppercase tracking-wide text-white/40">Orders Count</p>
+            <p className="text-lg font-semibold text-white">{snapshot?.monthOrders ?? 0}</p>
           </div>
           <button
             type="button"
             onClick={() => router.push("/products?filter=low&lowStockOnly=true")}
-            className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-left transition hover:bg-rose-100"
+            className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-left transition hover:bg-rose-500/20"
           >
-            <p className="text-[11px] uppercase tracking-wide text-rose-700">Low Stock Items</p>
-            <p className="text-lg font-semibold text-rose-800">{alerts.lowStockCount}</p>
-            <p className="text-xs text-rose-600">Based on available boxes</p>
+            <p className="text-[11px] uppercase tracking-wide text-rose-300">Low Stock Items</p>
+            <p className="text-lg font-semibold text-rose-200">{alerts.lowStockCount}</p>
+            <p className="text-xs text-rose-400/80">Based on available boxes</p>
           </button>
           {hasMonthData ? (
-            <div className="rounded-md bg-white px-3 py-2">
-              <p className="text-[11px] uppercase tracking-wide text-slate-500">Top Product</p>
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 backdrop-blur-xl transition-colors hover:bg-white/[0.06]">
+              <p className="text-[11px] uppercase tracking-wide text-white/40">Top Product</p>
               {topProductLink ? (
                 <button
                   type="button"
                   onClick={() => router.push(topProductLink)}
-                  className="max-w-full cursor-pointer truncate text-left text-sm font-medium text-slate-900 underline-offset-2 hover:text-slate-700 hover:underline"
+                  className="max-w-full cursor-pointer truncate text-left text-sm font-medium text-white underline-offset-2 hover:text-slate-300 hover:underline"
                 >
                   {snapshot?.topProduct?.name ?? "-"}
                 </button>
               ) : (
-                <p className="truncate text-sm font-medium text-slate-900">{snapshot?.topProduct?.name ?? "-"}</p>
+                <p className="truncate text-sm font-medium text-white">{snapshot?.topProduct?.name ?? "-"}</p>
               )}
-              <p className="text-xs text-slate-500">${Number(snapshot?.topProduct?.amount ?? 0).toFixed(2)}</p>
+              <p className="text-xs text-white/40">${Number(snapshot?.topProduct?.amount ?? 0).toFixed(2)}</p>
             </div>
           ) : null}
           {hasMonthData ? (
-            <div className="rounded-md bg-white px-3 py-2">
-              <p className="text-[11px] uppercase tracking-wide text-slate-500">Top Customer</p>
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2 backdrop-blur-xl transition-colors hover:bg-white/[0.06]">
+              <p className="text-[11px] uppercase tracking-wide text-white/40">Top Customer</p>
               {topCustomerLink ? (
                 <button
                   type="button"
                   onClick={() => router.push(topCustomerLink)}
-                  className="max-w-full cursor-pointer truncate text-left text-sm font-medium text-slate-900 underline-offset-2 hover:text-slate-700 hover:underline"
+                  className="max-w-full cursor-pointer truncate text-left text-sm font-medium text-white underline-offset-2 hover:text-slate-300 hover:underline"
                 >
                   {snapshot?.topCustomer?.name ?? "-"}
                 </button>
               ) : (
-                <p className="truncate text-sm font-medium text-slate-900">{snapshot?.topCustomer?.name ?? "-"}</p>
+                <p className="truncate text-sm font-medium text-white">{snapshot?.topCustomer?.name ?? "-"}</p>
               )}
-              <p className="text-xs text-slate-500">${Number(snapshot?.topCustomer?.amount ?? 0).toFixed(2)}</p>
+              <p className="text-xs text-white/40">${Number(snapshot?.topCustomer?.amount ?? 0).toFixed(2)}</p>
             </div>
           ) : null}
         </div>
       </div>
 
-      <div className="border border-slate-100 bg-white p-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="inline-flex rounded-xl bg-slate-100 p-1">
+      <div className="glass-card p-4">
+        <div className="glass-card-content flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="inline-flex rounded-2xl border border-white/[0.12] bg-white/[0.06] p-2 backdrop-blur-xl">
             <button
               type="button"
               onClick={() => setDocTypeFilter("QUOTE")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                docTypeFilter === "QUOTE" ? "bg-white text-slate-900" : "text-slate-600"
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150 ${
+                docTypeFilter === "QUOTE"
+                  ? "bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-lg"
+                  : "bg-transparent text-white/70 hover:bg-white/[0.06]"
               }`}
             >
               Quotes
@@ -272,15 +276,17 @@ export default function OrdersPage() {
             <button
               type="button"
               onClick={() => setDocTypeFilter("SALES_ORDER")}
-              className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${
-                docTypeFilter === "SALES_ORDER" ? "bg-white text-slate-900" : "text-slate-600"
+              className={`rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150 ${
+                docTypeFilter === "SALES_ORDER"
+                  ? "bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-lg"
+                  : "bg-transparent text-white/70 hover:bg-white/[0.06]"
               }`}
             >
               Sales Orders
             </button>
           </div>
           <div className="relative w-full md:max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-white/50" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -290,16 +296,16 @@ export default function OrdersPage() {
           </div>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div className="glass-card-content mt-3 flex flex-wrap items-center gap-2">
           {statusOptions.map((status) => (
             <button
               key={status}
               type="button"
               onClick={() => setStatusFilter(status)}
-              className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
+              className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
                 statusFilter === status
-                  ? "bg-slate-900 text-white"
-                  : "bg-slate-100 text-slate-600"
+                  ? "border-transparent bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-lg"
+                  : "border-white/[0.12] bg-white/[0.05] text-white/70 hover:bg-white/[0.08]"
               }`}
             >
               {status === "ALL" ? "All Statuses" : getSalesOrderStatusLabel(status)}
@@ -308,8 +314,10 @@ export default function OrdersPage() {
           <button
             type="button"
             onClick={() => setSpecialOnly((prev) => !prev)}
-            className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
-              specialOnly ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+            className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition-all duration-150 ${
+              specialOnly
+                ? "border-transparent bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-lg"
+                : "border-white/[0.12] bg-white/[0.05] text-white/70 hover:bg-white/[0.08]"
             }`}
           >
             Special Order
@@ -318,38 +326,34 @@ export default function OrdersPage() {
       </div>
 
       {resolvedError ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
           {resolvedError}
         </div>
       ) : null}
 
-      <div className="linear-card overflow-hidden p-0">
+      <div className="glass-card overflow-hidden p-0">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
-              <TableHead>#</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Job</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Total</TableHead>
-              <TableHead>Paid</TableHead>
-              <TableHead>Balance</TableHead>
-              <TableHead>Supplier</TableHead>
-              <TableHead>ETA</TableHead>
-              <TableHead>Special Status</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead>Actions</TableHead>
+            <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
+              <TableHead className="text-slate-400">#</TableHead>
+              <TableHead className="text-slate-400">Customer</TableHead>
+              <TableHead className="text-slate-400">Job</TableHead>
+              <TableHead className="text-slate-400">Status</TableHead>
+              <TableHead className="text-slate-400">Total</TableHead>
+              <TableHead className="text-slate-400">Paid</TableHead>
+              <TableHead className="text-slate-400">Balance</TableHead>
+              <TableHead className="text-slate-400">Supplier</TableHead>
+              <TableHead className="text-slate-400">ETA</TableHead>
+              <TableHead className="text-slate-400">Special Status</TableHead>
+              <TableHead className="text-slate-400">Created</TableHead>
+              <TableHead className="text-slate-400">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={12} className="text-center text-slate-500">
-                  Loading orders...
-                </TableCell>
-              </TableRow>
+              <TableSkeletonRows columns={12} rows={8} />
             ) : rows.length === 0 ? (
-              <TableRow>
+              <TableRow className="border-white/10">
                 <TableCell colSpan={12} className="text-center text-slate-500">
                   No orders found
                 </TableCell>
@@ -360,7 +364,7 @@ export default function OrdersPage() {
                   key={row.id}
                   role="button"
                   tabIndex={0}
-                  className="group cursor-pointer odd:bg-white even:bg-slate-50/40 transition-colors duration-200 hover:bg-slate-100/70"
+                  className="group cursor-pointer border-white/10 text-slate-300 transition-colors duration-200 hover:bg-white/[0.06]"
                   onClick={() => router.push(`/sales-orders/${row.id}`)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -369,14 +373,14 @@ export default function OrdersPage() {
                     }
                   }}
                 >
-                  <TableCell className="font-bold text-slate-900">
+                  <TableCell className="font-bold text-white">
                     {row.orderNumber}
                   </TableCell>
                   <TableCell>
-                    <p>{row.customer.name}</p>
+                    <p className="text-white">{row.customer.name}</p>
                     <p className="text-xs text-slate-500">{row.customer.phone ?? "-"}</p>
                   </TableCell>
-                  <TableCell>{row.projectName || "-"}</TableCell>
+                  <TableCell className="text-slate-300">{row.projectName || "-"}</TableCell>
                   <TableCell>
                     <span
                       className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-semibold ${getSalesOrderStatusBadge(
@@ -386,42 +390,42 @@ export default function OrdersPage() {
                       {getSalesOrderStatusLabel(row.status)}
                     </span>
                   </TableCell>
-                  <TableCell>${Number(row.total).toFixed(2)}</TableCell>
-                  <TableCell>${Number(row.paidAmount).toFixed(2)}</TableCell>
-                  <TableCell>
-                    <span
-                      className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
-                        Number(row.balanceDue) <= 0
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-amber-100 text-amber-700"
-                      }`}
+                <TableCell>${Number(row.total).toFixed(2)}</TableCell>
+                <TableCell>${Number(row.paidAmount).toFixed(2)}</TableCell>
+                <TableCell>
+                  <span
+                    className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${
+                      Number(row.balanceDue) <= 0
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/30"
+                        : "bg-amber-500/20 text-amber-300 border border-amber-400/30"
+                    }`}
+                  >
+                    {Number(row.balanceDue) <= 0
+                      ? "Paid"
+                      : `$${Number(row.balanceDue).toFixed(2)}`}
+                  </span>
+                </TableCell>
+                <TableCell className="text-slate-400">{row.specialOrder ? row.supplier?.name ?? "-" : "-"}</TableCell>
+                <TableCell className="text-slate-400">
+                  {row.specialOrder && row.etaDate
+                    ? new Date(row.etaDate).toLocaleDateString("en-US", { timeZone: "UTC" })
+                    : "-"}
+                </TableCell>
+                <TableCell className="text-slate-400">{row.specialOrder ? row.specialOrderStatus ?? "-" : "-"}</TableCell>
+                <TableCell className="text-slate-500">
+                  {new Date(row.createdAt).toLocaleDateString("en-US", {
+                    timeZone: "UTC",
+                  })}
+                </TableCell>
+                <TableCell>
+                  <div className="inline-flex items-center gap-2">
+                    <Link
+                      href={`/sales-orders/${row.id}`}
+                      className="ios-secondary-btn h-9 px-3 py-2 text-xs"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      {Number(row.balanceDue) <= 0
-                        ? "Paid"
-                        : `$${Number(row.balanceDue).toFixed(2)}`}
-                    </span>
-                  </TableCell>
-                  <TableCell>{row.specialOrder ? row.supplier?.name ?? "-" : "-"}</TableCell>
-                  <TableCell>
-                    {row.specialOrder && row.etaDate
-                      ? new Date(row.etaDate).toLocaleDateString("en-US", { timeZone: "UTC" })
-                      : "-"}
-                  </TableCell>
-                  <TableCell>{row.specialOrder ? row.specialOrderStatus ?? "-" : "-"}</TableCell>
-                  <TableCell>
-                    {new Date(row.createdAt).toLocaleDateString("en-US", {
-                      timeZone: "UTC",
-                    })}
-                  </TableCell>
-                  <TableCell>
-                    <div className="inline-flex items-center gap-2">
-                      <Link
-                        href={`/sales-orders/${row.id}`}
-                        className="ios-secondary-btn h-9 px-3 py-2 text-xs"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        View
-                      </Link>
+                      View
+                    </Link>
                       {row.docType === "QUOTE" ? (
                         <button
                           type="button"
@@ -459,18 +463,18 @@ export default function OrdersPage() {
                           void deleteSalesOrder(row);
                         }}
                         disabled={deletingId === row.id}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-50 hover:text-rose-700 disabled:opacity-40"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition hover:bg-rose-500/20 hover:text-rose-400 disabled:opacity-40"
                         aria-label={`Delete ${row.orderNumber}`}
                         title="Delete sales order"
                       >
                         {deletingId === row.id ? (
-                          <span className="text-[11px] font-medium">...</span>
+                          <Spinner className="h-4 w-4 text-rose-300" />
                         ) : (
                           <Trash2 className="h-4 w-4" />
                         )}
                       </button>
                       <span
-                        className="ml-1 inline-flex items-center text-slate-400 opacity-20 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
+                        className="ml-1 inline-flex items-center text-slate-500 opacity-60 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
                         aria-hidden="true"
                       >
                         <ChevronRight className="h-4 w-4" />

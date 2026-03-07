@@ -19,11 +19,23 @@ export async function GET(request: NextRequest) {
         status: true,
         scheduledAt: true,
         scheduledDate: true,
+        timeWindow: true,
+        driverName: true,
+        pickupContact: true,
+        shiptoPhone: true,
+        shiptoNotes: true,
+        notes: true,
         shiptoAddress1: true,
         shiptoAddress2: true,
         shiptoCity: true,
         shiptoState: true,
         shiptoZip: true,
+        items: {
+          select: {
+            orderedQty: true,
+            fulfilledQty: true,
+          },
+        },
         salesOrder: {
           select: {
             id: true,
@@ -45,15 +57,33 @@ export async function GET(request: NextRequest) {
                 .filter(Boolean)
                 .join(", ")
             : "";
+
+        const itemCount = row.items.length;
+        const itemsCompleted = row.items.filter(
+          (item) => Number(item.fulfilledQty ?? 0) >= Number(item.orderedQty ?? 0),
+        ).length;
+        const itemsAnyFulfilled = row.items.some((item) => Number(item.fulfilledQty ?? 0) > 0);
+        const itemsAllCompleted = itemCount > 0 && itemsCompleted === itemCount;
+
         return {
           id: row.id,
           type: row.type,
           status: row.status,
           scheduledAt,
+          timeWindow: row.timeWindow ?? null,
+          driverName: row.driverName ?? null,
+          pickupContact: row.pickupContact ?? null,
+          phone: row.shiptoPhone ?? null,
+          shiptoNotes: row.shiptoNotes ?? null,
+          notes: row.notes ?? null,
           salesOrderId: row.salesOrder.id,
           salesOrderNumber: row.salesOrder.orderNumber,
           customerName: row.salesOrder.customer?.name ?? "-",
           address: address || "-",
+          itemCount,
+          itemsCompleted,
+          itemsAnyFulfilled,
+          itemsAllCompleted,
         };
       })
       .sort((a, b) => {

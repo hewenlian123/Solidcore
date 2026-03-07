@@ -214,6 +214,9 @@ export async function POST(request: NextRequest) {
           deliveryZip: fulfillmentMethod === "DELIVERY" ? deliveryZip || null : null,
           salespersonName: payload.salespersonName ? String(payload.salespersonName) : null,
           notes: payload.notes ? String(payload.notes) : null,
+          orderDate: payload.orderDate ? new Date(payload.orderDate) : new Date(),
+          requestedDeliveryAt: payload.requestedDeliveryAt ? new Date(payload.requestedDeliveryAt) : null,
+          timeWindow: payload.timeWindow ? String(payload.timeWindow).trim() || null : null,
         },
       });
 

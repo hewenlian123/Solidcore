@@ -192,6 +192,88 @@ export async function syncSalesOutboundQueue(
   });
 }
 
+/**
+ * When a fulfillment reaches a final status (COMPLETED, PICKED_UP, DELIVERED), sync
+ * fulfillment items' fulfilledQty to the corresponding sales order items' fulfillQty,
+ * then update SO status (FULFILLED / PARTIALLY_FULFILLED) and recalc/sync queue/reservation.
+ */
+export async function syncSalesOrderFulfillmentFromFulfillment(
+  tx: Prisma.TransactionClient,
+  fulfillmentId: string,
+) {
+  const fulfillment = await tx.salesOrderFulfillment.findUnique({
+    where: { id: fulfillmentId },
+    select: {
+      salesOrderId: true,
+      items: { select: { salesOrderItemId: true, fulfilledQty: true } },
+    },
+  });
+  if (!fulfillment?.salesOrderId || fulfillment.items.length === 0) return;
+
+  const salesOrderId = fulfillment.salesOrderId;
+  const soItems = await tx.salesOrderItem.findMany({
+    where: { salesOrderId },
+    select: { id: true, quantity: true, fulfillQty: true },
+  });
+  const soItemById = new Map(soItems.map((i) => [i.id, i]));
+
+  for (const fi of fulfillment.items) {
+    if (!fi.salesOrderItemId) continue;
+    const soItem = soItemById.get(fi.salesOrderItemId);
+    if (!soItem) continue;
+    const fulfilledQty = Number(fi.fulfilledQty ?? 0);
+    const current = Number(soItem.fulfillQty ?? 0);
+    const nextQty = Math.max(current, fulfilledQty);
+    if (nextQty !== current) {
+      await tx.salesOrderItem.update({
+        where: { id: fi.salesOrderItemId },
+        data: { fulfillQty: nextQty },
+      });
+    }
+  }
+
+  const updatedItems = await tx.salesOrderItem.findMany({
+    where: { salesOrderId },
+    select: { quantity: true, fulfillQty: true },
+  });
+  const allFulfilled =
+    updatedItems.length > 0 &&
+    updatedItems.every((item) => Number(item.fulfillQty) >= Number(item.quantity));
+  const anyFulfilled = updatedItems.some((item) => Number(item.fulfillQty) > 0);
+
+  const order = await tx.salesOrder.findUnique({
+    where: { id: salesOrderId },
+    select: { status: true },
+  });
+  if (!order) return;
+
+  const hasFulfillment = !!(await tx.salesOrderFulfillment.findFirst({
+    where: {
+      salesOrderId,
+      status: { in: ["DRAFT", "SCHEDULED", "PACKING", "READY", "OUT_FOR_DELIVERY", "PARTIAL"] },
+    },
+    select: { id: true },
+  }));
+
+  if (allFulfilled) {
+    await tx.salesOrder.update({ where: { id: salesOrderId }, data: { status: "FULFILLED" } });
+  } else if (anyFulfilled) {
+    await tx.salesOrder.update({
+      where: { id: salesOrderId },
+      data: { status: "PARTIALLY_FULFILLED" },
+    });
+  } else if (["READY", "PARTIALLY_FULFILLED", "FULFILLED"].includes(order.status)) {
+    await tx.salesOrder.update({
+      where: { id: salesOrderId },
+      data: { status: hasFulfillment ? "READY" : "CONFIRMED" },
+    });
+  }
+
+  await recalculateSalesOrder(tx, salesOrderId);
+  await syncSalesOutboundQueue(tx, salesOrderId);
+  await syncInventoryReservationForSalesOrder(tx, salesOrderId);
+}
+
 export async function applyReservedForSalesOrder(
   tx: Prisma.TransactionClient,
   salesOrderId: string,

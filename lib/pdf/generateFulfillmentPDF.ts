@@ -16,6 +16,7 @@ type FulfillmentPdfData = {
   driverName?: string | null;
   pickupContact?: string | null;
   address?: string | null;
+  shiptoNotes?: string | null;
   notes?: string | null;
   items: Array<{
     title: string;
@@ -23,6 +24,7 @@ type FulfillmentPdfData = {
     orderedQty: number;
     fulfilledQty: number;
     unit?: string | null;
+    notes?: string | null;
   }>;
 };
 
@@ -45,6 +47,12 @@ function fmtDateTime(value: string | Date | null | undefined) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function fmtQty(value: number) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return "0";
+  return n.toFixed(2);
 }
 
 function fitText(text: string, max: number, font: any, size: number) {
@@ -118,7 +126,23 @@ export async function generateFulfillmentPDF(data: FulfillmentPdfData): Promise<
     newPage();
   };
 
-  const title = data.type === "pick" ? "PICK LIST" : data.fulfillmentType === "DELIVERY" ? "DELIVERY SLIP" : "PICKUP SLIP";
+  const title =
+    data.type === "pick"
+      ? "PICK LIST"
+      : data.fulfillmentType === "DELIVERY"
+        ? "DELIVERY SLIP"
+        : "PICKUP SLIP";
+
+  const docLabel =
+    data.type === "pick"
+      ? "Pick List #"
+      : data.fulfillmentType === "DELIVERY"
+        ? "Delivery #"
+        : "Pickup #";
+
+  const shortId = String(data.fulfillmentId || "").slice(0, 8);
+  const warehouseLabel =
+    data.fulfillmentType === "PICKUP" ? "Pickup Location" : "Warehouse";
 
   drawAccent(page);
   drawText(COMPANY_SETTINGS.name, margin, 18, true);
@@ -145,10 +169,10 @@ export async function generateFulfillmentPDF(data: FulfillmentPdfData): Promise<
   });
   y -= 18;
 
-  drawText(`Fulfillment #: ${data.fulfillmentId}`, margin, 10, true);
+  drawText(`${docLabel}: ${shortId}`, margin, 10, true);
   drawText(`Sales Order #: ${data.salesOrderNumber}`, margin + 220, 10, true);
   y -= 14;
-  drawText(`Date: ${fmtDate(data.generatedAt)}`, margin, 10);
+  drawText(`Generated: ${fmtDateTime(data.generatedAt)}`, margin, 10);
   drawText(`Type: ${data.fulfillmentType === "DELIVERY" ? "Delivery" : "Pickup"}`, margin + 220, 10);
   y -= 14;
   drawText(`Customer: ${data.customerName || "-"}`, margin, 10);
@@ -160,29 +184,57 @@ export async function generateFulfillmentPDF(data: FulfillmentPdfData): Promise<
   if (data.fulfillmentType === "DELIVERY") {
     drawText(`Address: ${data.address || "-"}`, margin, 10);
     drawText(`Driver: ${data.driverName || "-"}`, margin + 320, 10);
+    y -= 14;
+    drawText(
+      `Delivery Notes: ${fitText(String(data.shiptoNotes ?? "-"), 520, font, 10) || "-"}`,
+      margin,
+      10,
+    );
   } else {
     drawText(`Pickup Contact: ${data.pickupContact || "-"}`, margin, 10);
-    drawText(`Pickup Location: ${COMPANY_SETTINGS.address || "-"}`, margin + 220, 10);
+    drawText(`${warehouseLabel}: ${COMPANY_SETTINGS.address || "-"}`, margin + 220, 10);
+    y -= 14;
+    drawText(`Pickup Notes: ${fitText(String(data.notes ?? "-"), 520, font, 10) || "-"}`, margin, 10);
   }
   y -= 18;
 
   drawSectionHeader("Items");
+  const remainingQty = (ordered: number, fulfilled: number) => Math.max(Number(ordered || 0) - Number(fulfilled || 0), 0);
+
+  const slipItems =
+    data.type === "slip"
+      ? data.items.filter((item) => Number(item.fulfilledQty || 0) > 0)
+      : data.items;
+  const itemsToRender = data.type === "slip" && slipItems.length > 0 ? slipItems : data.items;
+
   if (data.type === "pick") {
+    // Pick list: warehouse-friendly table with checkbox and remaining qty.
     page.drawRectangle({ x: margin, y: y - 14, width: contentWidth, height: 16, color: rgb(0.95, 0.95, 0.95) });
     drawText("Item", margin + 6, 9, true);
-    drawText("SKU", margin + 250, 9, true);
-    drawRight("Ordered", pageWidth - 150, 9, true);
-    drawRight("Fulfilled", pageWidth - 90, 9, true);
+    drawText("SKU", margin + 210, 9, true);
+    drawRight("Ordered", pageWidth - 204, 9, true);
+    drawRight("Fulfilled", pageWidth - 154, 9, true);
+    drawRight("Remaining", pageWidth - 98, 9, true);
+    drawText("Notes", pageWidth - 92, 9, true);
     drawRight("Pick", pageWidth - 38, 9, true);
     y -= 20;
 
-    for (const item of data.items) {
-      ensureSpace(18);
-      const itemText = fitText(`${item.title}${item.unit ? ` (${item.unit})` : ""}`, 230, font, 9);
-      drawText(itemText || "-", margin + 6, 9);
-      drawText(fitText(item.sku || "-", 110, font, 9), margin + 250, 9, false, rgb(0.4, 0.43, 0.49));
-      drawRight(Number(item.orderedQty || 0).toFixed(2), pageWidth - 150, 9);
-      drawRight(Number(item.fulfilledQty || 0).toFixed(2), pageWidth - 90, 9);
+    for (const item of itemsToRender) {
+      ensureSpace(22);
+      const title = fitText(`${item.title}${item.unit ? ` (${item.unit})` : ""}`, 195, font, 9);
+      const sku = fitText(item.sku || "-", 75, font, 9);
+      const ordered = Number(item.orderedQty || 0);
+      const fulfilled = Number(item.fulfilledQty || 0);
+      const remaining = remainingQty(ordered, fulfilled);
+      const notes = fitText(String(item.notes ?? ""), 68, font, 8);
+
+      drawText(title || "-", margin + 6, 9);
+      drawText(sku, margin + 210, 9, false, rgb(0.4, 0.43, 0.49));
+      drawRight(fmtQty(ordered), pageWidth - 204, 9);
+      drawRight(fmtQty(fulfilled), pageWidth - 154, 9);
+      drawRight(fmtQty(remaining), pageWidth - 98, 9);
+      drawText(notes || "-", pageWidth - 92, 8, false, rgb(0.35, 0.38, 0.43));
+
       page.drawRectangle({
         x: pageWidth - 50,
         y: y - 2,
@@ -200,15 +252,30 @@ export async function generateFulfillmentPDF(data: FulfillmentPdfData): Promise<
       });
     }
   } else {
+    // Slip: show fulfilled + remaining after this trip (and SKU), with customer-friendly signature section.
     page.drawRectangle({ x: margin, y: y - 14, width: contentWidth, height: 16, color: rgb(0.95, 0.95, 0.95) });
     drawText("Item", margin + 6, 9, true);
-    drawRight("Qty", pageWidth - 40, 9, true);
+    drawText("SKU", margin + 260, 9, true);
+    drawRight("Fulfilled", pageWidth - 170, 9, true);
+    drawRight("Remaining", pageWidth - 110, 9, true);
+    drawText("Notes", pageWidth - 104, 9, true);
     y -= 20;
-    for (const item of data.items) {
-      ensureSpace(18);
-      const itemText = fitText(`${item.title}${item.unit ? ` (${item.unit})` : ""}`, 430, font, 9);
-      drawText(itemText || "-", margin + 6, 9);
-      drawRight(Number(item.fulfilledQty || 0).toFixed(2), pageWidth - 40, 9);
+
+    for (const item of itemsToRender) {
+      ensureSpace(22);
+      const title = fitText(`${item.title}${item.unit ? ` (${item.unit})` : ""}`, 245, font, 9);
+      const sku = fitText(item.sku || "-", 85, font, 9);
+      const ordered = Number(item.orderedQty || 0);
+      const fulfilled = Number(item.fulfilledQty || 0);
+      const remaining = remainingQty(ordered, fulfilled);
+      const notes = fitText(String(item.notes ?? ""), 90, font, 8);
+
+      drawText(title || "-", margin + 6, 9);
+      drawText(sku, margin + 260, 9, false, rgb(0.4, 0.43, 0.49));
+      drawRight(fmtQty(fulfilled), pageWidth - 170, 9);
+      drawRight(fmtQty(remaining), pageWidth - 110, 9);
+      drawText(notes || "-", pageWidth - 104, 8, false, rgb(0.35, 0.38, 0.43));
+
       y -= 16;
       page.drawLine({
         start: { x: margin, y: y + 4 },
@@ -216,6 +283,13 @@ export async function generateFulfillmentPDF(data: FulfillmentPdfData): Promise<
         thickness: 0.35,
         color: rgb(0.9, 0.9, 0.92),
       });
+    }
+
+    if (data.type === "slip" && slipItems.length === 0) {
+      y -= 6;
+      ensureSpace(22);
+      drawText("No items have been fulfilled yet for this fulfillment.", margin + 6, 9, false, rgb(0.45, 0.47, 0.52));
+      y -= 14;
     }
   }
 
@@ -244,10 +318,10 @@ export async function generateFulfillmentPDF(data: FulfillmentPdfData): Promise<
       color: rgb(0.45, 0.46, 0.5),
     });
     y -= 18;
-    drawText("Date:", margin + 6, 10, true);
+    drawText(data.fulfillmentType === "DELIVERY" ? "Delivered By / Date & Time:" : "Picked Up By / Date & Time:", margin + 6, 10, true);
     page.drawLine({
-      start: { x: margin + 42, y: y + 2 },
-      end: { x: margin + 180, y: y + 2 },
+      start: { x: margin + 160, y: y + 2 },
+      end: { x: margin + 360, y: y + 2 },
       thickness: 0.8,
       color: rgb(0.45, 0.46, 0.5),
     });

@@ -75,7 +75,7 @@ export function SalesByRegionCard({ rows }: { rows: RegionRow[] }) {
 
   return (
     <article className="glass-card glass-card-moderate px-5 py-5">
-      <h3 className="glass-card-content text-[19px] font-semibold text-slate-900">Sales by Region</h3>
+      <h3 className="glass-card-content text-[19px] font-semibold text-white">Sales by Region</h3>
       <div className="glass-card-content mt-3 flex items-center gap-4">
         <motion.div
           className="relative h-[176px] w-[176px] shrink-0"
@@ -108,23 +108,23 @@ export function SalesByRegionCard({ rows }: { rows: RegionRow[] }) {
           </ResponsiveContainer>
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <motion.div
-              className="rounded-full bg-white/65 px-3 py-1.5 text-center backdrop-blur-sm"
+              className="rounded-full bg-white/[0.08] px-3 py-1.5 text-center backdrop-blur-sm border border-white/[0.1]"
               animate={reducedMotion ? undefined : { scale: [1, 1.03, 1] }}
               transition={reducedMotion ? undefined : { duration: 2.4, ease: "easeInOut", repeat: Infinity }}
             >
-              <p className="text-[11px] text-slate-500">{centerLabel.title}</p>
-              <p className="text-[17px] font-semibold text-slate-900">{centerLabel.value}</p>
+              <p className="text-[11px] text-slate-400">{centerLabel.title}</p>
+              <p className="text-[17px] font-semibold text-white">{centerLabel.value}</p>
             </motion.div>
           </div>
         </motion.div>
         <div className="w-full space-y-2">
           {rows.map((row) => (
             <div key={row.region} className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 text-slate-600">
+              <div className="flex items-center gap-2 text-slate-400">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: row.color }} />
                 {row.region}
               </div>
-              <span className="font-medium text-slate-900">{row.value}%</span>
+              <span className="font-medium text-white">{row.value}%</span>
             </div>
           ))}
         </div>

@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
             { product: { name: { contains: q } } },
           ],
         },
-        orderBy: { updatedAt: "desc" },
+        orderBy: { id: "desc" },
         take: LIMIT_PER_GROUP,
         select: {
           id: true,
@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
                 { companyName: { contains: q } },
               ],
             },
-            orderBy: { updatedAt: "desc" },
+            orderBy: { id: "desc" },
             take: LIMIT_PER_GROUP,
             select: {
               id: true,

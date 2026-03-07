@@ -38,20 +38,20 @@ export function ScanModal({ open, title, onClose, onDetected }: ScanModalProps) 
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/65 p-4 backdrop-blur-sm">
-      <div className="mx-auto max-w-md rounded-lg border border-slate-200/80 bg-white p-4 shadow-md">
+    <div className="fixed inset-0 z-50 bg-black/40 p-4 backdrop-blur-sm">
+      <div className="so-modal-shell mx-auto max-w-md p-4">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-semibold text-slate-900">{title}</h3>
+          <h3 className="text-base font-semibold text-white">{title}</h3>
           <button
             type="button"
             onClick={onClose}
-            className="h-12 rounded-lg border border-slate-300 px-3 text-sm text-slate-700"
+            className="ios-secondary-btn h-10 px-3 text-sm"
           >
             Close
           </button>
         </div>
 
-        <div className="relative overflow-hidden rounded-lg border border-slate-300 bg-slate-900/90">
+        <div className="relative overflow-hidden rounded-xl border border-white/[0.10] bg-white/[0.05] backdrop-blur-xl">
           <div id={scannerId} className="min-h-[320px] w-full" />
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
             <div className="h-60 w-60 rounded-lg border-2 border-white/80" />

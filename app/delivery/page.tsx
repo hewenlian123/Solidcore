@@ -15,6 +15,9 @@ type DeliveryRow = {
   address: string | null;
   status: string;
   driver: string | null;
+  timeWindow?: string | null;
+  notes?: string | null;
+  shiptoNotes?: string | null;
 };
 
 type Payload = {
@@ -76,16 +79,29 @@ export default function DeliverySchedulePage() {
     [selectedDate],
   );
 
+  const statusBadge = (status: string) => {
+    const key = String(status ?? "").toUpperCase();
+    if (key === "COMPLETED" || key === "DELIVERED" || key === "PICKED_UP") return "bg-emerald-100 text-emerald-700";
+    if (key === "OUT_FOR_DELIVERY" || key === "OUT" || key === "IN_PROGRESS") return "bg-sky-100 text-sky-700";
+    if (key === "READY") return "bg-cyan-100 text-cyan-700";
+    if (key === "PACKING") return "bg-violet-100 text-violet-700";
+    if (key === "PARTIAL") return "bg-amber-100 text-amber-700";
+    if (key === "CANCELLED") return "bg-slate-200 text-slate-600";
+    return "bg-slate-100 text-slate-700";
+  };
+
+  const statusLabel = (status: string) => String(status ?? "").toUpperCase().replaceAll("_", " ");
+
   return (
     <section className="space-y-6">
-      <header className="linear-card p-8">
+      <header className="glass-card p-8">
         <div className="flex items-center gap-3">
-          <span className="rounded-xl bg-slate-100 p-2 text-slate-700">
+          <span className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-300 backdrop-blur-xl">
             <CalendarClock className="h-5 w-5" />
           </span>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Delivery Schedule</h1>
-            <p className="mt-1 text-sm text-slate-500">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Delivery Schedule</h1>
+            <p className="mt-1 text-sm text-slate-400">
               Delivery list by day, backed by fulfillment schedules.
             </p>
           </div>
@@ -93,7 +109,7 @@ export default function DeliverySchedulePage() {
       </header>
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
       ) : null}
 
       <div className="linear-card p-5">
@@ -111,26 +127,28 @@ export default function DeliverySchedulePage() {
       <div className="linear-card overflow-hidden p-0">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+            <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
               <TableHead>Time</TableHead>
+              <TableHead>Window</TableHead>
               <TableHead>Order #</TableHead>
               <TableHead>Customer</TableHead>
               <TableHead>Address</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Driver</TableHead>
+              <TableHead>Notes</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-slate-500">
+                <TableCell colSpan={9} className="text-center text-slate-500">
                   No delivery schedules for this date.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
+                <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/10">
                   <TableCell>
                     {new Date(row.startAt).toLocaleTimeString("en-US", {
                       timeZone: "UTC",
@@ -138,11 +156,22 @@ export default function DeliverySchedulePage() {
                       minute: "2-digit",
                     })}
                   </TableCell>
-                  <TableCell className="font-semibold text-slate-900">{row.orderNumber}</TableCell>
-                  <TableCell>{row.customer}</TableCell>
+                  <TableCell className="text-slate-300">{row.timeWindow || "-"}</TableCell>
+                  <TableCell className="font-semibold text-white">{row.orderNumber}</TableCell>
+                  <TableCell className="text-slate-300">{row.customer}</TableCell>
                   <TableCell>{row.address || "-"}</TableCell>
-                  <TableCell>{row.status}</TableCell>
+                  <TableCell>
+                    <span className={`inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${statusBadge(row.status)}`}>
+                      {statusLabel(row.status)}
+                    </span>
+                  </TableCell>
                   <TableCell>{row.driver || "-"}</TableCell>
+                  <TableCell className="max-w-[260px] text-slate-300">
+                    <div className="space-y-0.5 text-xs">
+                      <div className="truncate">{row.shiptoNotes || "-"}</div>
+                      {row.notes ? <div className="truncate text-slate-400">{row.notes}</div> : null}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       <Link href={`/sales-orders/${row.salesOrderId}`} className="ios-secondary-btn h-8 px-2 text-xs">
@@ -151,6 +180,14 @@ export default function DeliverySchedulePage() {
                       <Link href={`/fulfillment/${row.id}`} className="ios-secondary-btn h-8 px-2 text-xs">
                         View Fulfillment
                       </Link>
+                      <a
+                        href={`/api/fulfillments/${row.id}/pdf?type=slip&download=true`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ios-secondary-btn h-8 px-2 text-xs"
+                      >
+                        Slip
+                      </a>
                       <button
                         type="button"
                         disabled={busyId === row.id}
@@ -178,15 +215,9 @@ export default function DeliverySchedulePage() {
 
       <article className="linear-card p-6">
         <p className="text-sm text-slate-600">
-          Use <Link href="/outbound" className="font-medium text-slate-900 underline">Outbound Queue</Link> for loading operations.
+          Use <Link href="/fulfillment/outbound" className="font-medium text-slate-900 underline">Fulfillment Queue</Link> for loading operations.
         </p>
-        <p className="mt-2 text-sm text-slate-600">
-          For fulfillment-first queue, open{" "}
-          <Link href="/fulfillment/outbound" className="font-medium text-slate-900 underline">
-            Fulfillment Outbound Queue
-          </Link>
-          .
-        </p>
+        <p className="mt-2 text-sm text-slate-600">Use the Fulfillment Queue for the canonical fulfillment-first outbound list.</p>
       </article>
     </section>
   );

@@ -94,7 +94,7 @@ export default function SuppliersPage() {
       <div className="linear-card overflow-hidden p-0">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+            <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
               <TableHead>Supplier Name</TableHead>
               <TableHead>Contact</TableHead>
               <TableHead>Phone</TableHead>
@@ -110,7 +110,7 @@ export default function SuppliersPage() {
               </TableRow>
             ) : (
               suppliers.map((item) => (
-                <TableRow key={item.id} className="odd:bg-white even:bg-slate-50/40">
+                <TableRow key={item.id} className="border-white/10 transition-colors hover:bg-white/10">
                   <TableCell className="font-semibold text-slate-900">
                     <Link href={`/suppliers/${item.id}`} className="hover:underline">
                       {item.name}
@@ -131,7 +131,7 @@ export default function SuppliersPage() {
                   <TableCell>
                     <span
                       className={`inline-flex items-center gap-1 rounded-xl px-2.5 py-1 text-xs font-semibold ${
-                        CATEGORY_BADGE[item.category] ?? "bg-slate-100 text-slate-800"
+                        CATEGORY_BADGE[item.category] ?? "bg-white/5 text-slate-300 border border-white/10"
                       }`}
                     >
                       <Factory className="h-3.5 w-3.5" />

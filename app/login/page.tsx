@@ -34,13 +34,13 @@ function LoginPageContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--bg)] px-6 py-10">
-      <div className="mx-auto mt-20 w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-[var(--shadow)]">
-        <h1 className="text-xl font-semibold text-[var(--text)]">Sign In</h1>
-        <p className="mt-1 text-sm text-[var(--muted)]">Use your Solidcore account to continue.</p>
+    <div className="min-h-screen bg-transparent px-6 py-10">
+      <div className="mx-auto mt-20 w-full max-w-md rounded-2xl border border-white/[0.1] bg-white/[0.06] p-6 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-2xl">
+        <h1 className="text-xl font-semibold text-white">Sign In</h1>
+        <p className="mt-1 text-sm text-slate-400">Use your Solidcore account to continue.</p>
         <form onSubmit={onSubmit} className="mt-5 space-y-3">
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-[var(--muted)]">Username</span>
+            <span className="text-xs font-medium text-slate-400">Username</span>
             <input
               value={username}
               onChange={(event) => setUsername(event.target.value)}
@@ -50,7 +50,7 @@ function LoginPageContent() {
             />
           </label>
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-[var(--muted)]">Password</span>
+            <span className="text-xs font-medium text-slate-400">Password</span>
             <input
               type="password"
               value={password}
@@ -60,12 +60,12 @@ function LoginPageContent() {
               required
             />
           </label>
-          {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+          {error ? <p className="text-sm text-rose-400">{error}</p> : null}
           <button type="submit" className="ios-primary-btn w-full" disabled={submitting}>
             {submitting ? "Signing in..." : "Sign In"}
           </button>
         </form>
-        <p className="mt-4 text-xs text-[var(--muted)]">
+        <p className="mt-4 text-xs text-slate-500">
           Demo accounts: admin/admin123, sales/sales123, warehouse/warehouse123
         </p>
       </div>
@@ -75,7 +75,7 @@ function LoginPageContent() {
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[var(--bg)]" />}>
+    <Suspense fallback={<div className="min-h-screen bg-transparent" />}>
       <LoginPageContent />
     </Suspense>
   );

@@ -238,24 +238,24 @@ function AfterSalesReturnsContent() {
 
   return (
     <section className="space-y-6">
-      <div className="linear-card p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <header className="glass-card p-6">
+        <div className="glass-card-content flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">After-Sales Returns</h1>
-            <p className="mt-1 text-sm text-slate-500">Manage return and exchange requests without affecting existing ticket board.</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">After-Sales Returns</h1>
+            <p className="mt-1 text-sm text-slate-400">Manage return and exchange requests without affecting existing ticket board.</p>
           </div>
           <button type="button" onClick={openCreateDrawer} className="ios-primary-btn h-10 px-3 text-sm">
             Create Return
           </button>
         </div>
-      </div>
+      </header>
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
       ) : null}
 
-      <div className="linear-card p-4">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="glass-card p-4">
+        <div className="glass-card-content mb-3 flex flex-wrap items-center gap-2">
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -268,7 +268,9 @@ function AfterSalesReturnsContent() {
               type="button"
               onClick={() => setStatusFilter(item.key)}
               className={`rounded-xl px-3 py-1.5 text-xs ${
-                statusFilter === item.key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                statusFilter === item.key
+                  ? "border border-white/[0.16] bg-white/[0.10] text-white"
+                  : "border border-white/[0.10] bg-white/[0.04] text-white/70 hover:bg-white/[0.06] hover:text-white"
               }`}
             >
               {item.label}
@@ -276,42 +278,42 @@ function AfterSalesReturnsContent() {
           ))}
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="glass-card-content overflow-x-auto">
           <Table>
             <TableHeader>
-              <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
-                <TableHead>Return #</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Related SO #</TableHead>
-                <TableHead>Related Invoice #</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Refund Total</TableHead>
-                <TableHead>Created Date</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+              <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
+                <TableHead className="text-slate-400">Return #</TableHead>
+                <TableHead className="text-slate-400">Customer</TableHead>
+                <TableHead className="text-slate-400">Related SO #</TableHead>
+                <TableHead className="text-slate-400">Related Invoice #</TableHead>
+                <TableHead className="text-slate-400">Type</TableHead>
+                <TableHead className="text-slate-400">Status</TableHead>
+                <TableHead className="text-right text-slate-400">Refund Total</TableHead>
+                <TableHead className="text-slate-400">Created Date</TableHead>
+                <TableHead className="text-right text-slate-400">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center text-slate-500">
+                <TableRow className="border-white/10">
+                  <TableCell colSpan={9} className="text-center text-slate-400">
                     Loading returns...
                   </TableCell>
                 </TableRow>
               ) : rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center text-slate-500">
+                <TableRow className="border-white/10">
+                  <TableCell colSpan={9} className="text-center text-slate-400">
                     No returns found.
                   </TableCell>
                 </TableRow>
               ) : (
                 rows.map((row) => (
-                  <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
-                    <TableCell className="font-medium text-slate-900">{row.returnNumber}</TableCell>
-                    <TableCell>{row.customerName}</TableCell>
+                  <TableRow key={row.id} className="border-white/10 text-slate-300 transition-colors hover:bg-white/[0.06]">
+                    <TableCell className="font-medium text-white">{row.returnNumber}</TableCell>
+                    <TableCell className="text-slate-300">{row.customerName}</TableCell>
                     <TableCell>
                       {row.salesOrderId ? (
-                        <Link href={`/sales-orders/${row.salesOrderId}`} className="text-slate-700 underline">
+                        <Link href={`/sales-orders/${row.salesOrderId}`} className="text-white underline decoration-white/30 hover:decoration-white/70">
                           {row.salesOrderNumber}
                         </Link>
                       ) : (
@@ -320,7 +322,7 @@ function AfterSalesReturnsContent() {
                     </TableCell>
                     <TableCell>
                       {row.invoiceId ? (
-                        <Link href={`/invoices/${row.invoiceId}`} className="text-slate-700 underline">
+                        <Link href={`/invoices/${row.invoiceId}`} className="text-white underline decoration-white/30 hover:decoration-white/70">
                           {row.invoiceNumber}
                         </Link>
                       ) : (
@@ -330,7 +332,7 @@ function AfterSalesReturnsContent() {
                     <TableCell>{row.type === "EXCHANGE" ? "Exchange" : "Return"}</TableCell>
                     <TableCell>{row.statusLabel ?? formatStatus(row.status)}</TableCell>
                     <TableCell className="text-right">${Number(row.refundTotal).toFixed(2)}</TableCell>
-                    <TableCell>{new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</TableCell>
+                    <TableCell className="text-slate-400">{new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</TableCell>
                     <TableCell className="text-right">
                       <Link href={`/after-sales/returns/${row.id}`} className="ios-secondary-btn h-8 px-2 text-xs">
                         View
@@ -346,9 +348,9 @@ function AfterSalesReturnsContent() {
 
       {openCreate ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/30">
-          <div className="h-full w-full max-w-2xl overflow-y-auto bg-white p-5 shadow-xl">
+          <div className="h-full w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/10 bg-white/5 p-5 shadow-xl backdrop-blur-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-slate-900">Create Return</h2>
+              <h2 className="text-base font-semibold text-white">Create Return</h2>
               <button type="button" onClick={() => setOpenCreate(false)} className="ios-secondary-btn h-9 px-3 text-sm">
                 Close
               </button>
@@ -356,7 +358,7 @@ function AfterSalesReturnsContent() {
             <form className="space-y-4" onSubmit={submitCreate}>
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <label className="block space-y-1">
-                  <span className="text-xs text-slate-500">Customer *</span>
+                  <span className="text-xs text-slate-400">Customer *</span>
                   <select
                     value={form.customerId}
                     onChange={async (event) => {
@@ -364,7 +366,7 @@ function AfterSalesReturnsContent() {
                       setForm(next);
                       await loadCreateData(next);
                     }}
-                    className="ios-input h-10 w-full bg-white px-3 text-sm"
+                    className="ios-input h-10 w-full px-3 text-sm"
                     required
                   >
                     <option value="">Select customer</option>
@@ -376,18 +378,18 @@ function AfterSalesReturnsContent() {
                   </select>
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-xs text-slate-500">Type</span>
+                  <span className="text-xs text-slate-400">Type</span>
                   <select
                     value={form.returnType}
                     onChange={(event) => setForm((prev) => ({ ...prev, returnType: event.target.value }))}
-                    className="ios-input h-10 w-full bg-white px-3 text-sm"
+                    className="ios-input h-10 w-full px-3 text-sm"
                   >
                     <option value="RETURN">Return</option>
                     <option value="EXCHANGE">Exchange</option>
                   </select>
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-xs text-slate-500">Link Sales Order (optional)</span>
+                  <span className="text-xs text-slate-400">Link Sales Order (optional)</span>
                   <select
                     value={form.salesOrderId}
                     onChange={async (event) => {
@@ -395,7 +397,7 @@ function AfterSalesReturnsContent() {
                       setForm(next);
                       await loadCreateData(next);
                     }}
-                    className="ios-input h-10 w-full bg-white px-3 text-sm"
+                    className="ios-input h-10 w-full px-3 text-sm"
                   >
                     <option value="">None</option>
                     {salesOrderOptions.map((item) => (
@@ -406,7 +408,7 @@ function AfterSalesReturnsContent() {
                   </select>
                 </label>
                 <label className="block space-y-1">
-                  <span className="text-xs text-slate-500">Link Invoice (optional)</span>
+                  <span className="text-xs text-slate-400">Link Invoice (optional)</span>
                   <select
                     value={form.invoiceId}
                     onChange={async (event) => {
@@ -414,7 +416,7 @@ function AfterSalesReturnsContent() {
                       setForm(next);
                       await loadCreateData(next);
                     }}
-                    className="ios-input h-10 w-full bg-white px-3 text-sm"
+                    className="ios-input h-10 w-full px-3 text-sm"
                   >
                     <option value="">None</option>
                     {invoiceOptions.map((item) => (
@@ -425,11 +427,11 @@ function AfterSalesReturnsContent() {
                   </select>
                 </label>
                 <label className="block space-y-1 md:col-span-2">
-                  <span className="text-xs text-slate-500">Refund Method</span>
+                  <span className="text-xs text-slate-400">Refund Method</span>
                   <select
                     value={form.refundMethod}
                     onChange={(event) => setForm((prev) => ({ ...prev, refundMethod: event.target.value }))}
-                    className="ios-input h-10 w-full bg-white px-3 text-sm"
+                    className="ios-input h-10 w-full px-3 text-sm"
                   >
                     <option value="STORE_CREDIT">Store Credit</option>
                     <option value="REFUND_PAYMENT">Refund Payment</option>
@@ -437,15 +439,15 @@ function AfterSalesReturnsContent() {
                 </label>
               </div>
 
-              <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-3">
-                <h3 className="text-sm font-semibold text-slate-900">Items (Preview)</h3>
-                <p className="mb-2 text-xs text-slate-500">
+              <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3 backdrop-blur-xl">
+                <h3 className="text-sm font-semibold text-white">Items (Preview)</h3>
+                <p className="mb-2 text-xs text-slate-400">
                   Loaded from linked sales order or invoice if provided.
                 </p>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-xs">
                     <thead>
-                      <tr className="border-b border-slate-200 text-left text-slate-500">
+                      <tr className="border-b border-white/10 text-left text-slate-400">
                         <th className="py-1 pr-2">Item</th>
                         <th className="py-1 pr-2">SKU</th>
                         <th className="py-1 pr-2 text-right">Qty Purchased</th>
@@ -457,13 +459,13 @@ function AfterSalesReturnsContent() {
                     <tbody>
                       {(createData?.items ?? []).length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="py-2 text-center text-slate-500">
+                          <td colSpan={6} className="py-2 text-center text-slate-400">
                             No linked items.
                           </td>
                         </tr>
                       ) : (
                         (createData?.items ?? []).map((item, idx) => (
-                          <tr key={item.lineItemId} className="border-b border-slate-100">
+                          <tr key={item.lineItemId} className="border-b border-white/10">
                             <td className="py-1 pr-2">{item.title}</td>
                             <td className="py-1 pr-2">{item.sku}</td>
                             <td className="py-1 pr-2 text-right">{Number(item.qtyPurchased).toFixed(2)}</td>
@@ -512,12 +514,12 @@ function AfterSalesReturnsContent() {
               </div>
 
               <label className="block space-y-1">
-                <span className="text-xs text-slate-500">Notes</span>
+                <span className="text-xs text-slate-400">Notes</span>
                 <textarea
                   value={form.notes}
                   onChange={(event) => setForm((prev) => ({ ...prev, notes: event.target.value }))}
                   rows={3}
-                  className="w-full rounded-xl border border-slate-100 p-3 text-sm"
+                  className="w-full rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-white placeholder:text-white/40 backdrop-blur-xl"
                 />
               </label>
 
@@ -539,7 +541,7 @@ function AfterSalesReturnsContent() {
 
 export default function AfterSalesReturnsPage() {
   return (
-    <Suspense fallback={<section className="linear-card p-8 text-sm text-slate-500">Loading returns...</section>}>
+    <Suspense fallback={<section className="glass-card p-8 text-sm text-slate-400">Loading returns...</section>}>
       <AfterSalesReturnsContent />
     </Suspense>
   );

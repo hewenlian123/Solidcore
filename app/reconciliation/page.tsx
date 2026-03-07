@@ -203,7 +203,7 @@ export default function ReconciliationPage() {
         ) : (
           <Table>
             <TableHeader>
-              <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+              <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
                 <TableHead>Invoice</TableHead>
                 <TableHead>Customer</TableHead>
                 <TableHead>Date</TableHead>
@@ -224,7 +224,7 @@ export default function ReconciliationPage() {
                 </TableRow>
               ) : (
                 invoices.map((row) => (
-                  <TableRow key={row.id} className={row.unmatched ? "bg-rose-50/50 hover:bg-rose-50/70" : "odd:bg-white even:bg-slate-50/30"}>
+                  <TableRow key={row.id} className={row.unmatched ? "border-white/10 bg-rose-500/10 transition-colors hover:bg-rose-500/20" : "border-white/10 transition-colors hover:bg-white/10"}>
                     <TableCell className="font-medium">
                       <Link href={`/invoices/${row.id}`} className="text-slate-900 underline">
                         {row.invoiceNumber}
@@ -280,7 +280,7 @@ export default function ReconciliationPage() {
         </div>
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+            <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
               <TableHead>Payment ID</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Customer</TableHead>

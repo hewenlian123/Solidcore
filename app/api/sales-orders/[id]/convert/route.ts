@@ -3,7 +3,12 @@ import { prisma } from "@/lib/prisma";
 import {
   generateNextSalesOrderNumber,
   syncSalesOutboundQueue,
+  applyReservedForSalesOrder,
+  syncInventoryReservationForSalesOrder,
+  ReserveApplyError,
+  FlooringAllocationError,
 } from "@/lib/sales-orders";
+import { ensureFulfillmentFromSalesOrder } from "@/lib/fulfillment";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = {
@@ -42,7 +47,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         where: { id },
         data: { docType: "SALES_ORDER", status: "CONFIRMED", orderNumber },
       });
+      await ensureFulfillmentFromSalesOrder(tx, { salesOrderId: id });
+      await applyReservedForSalesOrder(tx, id);
       await syncSalesOutboundQueue(tx, id);
+      await syncInventoryReservationForSalesOrder(tx, id);
       return tx.salesOrder.findUnique({
         where: { id },
         include: {
@@ -57,6 +65,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
+    if (error instanceof ReserveApplyError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    if (error instanceof FlooringAllocationError) {
+      return NextResponse.json(
+        {
+          error: `Insufficient stock for ${error.variantName}: need ${error.requiredBoxes} boxes, available ${error.availableBoxes} boxes.`,
+        },
+        { status: 400 },
+      );
+    }
     console.error("PATCH /api/sales-orders/[id]/convert error:", error);
     return NextResponse.json({ error: "Failed to convert quote." }, { status: 500 });
   }

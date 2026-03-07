@@ -5,6 +5,7 @@ import { Download, FileDown, Search } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { useRole } from "@/components/layout/role-provider";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableSkeletonRows } from "@/components/ui/table-skeleton";
 
 type PriceListRow = {
   id: string;
@@ -26,9 +27,9 @@ function money(value: number) {
 }
 
 function marginClass(value: number) {
-  if (value > 40) return "text-emerald-700 font-semibold";
-  if (value < 20) return "text-rose-600 font-semibold";
-  return "text-slate-600 font-semibold";
+  if (value > 40) return "text-emerald-400 font-semibold";
+  if (value < 20) return "text-rose-400 font-semibold";
+  return "text-slate-300 font-semibold";
 }
 
 function esc(text: string) {
@@ -157,44 +158,48 @@ export default function PriceListPage() {
 
   return (
     <section className="space-y-6">
-      <div className="linear-card p-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      {/* Header — glass card */}
+      <div className="glass-card p-6">
+        <div className="glass-card-content flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Price List</h1>
-            <p className="mt-2 text-sm text-slate-500">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Price List</h1>
+            <p className="mt-2 text-sm txt-secondary">
               Dual-mode professional price list with variant-level inventory visibility.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setMode("internal")}
-              className={`h-10 rounded-lg px-4 text-sm ${showInternal ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-200"}`}
-            >
-              Internal Mode
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("customer")}
-              className={`h-10 rounded-lg px-4 text-sm ${!showInternal ? "bg-slate-800 text-white" : "bg-white text-slate-600 border border-slate-200"}`}
-            >
-              Customer Mode
-            </button>
-            <button type="button" onClick={exportPdf} className="ios-secondary-btn h-10 px-3 text-sm">
-              <FileDown className="mr-1.5 h-4 w-4" />
+            <div className="inline-flex rounded-xl border border-white/[0.10] bg-white/[0.05] p-1 backdrop-blur-xl">
+              <button
+                type="button"
+                onClick={() => setMode("internal")}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${showInternal ? "so-chip-active" : "so-chip"}`}
+              >
+                Internal Mode
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("customer")}
+                className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${!showInternal ? "so-chip-active" : "so-chip"}`}
+              >
+                Customer Mode
+              </button>
+            </div>
+            <button type="button" onClick={exportPdf} className="ios-secondary-btn h-10 gap-2 px-4 text-sm">
+              <FileDown className="h-4 w-4" />
               Export PDF
             </button>
-            <button type="button" onClick={exportExcel} className="ios-secondary-btn h-10 px-3 text-sm">
-              <Download className="mr-1.5 h-4 w-4" />
+            <button type="button" onClick={exportExcel} className="ios-secondary-btn h-10 gap-2 px-4 text-sm">
+              <Download className="h-4 w-4" />
               Export Excel
             </button>
           </div>
         </div>
       </div>
 
-      <div className="linear-card p-4">
-        <label className="relative block">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      {/* Search — glass card */}
+      <div className="glass-card p-4">
+        <label className="glass-card-content relative block">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/60" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -204,51 +209,51 @@ export default function PriceListPage() {
         </label>
       </div>
 
-      <div className="linear-card overflow-hidden p-0">
+      {/* Table — glass card container */}
+      <div className="glass-card overflow-hidden p-0">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
-              <TableHead>SKU</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Product Name</TableHead>
-              <TableHead>Variant</TableHead>
-              {showInternal ? <TableHead>Cost</TableHead> : null}
-              <TableHead>Price</TableHead>
-              {showInternal ? <TableHead>Margin %</TableHead> : null}
-              {showInternal ? <TableHead>Available Stock</TableHead> : null}
+            <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
+              <TableHead className="h-12 px-6 text-left text-xs font-semibold uppercase tracking-wider">SKU</TableHead>
+              <TableHead className="h-12 px-6 text-left text-xs font-semibold uppercase tracking-wider">Category</TableHead>
+              <TableHead className="h-12 px-6 text-left text-xs font-semibold uppercase tracking-wider">Product Name</TableHead>
+              <TableHead className="h-12 px-6 text-left text-xs font-semibold uppercase tracking-wider">Variant</TableHead>
+              {showInternal ? <TableHead className="h-12 px-6 text-right text-xs font-semibold uppercase tracking-wider">Cost</TableHead> : null}
+              <TableHead className="h-12 px-6 text-right text-xs font-semibold uppercase tracking-wider">Price</TableHead>
+              {showInternal ? <TableHead className="h-12 px-6 text-right text-xs font-semibold uppercase tracking-wider">Margin %</TableHead> : null}
+              {showInternal ? <TableHead className="h-12 px-6 text-right text-xs font-semibold uppercase tracking-wider">Available Stock</TableHead> : null}
             </TableRow>
           </TableHeader>
           <TableBody>
             {query.isLoading ? (
-              <TableRow>
-                <TableCell colSpan={showInternal ? 8 : 5} className="text-center text-slate-500">
-                  Loading price list...
-                </TableCell>
-              </TableRow>
+              <TableSkeletonRows columns={showInternal ? 8 : 5} rows={10} rowClassName="border-white/10" />
             ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={showInternal ? 8 : 5} className="text-center text-slate-500">
+              <TableRow className="border-white/10 hover:bg-white/[0.06]">
+                <TableCell colSpan={showInternal ? 8 : 5} className="px-6 py-12 text-center txt-muted">
                   No data
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
-                  <TableCell className="font-semibold text-slate-900">{row.sku}</TableCell>
-                  <TableCell>{row.category}</TableCell>
-                  <TableCell>{row.productName}</TableCell>
-                  <TableCell>
+                <TableRow
+                  key={row.id}
+                  className="border-white/10 txt-secondary transition-colors hover:bg-white/[0.06]"
+                >
+                  <TableCell className="px-6 py-4 font-semibold text-white">{row.sku}</TableCell>
+                  <TableCell className="px-6 py-4 txt-muted">{row.category}</TableCell>
+                  <TableCell className="px-6 py-4 font-medium text-white">{row.productName}</TableCell>
+                  <TableCell className="px-6 py-4">
                     <div>{row.variantText}</div>
                     {!showInternal && row.description ? (
-                      <div className="mt-1 text-xs text-slate-500">{row.description}</div>
+                      <div className="mt-1 text-xs txt-muted">{row.description}</div>
                     ) : null}
                   </TableCell>
-                  {showInternal ? <TableCell>{money(row.cost)}</TableCell> : null}
-                  <TableCell className="font-semibold text-slate-900">{money(row.price)}</TableCell>
+                  {showInternal ? <TableCell className="px-6 py-4 text-right txt-muted">{money(row.cost)}</TableCell> : null}
+                  <TableCell className="px-6 py-4 text-right font-semibold text-white">{money(row.price)}</TableCell>
                   {showInternal ? (
-                    <TableCell className={marginClass(row.margin)}>{row.margin.toFixed(2)}%</TableCell>
+                    <TableCell className={`px-6 py-4 text-right ${marginClass(row.margin)}`}>{row.margin.toFixed(2)}%</TableCell>
                   ) : null}
-                  {showInternal ? <TableCell>{row.availableStock.toFixed(2)}</TableCell> : null}
+                  {showInternal ? <TableCell className="px-6 py-4 text-right txt-muted">{row.availableStock.toFixed(2)}</TableCell> : null}
                 </TableRow>
               ))
             )}

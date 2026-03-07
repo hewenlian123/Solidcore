@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0F172A",
+  themeColor: "#0B0F19",
 };
 
 export default function RootLayout({
@@ -23,22 +23,35 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en-US">
-      <body className="bg-[var(--bg)] text-[var(--text)] antialiased [font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]">
-        <AppQueryProvider>
-          <RoleProvider>
-            <NextTopLoader
-              color="#0F172A"
-              height={2}
-              showSpinner={false}
-              crawl={true}
-              crawlSpeed={220}
-              speed={280}
-              shadow="0 0 10px rgba(15, 23, 42, 0.3)"
-            />
-            <PWARegister />
-            <AppShell>{children}</AppShell>
-          </RoleProvider>
-        </AppQueryProvider>
+      <body className="min-h-screen bg-[#0B0F19] text-[var(--text)] antialiased [font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]">
+        <div className="relative min-h-screen overflow-hidden">
+          {/* Minimal premium SaaS background — subtle vertical gradient only */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none fixed inset-0 z-0"
+            style={{
+              background: "linear-gradient(180deg, #0B0F19 0%, #0F172A 100%)",
+            }}
+          />
+
+          <div className="relative z-10">
+            <AppQueryProvider>
+              <RoleProvider>
+                <NextTopLoader
+                  color="#0F172A"
+                  height={2}
+                  showSpinner={false}
+                  crawl={true}
+                  crawlSpeed={220}
+                  speed={280}
+                  shadow="0 0 10px rgba(15, 23, 42, 0.3)"
+                />
+                <PWARegister />
+                <AppShell>{children}</AppShell>
+              </RoleProvider>
+            </AppQueryProvider>
+          </div>
+        </div>
       </body>
     </html>
   );

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRole } from "@/components/layout/role-provider";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableSkeletonRows } from "@/components/ui/table-skeleton";
 import { formatQuantity, formatQuantityWithUnit, normalizeUnitAbbr } from "@/lib/quantity-format";
 
 type MovementRow = {
@@ -176,7 +177,7 @@ export default function InventoryMovementsPage() {
           <select
             value={type}
             onChange={(event) => setType(event.target.value)}
-            className="ios-input h-10 w-44 bg-white px-3 text-sm"
+            className="ios-input h-10 w-44 px-3 text-sm"
           >
             <option value="">All</option>
             {movementTypes.map((entry) => (
@@ -224,7 +225,7 @@ export default function InventoryMovementsPage() {
       <div className="linear-card overflow-x-auto p-0">
         <Table>
           <TableHeader>
-            <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
+            <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
               <TableHead>Date / Time</TableHead>
               <TableHead>SKU</TableHead>
               <TableHead>Item</TableHead>
@@ -237,11 +238,7 @@ export default function InventoryMovementsPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow>
-                <TableCell colSpan={showBalanceColumn ? 8 : 7} className="text-center text-slate-500">
-                  Loading movements...
-                </TableCell>
-              </TableRow>
+              <TableSkeletonRows columns={showBalanceColumn ? 8 : 7} rows={10} rowClassName="border-white/10" />
             ) : items.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={showBalanceColumn ? 8 : 7} className="text-center text-slate-500">
@@ -254,7 +251,7 @@ export default function InventoryMovementsPage() {
                   normalizeUnitAbbr(row.unit) || row.unit
                 }`;
                 return (
-                  <TableRow key={row.id} className="odd:bg-white even:bg-slate-50/40">
+                  <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/10">
                     <TableCell>
                       {new Date(row.createdAt).toLocaleString("en-US", { timeZone: "UTC" })}
                     </TableCell>

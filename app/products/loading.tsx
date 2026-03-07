@@ -7,7 +7,7 @@ export default function ProductsLoading() {
         ))}
       </div>
       <div className="route-skeleton h-28" />
-      <div className="linear-card overflow-hidden p-0">
+      <div className="glass-card overflow-hidden p-0">
         <div className="space-y-2 p-4">
           {Array.from({ length: 10 }).map((_, idx) => (
             <div key={idx} className="route-skeleton h-10" />
