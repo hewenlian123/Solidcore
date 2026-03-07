@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Role } from "@/lib/rbac";
 
 type RoleContextValue = {
@@ -22,22 +22,24 @@ const RoleContext = createContext<RoleContextValue>({
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const [role, setRoleState] = useState<Role>("ADMIN");
   const [userName, setUserName] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let cancelled = false;
     const loadSession = async () => {
       try {
         setLoading(true);
         const res = await fetch("/api/auth/session", { cache: "no-store" });
         const payload = await res.json().catch(() => ({}));
+        if (cancelled) return;
         if (!res.ok) {
           setAuthenticated(false);
-          if (pathname !== "/login") {
-            router.replace(`/login?next=${encodeURIComponent(pathname || "/dashboard")}`);
+          const currentPath = typeof window !== "undefined" ? window.location.pathname : "/dashboard";
+          if (currentPath !== "/login") {
+            router.replace(`/login?next=${encodeURIComponent(currentPath || "/dashboard")}`);
           }
           return;
         }
@@ -45,16 +47,24 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
         setUserName(String(payload?.data?.name ?? ""));
         setAuthenticated(true);
       } catch {
-        setAuthenticated(false);
-        if (pathname !== "/login") {
-          router.replace(`/login?next=${encodeURIComponent(pathname || "/dashboard")}`);
+        if (!cancelled) {
+          setAuthenticated(false);
+          const currentPath = typeof window !== "undefined" ? window.location.pathname : "/dashboard";
+          if (currentPath !== "/login") {
+            router.replace(`/login?next=${encodeURIComponent(currentPath || "/dashboard")}`);
+          }
         }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     void loadSession();
-  }, [pathname, router]);
+    return () => {
+      cancelled = true;
+    };
+    // Run only on mount so navigation does not trigger a session refetch (fixes slow nav)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const setRole = async (nextRole: Role) => {
     try {

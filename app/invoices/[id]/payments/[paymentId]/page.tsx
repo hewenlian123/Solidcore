@@ -115,37 +115,37 @@ export default function InvoicePaymentDetailPage() {
     }
   };
 
-  if (loading) return <div className="linear-card p-8 text-sm text-slate-500">Loading payment...</div>;
-  if (!data) return <div className="linear-card p-8 text-sm text-slate-500">Payment not found.</div>;
+  if (loading) return <div className="glass-card p-8 text-sm text-slate-400">Loading payment...</div>;
+  if (!data) return <div className="glass-card p-8 text-sm text-slate-400">Payment not found.</div>;
 
   return (
     <section className="space-y-6">
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
       ) : null}
 
-      <div className="linear-card p-8">
-        <div className="flex flex-wrap items-start justify-between gap-3">
+      <div className="glass-card p-8">
+        <div className="glass-card-content flex flex-wrap items-start justify-between gap-3">
           <div>
-            <Link href={`/invoices/${invoiceId}`} className="text-xs text-slate-500 hover:text-slate-700">
+            <Link href={`/invoices/${invoiceId}`} className="text-xs text-slate-400 hover:text-white">
               ← Back to Invoice
             </Link>
-            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
+            <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">
               Payment · {data.payment.id.slice(0, 8)}
             </h1>
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-slate-400">
               Invoice: {data.invoice.invoiceNumber} · SO: {data.invoice.salesOrder?.orderNumber ?? "-"}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+            <span className="rounded border border-white/10 bg-white/5 px-2 py-1 text-xs font-semibold text-white/90">
               {data.payment.status}
             </span>
             <button
               type="button"
               onClick={deletePayment}
               disabled={saving || data.payment.status === "VOIDED"}
-              className="ios-secondary-btn h-9 px-3 text-xs text-rose-700 disabled:opacity-60"
+              className="ios-secondary-btn h-9 px-3 text-xs text-rose-300 disabled:opacity-60"
             >
               {data.payment.status === "VOIDED" ? "Deleted" : "Delete Payment"}
             </button>
@@ -154,7 +154,7 @@ export default function InvoicePaymentDetailPage() {
                 type="button"
                 onClick={hardDeletePayment}
                 disabled={saving}
-                className="ios-secondary-btn h-9 px-3 text-xs text-rose-700 disabled:opacity-60"
+                className="ios-secondary-btn h-9 px-3 text-xs text-rose-300 disabled:opacity-60"
               >
                 Hard Delete
               </button>
@@ -164,28 +164,32 @@ export default function InvoicePaymentDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <article className="linear-card space-y-2 p-6 text-sm">
-          <h2 className="text-base font-semibold text-slate-900">Payment Details</h2>
-          <div className="flex justify-between"><span className="text-slate-500">Amount</span><span>${Number(data.payment.amount).toFixed(2)}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Method</span><span>{data.payment.method}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Type</span><span>{data.payment.paymentType}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Reference</span><span>{data.payment.referenceNumber || "-"}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Received At</span><span>{formatDateTime(data.payment.receivedAt)}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Created At</span><span>{formatDateTime(data.payment.createdAt)}</span></div>
-          {data.payment.notes ? (
-            <div className="pt-2 text-xs text-slate-500">Notes: {data.payment.notes}</div>
-          ) : null}
+        <article className="glass-card space-y-2 p-6 text-sm">
+          <div className="glass-card-content">
+            <h2 className="text-base font-semibold text-white">Payment Details</h2>
+            <div className="flex justify-between"><span className="text-slate-400">Amount</span><span className="text-white">${Number(data.payment.amount).toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Method</span><span className="text-white/90">{data.payment.method}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Type</span><span className="text-white/90">{data.payment.paymentType}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Reference</span><span className="text-white/90">{data.payment.referenceNumber || "-"}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Received At</span><span className="text-white/90">{formatDateTime(data.payment.receivedAt)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Created At</span><span className="text-white/90">{formatDateTime(data.payment.createdAt)}</span></div>
+            {data.payment.notes ? (
+              <div className="pt-2 text-xs text-slate-500">Notes: {data.payment.notes}</div>
+            ) : null}
+          </div>
         </article>
 
-        <article className="linear-card space-y-2 p-6 text-sm">
-          <h2 className="text-base font-semibold text-slate-900">Invoice Summary</h2>
-          <div className="flex justify-between"><span className="text-slate-500">Invoice #</span><span>{data.invoice.invoiceNumber}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Status</span><span>{data.invoice.status}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Total</span><span>${Number(data.invoice.total).toFixed(2)}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Paid</span><span>${Number(data.paidTotal).toFixed(2)}</span></div>
-          <div className="flex justify-between font-semibold"><span>Balance</span><span>${Number(data.balanceDue).toFixed(2)}</span></div>
-          <div className="pt-2 text-xs text-slate-500">
-            Customer: {data.invoice.customer?.name ?? "-"}
+        <article className="glass-card space-y-2 p-6 text-sm">
+          <div className="glass-card-content">
+            <h2 className="text-base font-semibold text-white">Invoice Summary</h2>
+            <div className="flex justify-between"><span className="text-slate-400">Invoice #</span><span className="text-white/90">{data.invoice.invoiceNumber}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Status</span><span className="text-white/90">{data.invoice.status}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Total</span><span className="text-white/90">${Number(data.invoice.total).toFixed(2)}</span></div>
+            <div className="flex justify-between"><span className="text-slate-400">Paid</span><span className="text-white/90">${Number(data.paidTotal).toFixed(2)}</span></div>
+            <div className="flex justify-between font-semibold"><span className="text-slate-300">Balance</span><span className="text-white">${Number(data.balanceDue).toFixed(2)}</span></div>
+            <div className="pt-2 text-xs text-slate-500">
+              Customer: {data.invoice.customer?.name ?? "-"}
+            </div>
           </div>
         </article>
       </div>

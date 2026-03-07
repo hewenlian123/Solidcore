@@ -60,34 +60,36 @@ export default function SupplierDetailPage() {
   return (
     <section className="space-y-8">
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
           {error}
         </div>
       ) : null}
 
       {!data ? (
-        <div className="linear-card p-8 text-sm text-slate-500">Loading supplier...</div>
+        <div className="glass-card p-8 text-sm text-slate-400">Loading supplier...</div>
       ) : (
         <>
-          <div className="linear-card p-8">
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{data.supplier.name}</h1>
-            <p className="mt-2 text-sm text-slate-500">
-              Contact: {data.supplier.contactName} · Phone: {data.supplier.phone} · Category:{" "}
-              {data.supplier.category}
-            </p>
+          <div className="glass-card p-8">
+            <div className="glass-card-content">
+              <h1 className="text-2xl font-semibold tracking-tight text-white">{data.supplier.name}</h1>
+              <p className="mt-2 text-sm text-slate-400">
+                Contact: {data.supplier.contactName} · Phone: {data.supplier.phone} · Category:{" "}
+                {data.supplier.category}
+              </p>
+            </div>
           </div>
 
-          <div className="linear-card overflow-hidden p-0">
+          <div className="glass-card overflow-hidden p-0">
             <Table>
               <TableHeader>
-                <TableRow className="bg-slate-50/70 hover:bg-slate-50/70">
-                  <TableHead>Sales Order #</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Project</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Special Status</TableHead>
-                  <TableHead>ETA</TableHead>
-                  <TableHead>Action</TableHead>
+                <TableRow className="border-white/5 bg-white/5 hover:bg-white/5">
+                  <TableHead className="text-slate-300">Sales Order #</TableHead>
+                  <TableHead className="text-slate-300">Customer</TableHead>
+                  <TableHead className="text-slate-300">Project</TableHead>
+                  <TableHead className="text-slate-300">Status</TableHead>
+                  <TableHead className="text-slate-300">Special Status</TableHead>
+                  <TableHead className="text-slate-300">ETA</TableHead>
+                  <TableHead className="text-slate-300">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -99,13 +101,13 @@ export default function SupplierDetailPage() {
                   </TableRow>
                 ) : (
                   data.salesOrders.map((order) => (
-                    <TableRow key={order.id} className="odd:bg-white even:bg-slate-50/40">
-                      <TableCell className="font-semibold text-slate-900">{order.orderNumber}</TableCell>
-                      <TableCell>{order.customer.name}</TableCell>
-                      <TableCell>{order.projectName ?? "-"}</TableCell>
-                      <TableCell>{order.status}</TableCell>
-                      <TableCell>{order.specialOrderStatus ?? "-"}</TableCell>
-                      <TableCell>
+                    <TableRow key={order.id} className="border-white/5 odd:bg-white/5 even:bg-transparent">
+                      <TableCell className="font-semibold text-white">{order.orderNumber}</TableCell>
+                      <TableCell className="text-slate-300">{order.customer.name}</TableCell>
+                      <TableCell className="text-slate-300">{order.projectName ?? "-"}</TableCell>
+                      <TableCell className="text-slate-300">{order.status}</TableCell>
+                      <TableCell className="text-slate-300">{order.specialOrderStatus ?? "-"}</TableCell>
+                      <TableCell className="text-slate-300">
                         {order.etaDate
                           ? new Date(order.etaDate).toLocaleDateString("en-US", {
                               timeZone: "UTC",

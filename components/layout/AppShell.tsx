@@ -361,8 +361,8 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
           open ? "translate-x-0" : "-translate-x-[120%] xl:translate-x-0"
         }`}
       >
-        <div className="flex h-full flex-col">
-          <div className="px-5 pb-4 pt-5">
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="px-5 pb-4 pt-5 shrink-0">
             <div className="flex items-start justify-between">
               <div>
                 <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-slate-500 to-slate-700 text-white shadow-lg shadow-slate-500/20">
@@ -377,7 +377,7 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
             </div>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-4 pb-2">
+          <nav className="so-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-2">
             <div className="space-y-1.5">
               {visibleItems.map((item) => {
                 const childActive = item.children?.some(
@@ -398,14 +398,20 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
                         active
                           ? "bg-white/[0.06] font-semibold text-white shadow-[0_10px_40px_rgba(0,0,0,0.25)] border border-white/[0.10]"
                           : "text-slate-300 hover:bg-white/[0.06] hover:text-white border border-transparent"
-                      }`}
+                      } ${hasChildren ? "cursor-pointer" : ""}`}
                     >
                       <Link
                         href={item.href}
                         prefetch={true}
                         className="flex min-w-0 flex-1 items-center gap-3"
                         onMouseEnter={() => prefetchFastRoute(item.href)}
-                        onClick={() => setOpen(false)}
+                        onClick={(e) => {
+                          if (hasChildren) {
+                            e.preventDefault();
+                            setCollapsedItems((prev) => ({ ...prev, [item.label]: !collapsed }));
+                          }
+                          setOpen(false);
+                        }}
                       >
                         <Icon className="h-3.5 w-3.5" />
                         <span className="flex-1">{item.label}</span>
@@ -460,7 +466,7 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
             </div>
           </nav>
 
-          <div className="px-4 pb-4 pt-3">
+          <div className="shrink-0 border-t border-white/[0.06] px-4 pb-4 pt-3">
             <div className="w-full rounded-2xl border border-white/[0.08] bg-white/[0.04] p-3.5">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold text-white">Solidcore Pro</p>

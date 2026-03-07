@@ -11,6 +11,7 @@ import { SalesByRegionCard } from "@/components/dashboard/SalesByRegionCard";
 import { SalesTrendCard } from "@/components/dashboard/SalesTrendCard";
 import { TopProductsCard } from "@/components/dashboard/TopProductsCard";
 import type { KpiItem, RecentOrderRow, SalesTrendPoint, TopProductRow } from "@/components/dashboard/dashboardMock";
+import { useMemo } from "react";
 
 const kpiContainerVariants = {
   hidden: { opacity: 0 },
@@ -62,78 +63,98 @@ export default function DashboardPage() {
   });
 
   const metrics = dashboardQuery.data?.metrics;
-  const dashboardKpis: KpiItem[] =
-    metrics == null
-      ? kpiItems
-      : [
-          {
-            title: "Today Sales",
-            value: `$${Number(metrics.todayRevenue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            delta: kpiItems[0].delta,
-            positive: kpiItems[0].positive,
-            accent: "blue",
-            sparkline: kpiItems[0].sparkline,
-          },
-          {
-            title: "Orders Today",
-            value: String(metrics.todayOrderCount ?? 0),
-            delta: kpiItems[1].delta,
-            positive: kpiItems[1].positive,
-            accent: "orange",
-            sparkline: kpiItems[1].sparkline,
-          },
-          {
-            title: "Payments Collected",
-            value: `$${Number(metrics.todayRevenue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            delta: kpiItems[2].delta,
-            positive: kpiItems[2].positive,
-            accent: "green",
-            progress: kpiItems[2].progress,
-            sparkline: kpiItems[2].sparkline,
-          },
-          {
-            title: "Inventory Value",
-            value: `$${Number(metrics.totalReceivable ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-            delta: kpiItems[3].delta,
-            positive: kpiItems[3].positive,
-            accent: "amber",
-            progress: kpiItems[3].progress,
-            sparkline: kpiItems[3].sparkline,
-            warning: `${metrics.lowStockCount ?? 0} low-stock items`,
-          },
-        ];
+  const dashboardKpis: KpiItem[] = useMemo(
+    () =>
+      metrics == null
+        ? kpiItems
+        : [
+            {
+              title: "Today Sales",
+              value: `$${Number(metrics.todayRevenue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              delta: kpiItems[0].delta,
+              positive: kpiItems[0].positive,
+              accent: "blue",
+              sparkline: kpiItems[0].sparkline,
+            },
+            {
+              title: "Orders Today",
+              value: String(metrics.todayOrderCount ?? 0),
+              delta: kpiItems[1].delta,
+              positive: kpiItems[1].positive,
+              accent: "orange",
+              sparkline: kpiItems[1].sparkline,
+            },
+            {
+              title: "Payments Collected",
+              value: `$${Number(metrics.todayRevenue ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              delta: kpiItems[2].delta,
+              positive: kpiItems[2].positive,
+              accent: "green",
+              progress: kpiItems[2].progress,
+              sparkline: kpiItems[2].sparkline,
+            },
+            {
+              title: "Inventory Value",
+              value: `$${Number(metrics.totalReceivable ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+              delta: kpiItems[3].delta,
+              positive: kpiItems[3].positive,
+              accent: "amber",
+              progress: kpiItems[3].progress,
+              sparkline: kpiItems[3].sparkline,
+              warning: `${metrics.lowStockCount ?? 0} low-stock items`,
+            },
+          ],
+    [
+      metrics?.todayRevenue,
+      metrics?.todayOrderCount,
+      metrics?.totalReceivable,
+      metrics?.lowStockCount,
+    ],
+  );
 
-  const dashboardTrend: SalesTrendPoint[] =
-    dashboardQuery.data?.trendData?.map((point) => ({
-      day: new Date(point.date).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }),
-      revenue: Number(point.amount ?? 0),
-      orders: Number(point.orders ?? 0),
-    })) ?? salesTrend;
+  const dashboardTrend: SalesTrendPoint[] = useMemo(
+    () =>
+      dashboardQuery.data?.trendData?.map((point) => ({
+        day: new Date(point.date).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" }),
+        revenue: Number(point.amount ?? 0),
+        orders: Number(point.orders ?? 0),
+      })) ?? salesTrend,
+    [dashboardQuery.data?.trendData],
+  );
 
-  const dashboardTopProducts: TopProductRow[] =
-    dashboardQuery.data?.topProducts?.map((item) => ({
-      id: item.id,
-      name: item.name,
-      sku: item.sku,
-      sales: Number(item.sales),
-      revenue: Number(item.revenue),
-      trend: item.trend,
-    })) ?? topProducts;
+  const dashboardTopProducts: TopProductRow[] = useMemo(
+    () =>
+      dashboardQuery.data?.topProducts?.map((item) => ({
+        id: item.id,
+        name: item.name,
+        sku: item.sku,
+        sales: Number(item.sales),
+        revenue: Number(item.revenue),
+        trend: item.trend,
+      })) ?? topProducts,
+    [dashboardQuery.data?.topProducts],
+  );
 
-  const dashboardRecentOrders: RecentOrderRow[] =
-    dashboardQuery.data?.recentOrders?.map((row) => ({
-      id: row.id,
-      customer: row.customer,
-      date: row.date,
-      total: `$${Number(row.total ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-      status: row.status,
-      payment: row.payment,
-    })) ?? recentOrders;
+  const dashboardRecentOrders: RecentOrderRow[] = useMemo(
+    () =>
+      dashboardQuery.data?.recentOrders?.map((row) => ({
+        id: row.id,
+        customer: row.customer,
+        date: row.date,
+        total: `$${Number(row.total ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+        status: row.status,
+        payment: row.payment,
+      })) ?? recentOrders,
+    [dashboardQuery.data?.recentOrders],
+  );
 
-  const sectionReveal = {
-    initial: reduced ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 },
-    animate: { opacity: 1, y: 0 },
-  };
+  const sectionReveal = useMemo(
+    () => ({
+      initial: reduced ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 },
+      animate: { opacity: 1, y: 0 },
+    }),
+    [reduced],
+  );
 
   return (
     <section className="space-y-6">

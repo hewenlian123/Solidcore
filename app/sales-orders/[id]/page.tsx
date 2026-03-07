@@ -445,7 +445,7 @@ export default function SalesOrderDetailPage() {
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
   const [tickets, setTickets] = useState<SalesOrderTicket[]>([]);
   const [invoiceId, setInvoiceId] = useState<string | null>(null);
-  const [activeBottomTab, setActiveBottomTab] = useState<"PAYMENTS" | "FULFILLMENT" | "TICKETS">("PAYMENTS");
+  const [activeBottomTab, setActiveBottomTab] = useState<"PAYMENTS" | "FULFILLMENT" | "TICKETS" | "ACTIVITY">("PAYMENTS");
   const [expandedSpecsByItem, setExpandedSpecsByItem] = useState<Record<string, boolean>>({});
   const [ticketStatusFilter, setTicketStatusFilter] = useState<
     "ALL" | "open" | "in_progress" | "done" | "voided"
@@ -1610,354 +1610,161 @@ export default function SalesOrderDetailPage() {
   }, [activeDrawerItemId, mode, isDrawerDirty, activeDrawerItem, activeDrawerDraft, rowDraftsByItemId]);
 
   return (
-    <section className="so-glass-page mx-auto max-w-[1400px] space-y-3 px-4 py-3 text-[#111827]">
+    <section className="so-glass-page mx-auto max-w-[1400px] space-y-6 px-4 py-6 text-white">
       {successMessage ? (
-        <div className="inline-flex rounded-md border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs text-emerald-700">
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2.5 text-sm text-emerald-200">
           {successMessage}
         </div>
       ) : null}
       {showGlobalError ? (
-        <div className="inline-flex rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-sm text-rose-200">
           {error}
         </div>
       ) : null}
 
       {!data ? (
-        <div className="so-panel p-6 text-sm text-[#6B7280]">Loading order...</div>
+        <div className="glass-card p-8 text-sm text-slate-400">
+          <div className="glass-card-content">Loading order...</div>
+        </div>
       ) : (
         <>
-          <div className="so-panel px-4 py-4">
-            <div className="grid gap-3 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:items-start">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl font-semibold tracking-tight text-[#111827]">{data.orderNumber}</h1>
-                  <span
-                    className={`so-chip ${
-                      mode === "edit" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-700"
-                    }`}
-                  >
-                    {mode === "edit" ? "EDIT" : "VIEW"}
-                  </span>
-                  <span className={`so-chip ${getSalesOrderStatusBadge(data.status)}`}>
-                    {getSalesOrderStatusLabel(data.status)}
-                  </span>
-                  <span
-                    className={`so-chip ${
-                      paymentStatus === "Paid"
-                        ? "bg-emerald-100 text-emerald-700"
-                        : paymentStatus === "Partial"
-                          ? "bg-sky-100 text-sky-700"
-                          : "bg-slate-200 text-slate-700"
-                    }`}
-                  >
-                    {paymentStatus}
-                  </span>
-                </div>
+          {/* 1) Header Summary */}
+          <header className="glass-card px-6 py-4">
+            <div className="glass-card-content flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-3">
+                <h1 className="text-xl font-semibold tracking-tight text-white">{data.orderNumber}</h1>
+                <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${mode === "edit" ? "border-amber-500/40 bg-amber-500/10 text-amber-200" : "border-white/20 bg-white/5 text-slate-300"}`}>
+                  {mode === "edit" ? "EDIT" : "VIEW"}
+                </span>
+                <span className="rounded-full border border-white/20 bg-white/5 px-2.5 py-0.5 text-xs font-medium text-slate-300">
+                  {getSalesOrderStatusLabel(data.status)}
+                </span>
+                <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${paymentStatus === "Paid" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200" : paymentStatus === "Partial" ? "border-sky-500/40 bg-sky-500/10 text-sky-200" : "border-white/20 bg-white/5 text-slate-300"}`}>
+                  {paymentStatus}
+                </span>
+                <span className="text-slate-500">·</span>
+                <span className="text-sm text-slate-300">{data.customer.name || "-"}</span>
+                <span className="text-slate-500">·</span>
+                <span className="text-sm text-slate-400">{data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"}</span>
+                <span className="text-slate-500">·</span>
+                <span className="text-sm text-slate-500">{new Date(data.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => router.push(`/sales-orders/edit/${data.id}`)} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10">
+                  Edit Order
+                </button>
+                {data.docType === "SALES_ORDER" ? (
+                  <button type="button" onClick={createInvoiceFromSalesOrder} disabled={!isInvoiceCreateEligible} title={!isInvoiceCreateEligible ? "Confirm the sales order to create an invoice." : undefined} className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:opacity-50">
+                    {invoiceId ? "View Invoice" : "Create Invoice"}
+                  </button>
+                ) : null}
+                {data.docType === "SALES_ORDER" ? (
+                  <button type="button" onClick={() => { if (activeFulfillment?.id) { router.push(`/fulfillment/${activeFulfillment.id}`); return; } setOpenStartFulfillmentDialog(true); }} disabled={!activeFulfillment && !canStartFulfillment} title={!activeFulfillment && !canStartFulfillment ? "Confirm the sales order before starting fulfillment." : undefined} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10 disabled:opacity-50">
+                    {activeFulfillment ? "View Fulfillment" : "Start Fulfillment"}
+                  </button>
+                ) : null}
+                {data.docType === "SALES_ORDER" ? (
+                  <button type="button" onClick={createReturnFromSalesOrder} disabled={creatingReturn} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10 disabled:opacity-50">
+                    {creatingReturn ? "Creating..." : "Create Return"}
+                  </button>
+                ) : null}
+                <Link href={`/orders/${data.id}/print`} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10">
+                  Print
+                </Link>
+                <button type="button" onClick={() => setPdfPreview({ title: `${data.docType === "QUOTE" ? "Quote" : "Sales Order"} ${data.orderNumber}`, src: `/api/pdf/sales-order/${data.id}` })} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10">
+                  PDF
+                </button>
+              </div>
+            </div>
+          </header>
 
-                <div className="rounded-xl border border-white/70 bg-white/55 p-3 backdrop-blur-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Customer Information</p>
-                  <div className="mt-2 grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
-                    <span className="text-[#6B7280]">Customer</span>
-                    <span className="text-[#111827]">
-                      {data.customer.name || "-"}
-                      {data.customer.phone ? ` (${data.customer.phone})` : ""}
-                    </span>
-                    <span className="text-[#6B7280]">Project</span>
-                    <span className="text-[#111827]">{data.projectName || "-"}</span>
-                    <span className="text-[#6B7280]">Salesperson</span>
-                    <span className="text-[#111827]">{data.salespersonName || "-"}</span>
-                    <span className="text-[#6B7280]">Tax Rate</span>
-                    <span className="text-[#111827]">
-                      {data.customer.taxExempt ? "Tax Exempt (0%)" : `${Number(data.taxRate ?? 0).toFixed(2)}%`}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-white/70 bg-white/55 p-3 backdrop-blur-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Fulfillment</p>
-                  <div className="mt-2 grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
-                    <span className="text-[#6B7280]">Fulfillment Type</span>
-                    <span className="text-[#111827]">{data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"}</span>
-                    <span className="text-[#6B7280]">Fulfillment Status</span>
-                    <span className="text-[#111827]">
-                      {activeFulfillmentDetail ? (
-                        <span className="inline-flex items-center gap-2">
-                          <span className="so-chip bg-slate-200 text-slate-700">{activeFulfillmentDetail.status}</span>
-                          {activeFulfillmentProgress.partial ? (
-                            <span className="so-chip border border-amber-200/60 bg-amber-50/70 text-amber-700">
-                              Partial
-                            </span>
-                          ) : null}
-                        </span>
-                      ) : activeFulfillment ? (
-                        activeFulfillment.status
-                      ) : (
-                        "-"
-                      )}
-                    </span>
-                    <span className="text-[#6B7280]">Progress</span>
-                    <span className="text-[#111827]">
-                      {activeFulfillmentDetail ? (
-                        <span className="inline-flex items-center gap-2">
-                          <span>
-                            {activeFulfillmentProgress.completed}/{activeFulfillmentProgress.total} items ·{" "}
-                            {activeFulfillmentProgress.percent}%
-                          </span>
-                          <span className="h-2 w-32 overflow-hidden rounded-full bg-slate-200">
-                            <span
-                              className="block h-2 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500"
-                              style={{ width: `${Math.min(Math.max(activeFulfillmentProgress.percent, 0), 100)}%` }}
-                            />
-                          </span>
-                        </span>
-                      ) : (
-                        "-"
-                      )}
-                    </span>
-                    <span className="text-[#6B7280]">Documents</span>
-                    <span className="flex flex-wrap gap-2">
-                      {activeFulfillment ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setPdfPreview({
-                                title: `Pick List ${activeFulfillment.id.slice(0, 8)}`,
-                                src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=pick`,
-                              })
-                            }
-                            className="so-action-btn px-2.5"
-                          >
-                            Pick List
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setPdfPreview({
-                                title: `${data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"} Slip ${activeFulfillment.id.slice(0, 8)}`,
-                                src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=slip`,
-                              })
-                            }
-                            className="so-action-btn px-2.5"
-                          >
-                            {data.fulfillmentMethod === "DELIVERY" ? "Delivery Slip" : "Pickup Slip"}
-                          </button>
-                        </>
-                      ) : (
-                        "-"
-                      )}
-                    </span>
-                    <span className="text-[#6B7280]">Pickup</span>
-                    <span className="text-[#111827]">
-                      {data.fulfillmentMethod === "PICKUP"
-                        ? String(data.pickupNotes ?? "").trim() || "Pickup"
-                        : "-"}
-                    </span>
-                    <span className="text-[#6B7280]">Notes</span>
-                    <span className="text-[#111827]">{String(data.notes ?? "").trim() || "-"}</span>
-                    <span className="text-[#6B7280]">Created Date</span>
-                    <span className="text-[#111827]">
-                      {new Date(data.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
-                    </span>
-                    {data.fulfillmentMethod === "DELIVERY" ? (
-                      <>
-                        <span className="text-[#6B7280]">Delivery Address</span>
-                        <span className="text-[#111827]">
-                          {[
-                            data.deliveryAddress1,
-                            data.deliveryAddress2,
-                            data.deliveryCity,
-                            data.deliveryState,
-                            data.deliveryZip,
-                          ]
-                            .filter((part) => String(part ?? "").trim())
-                            .join(", ") || "-"}
-                        </span>
-                      </>
-                    ) : null}
+          {/* 2) Main 2-column workspace: 70% left, 30% right */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
+            {/* Left: Order Info, Fulfillment Summary, then Items table below */}
+            <div className="space-y-6">
+              {/* A. Order Info */}
+              <div className="glass-card p-6">
+                <div className="glass-card-content">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Order Info</h2>
+                  <div className="mt-4 grid grid-cols-[100px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm">
+                    <span className="text-slate-500">Customer</span>
+                    <span className="text-white/90">{data.customer.name || "-"}{data.customer.phone ? ` · ${data.customer.phone}` : ""}</span>
+                    <span className="text-slate-500">Project</span>
+                    <span className="text-white/90">{data.projectName || "-"}</span>
+                    <span className="text-slate-500">Salesperson</span>
+                    <span className="text-white/90">{data.salespersonName || "-"}</span>
+                    <span className="text-slate-500">Tax Rate</span>
+                    <span className="text-white/90">{data.customer.taxExempt ? "Tax Exempt (0%)" : `${Number(data.taxRate ?? 0).toFixed(2)}%`}</span>
+                    <span className="text-slate-500">Warehouse</span>
+                    <span className="text-white/90">—</span>
+                    <span className="text-slate-500">Order Date</span>
+                    <span className="text-white/90">{new Date(data.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</span>
+                    <span className="text-slate-500">Pickup / Delivery</span>
+                    <span className="text-white/90">{data.fulfillmentMethod === "PICKUP" ? (String(data.pickupNotes ?? "").trim() || "Pickup") : [data.deliveryAddress1, data.deliveryAddress2, data.deliveryCity, data.deliveryState, data.deliveryZip].filter(Boolean).join(", ") || "Delivery"}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-3 lg:justify-self-end lg:w-full lg:max-w-[430px]">
-                <div className="rounded-xl border border-white/70 bg-white/55 p-3 backdrop-blur-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Order Summary</p>
-                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                    <div>
-                      <p className="text-[#6B7280]">TOTAL</p>
-                      <p className="text-sm font-semibold text-[#111827]">${Number(liveTotal).toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[#6B7280]">PAID</p>
-                      <p className="text-sm font-semibold text-[#111827]">${Number(data.paidAmount).toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[#6B7280]">BALANCE</p>
-                      <p className="text-base font-semibold text-[#111827]">${Number(liveBalanceDue).toFixed(2)}</p>
-                    </div>
+              {/* B. Fulfillment Summary */}
+              <div className="glass-card p-6">
+                <div className="glass-card-content">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fulfillment Summary</h2>
+                  <div className="mt-4 grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm">
+                    <span className="text-slate-500">Fulfillment Type</span>
+                    <span className="text-white/90">{data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"}</span>
+                    <span className="text-slate-500">Fulfillment Status</span>
+                    <span className="text-white/90">{activeFulfillmentDetail ? (<span className="inline-flex items-center gap-2"><span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-xs text-slate-300">{activeFulfillmentDetail.status}</span>{activeFulfillmentProgress.partial ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200">Partial</span> : null}</span>) : activeFulfillment ? activeFulfillment.status : "-"}</span>
+                    <span className="text-slate-500">Progress</span>
+                    <span className="text-white/90">{activeFulfillmentDetail ? (<span className="inline-flex items-center gap-2"><span>{activeFulfillmentProgress.completed}/{activeFulfillmentProgress.total} items · {activeFulfillmentProgress.percent}%</span><span className="h-1.5 w-24 overflow-hidden rounded-full bg-white/10"><span className="block h-1.5 rounded-full bg-white/30" style={{ width: `${Math.min(Math.max(activeFulfillmentProgress.percent, 0), 100)}%` }} /></span></span>) : "-"}</span>
+                    <span className="text-slate-500">Pickup / Delivery</span>
+                    <span className="text-white/90">{data.fulfillmentMethod === "PICKUP" ? (String(data.pickupNotes ?? "").trim() || "Pickup") : [data.deliveryAddress1, data.deliveryCity, data.deliveryState, data.deliveryZip].filter(Boolean).join(", ") || "-"}</span>
+                    <span className="text-slate-500">Documents</span>
+                    <span className="flex flex-wrap gap-2">{activeFulfillment ? (<><button type="button" onClick={() => setPdfPreview({ title: `Pick List ${activeFulfillment.id.slice(0, 8)}`, src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=pick` })} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/90 transition hover:bg-white/10">Pick List</button><button type="button" onClick={() => setPdfPreview({ title: `${data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"} Slip ${activeFulfillment.id.slice(0, 8)}`, src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=slip` })} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/90 transition hover:bg-white/10">{data.fulfillmentMethod === "DELIVERY" ? "Delivery Slip" : "Pickup Slip"}</button></>) : "-"}</span>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                <div className="rounded-xl border border-white/70 bg-white/55 p-3 backdrop-blur-sm">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[#6B7280]">Actions</p>
-                  <div className="mt-2 space-y-3">
-                    <div>
-                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">Primary Action</p>
-                      <div className="flex flex-wrap gap-2">
-                        {data.docType === "SALES_ORDER" ? (
-                          <button
-                            type="button"
-                            onClick={createInvoiceFromSalesOrder}
-                            disabled={!isInvoiceCreateEligible}
-                            title={!isInvoiceCreateEligible ? "Confirm the sales order to create an invoice." : undefined}
-                            className="so-action-btn border-emerald-200/70 bg-emerald-50/80 text-emerald-700 hover:bg-emerald-100/90 disabled:opacity-50"
-                          >
-                            {invoiceId ? "View Invoice" : "Create Invoice"}
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">Secondary Actions</p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/sales-orders/edit/${data.id}`)}
-                          className="so-action-btn"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/sales-orders/edit/${data.id}`)}
-                          className="so-action-btn"
-                        >
-                          Edit Details
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => router.push(`/sales-orders/edit/${data.id}`)}
-                          className="so-action-btn"
-                        >
-                          Edit Items
-                        </button>
-                        <Link href={`/orders/${data.id}/print`} className="so-action-btn">
-                          Print
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setPdfPreview({
-                              title: `${data.docType === "QUOTE" ? "Quote" : "Sales Order"} ${data.orderNumber}`,
-                              src: `/api/pdf/sales-order/${data.id}`,
-                            })
-                          }
-                          className="so-action-btn"
-                        >
-                          PDF
-                        </button>
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">Workflow</p>
-                      <div className="flex flex-wrap gap-2">
-                        {data.docType === "SALES_ORDER" ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (activeFulfillment?.id) {
-                                router.push(`/fulfillment/${activeFulfillment.id}`);
-                                return;
-                              }
-                              setOpenStartFulfillmentDialog(true);
-                            }}
-                            disabled={!activeFulfillment && !canStartFulfillment}
-                            title={
-                              !activeFulfillment && !canStartFulfillment
-                                ? "Confirm the sales order before starting fulfillment."
-                                : undefined
-                            }
-                            className="so-action-btn disabled:opacity-50"
-                          >
-                            {activeFulfillment ? "View Fulfillment" : "Start Fulfillment"}
-                          </button>
-                        ) : null}
-                        {data.docType === "SALES_ORDER" ? (
-                          <button
-                            type="button"
-                            onClick={createReturnFromSalesOrder}
-                            disabled={creatingReturn}
-                            className="so-action-btn disabled:opacity-50"
-                          >
-                            {creatingReturn ? "Creating Return..." : "Create Return"}
-                          </button>
-                        ) : null}
-                        {data.docType === "SALES_ORDER" && hasRelatedReturns ? (
-                          <Link href={`/after-sales/returns?search=${encodeURIComponent(data.orderNumber)}`} className="so-action-btn">
-                            View Returns
-                          </Link>
-                        ) : null}
-                        {data.docType === "QUOTE" ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => updateStatus("DRAFT")}
-                              disabled={savingStatus}
-                              className="so-action-btn"
-                            >
-                              Save Draft
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => updateStatus("QUOTED")}
-                              disabled={savingStatus}
-                              className="so-action-btn"
-                            >
-                              Mark Quoted
-                            </button>
-                            <button
-                              type="button"
-                              onClick={convertQuote}
-                              disabled={savingStatus || data.status === "CANCELLED"}
-                              className="so-action-btn"
-                            >
-                              Convert
-                            </button>
-                          </>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div>
-                      <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-[#6B7280]">Navigation</p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (mode === "edit" && hasUnsavedChanges) {
-                              const ok = window.confirm("You have unsaved changes. Leave this page?");
-                              if (!ok) return;
-                            }
-                            router.push("/orders");
-                          }}
-                          className="so-action-btn gap-1"
-                        >
-                          <ArrowLeft className="h-3.5 w-3.5" />
-                          Back
-                        </button>
-                      </div>
-                    </div>
+            {/* Right: Summary rail */}
+            <div className="space-y-6">
+              {/* A. Financial Summary */}
+              <div className="glass-card p-5">
+                <div className="glass-card-content">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Financial Summary</h2>
+                  <div className="mt-4 space-y-2 text-sm">
+                    <div className="flex justify-between"><span className="text-slate-500">Total</span><span className="font-semibold text-white">${Number(liveTotal).toFixed(2)}</span></div>
+                    <div className="flex justify-between"><span className="text-slate-500">Paid</span><span className="text-white/90">${Number(data.paidAmount).toFixed(2)}</span></div>
+                    <div className="flex justify-between border-t border-white/10 pt-2"><span className="text-slate-400">Balance</span><span className="font-semibold text-white">${Number(liveBalanceDue).toFixed(2)}</span></div>
                   </div>
                 </div>
-
-                {data.docType === "SALES_ORDER" && !isInvoiceCreateEligible ? (
-                  <p className="text-[11px] text-slate-500">Confirm the sales order to create an invoice.</p>
-                ) : null}
-                {data.docType === "SALES_ORDER" && !activeFulfillment && !canStartFulfillment ? (
-                  <p className="text-[11px] text-slate-500">Confirm the sales order before starting fulfillment.</p>
-                ) : null}
+              </div>
+              {/* B. Quick Actions */}
+              <div className="glass-card p-5">
+                <div className="glass-card-content">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Quick Actions</h2>
+                  <div className="mt-3 flex flex-col gap-2">
+                    <Link href="/orders" className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-left text-xs font-medium text-white/90 transition hover:bg-white/10">
+                      Back to Orders
+                    </Link>
+                    <button type="button" onClick={() => router.push(`/sales-orders/edit/${data.id}`)} className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-left text-xs font-medium text-white/90 transition hover:bg-white/10">Edit Order</button>
+                    {data.docType === "SALES_ORDER" ? <button type="button" onClick={createInvoiceFromSalesOrder} disabled={!isInvoiceCreateEligible} className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-left text-xs font-medium text-white/90 transition hover:bg-white/10 disabled:opacity-50">{invoiceId ? "View Invoice" : "Create Invoice"}</button> : null}
+                    {data.docType === "SALES_ORDER" ? <button type="button" onClick={() => { if (activeFulfillment?.id) router.push(`/fulfillment/${activeFulfillment.id}`); else setOpenStartFulfillmentDialog(true); }} disabled={!activeFulfillment && !canStartFulfillment} className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-left text-xs font-medium text-white/90 transition hover:bg-white/10 disabled:opacity-50">{activeFulfillment ? "View Fulfillment" : "Start Fulfillment"}</button> : null}
+                    {data.docType === "SALES_ORDER" ? <button type="button" onClick={createReturnFromSalesOrder} disabled={creatingReturn} className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-left text-xs font-medium text-white/90 transition hover:bg-white/10 disabled:opacity-50">Create Return</button> : null}
+                    <Link href={`/orders/${data.id}/print`} className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-center text-xs font-medium text-white/90 transition hover:bg-white/10">Print PDF</Link>
+                  </div>
+                </div>
+              </div>
+              {/* C. Fulfillment Snapshot */}
+              <div className="glass-card p-5">
+                <div className="glass-card-content">
+                  <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fulfillment Snapshot</h2>
+                  <div className="mt-3 space-y-2 text-xs text-slate-400">
+                    <p><span className="text-slate-500">Type:</span> {data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"}</p>
+                    <p><span className="text-slate-500">Status:</span> {activeFulfillment ? activeFulfillment.status : "—"}</p>
+                    {activeFulfillmentDetail ? <p><span className="text-slate-500">Progress:</span> {activeFulfillmentProgress.completed}/{activeFulfillmentProgress.total} · {activeFulfillmentProgress.percent}%</p> : null}
+                    {activeFulfillment ? <div className="pt-1 flex gap-2"><button type="button" onClick={() => setPdfPreview({ title: "Pick List", src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=pick` })} className="text-white/70 hover:text-white">Pick List</button><button type="button" onClick={() => setPdfPreview({ title: "Slip", src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=slip` })} className="text-white/70 hover:text-white">Slip</button></div> : null}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2415,8 +2222,9 @@ export default function SalesOrderDetailPage() {
             </div>
           ) : null}
 
-          <article className="so-panel overflow-hidden p-0">
-            <div className="border-b border-white/70 px-3 py-2">
+          <article className="glass-card overflow-hidden p-0">
+            <div className="glass-card-content">
+            <div className="border-b border-white/10 px-4 py-3">
               {mode === "edit" ? (
                 <>
                 <div className="relative grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_86px_120px_92px]">
@@ -2594,16 +2402,16 @@ export default function SalesOrderDetailPage() {
               (() => {
                 const reservedBoxes = getReservedFlooringBoxesFromItems(data.items);
                 return reservedBoxes > 0 ? (
-                  <div className="border-b border-emerald-200/60 bg-emerald-50/70 px-3 py-1.5 text-[11px] text-emerald-700 backdrop-blur-sm">
+                  <div className="border-b border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-[11px] text-emerald-200">
                     Reserved: {reservedBoxes} boxes
                   </div>
                 ) : null;
               })()
             ) : null}
 
-            <div className="max-h-[calc(100vh-360px)] overflow-auto bg-white">
+            <div className="max-h-[calc(100vh-360px)] overflow-auto">
               <div
-                className={`sticky top-0 z-10 grid grid-cols-1 border-b border-white/70 bg-white/70 px-3 py-2 text-[10px] uppercase tracking-widest text-[#6B7280] backdrop-blur-sm ${
+                className={`sticky top-0 z-10 grid grid-cols-1 border-b border-white/10 bg-white/[0.06] px-4 py-3 text-[10px] font-semibold uppercase tracking-widest text-slate-400 backdrop-blur-sm ${
                   mode === "edit"
                     ? "md:grid-cols-[minmax(0,4fr)_84px_110px_84px_120px_172px]"
                     : "md:grid-cols-[minmax(0,4fr)_140px_84px_110px_84px_120px]"
@@ -2709,7 +2517,7 @@ export default function SalesOrderDetailPage() {
                         setActiveDrawerItemId(item.id);
                       }
                     }}
-                    className={`grid grid-cols-1 items-center border-b border-white/70 px-3 py-2 text-sm transition-colors hover:bg-white/70 ${
+                    className={`grid grid-cols-1 items-center border-b border-white/10 px-4 py-3 text-sm transition-colors hover:bg-white/[0.06] ${
                       mode === "edit"
                         ? "md:grid-cols-[minmax(0,4fr)_84px_110px_84px_120px_172px]"
                         : "md:grid-cols-[minmax(0,4fr)_140px_84px_110px_84px_120px]"
@@ -2718,7 +2526,7 @@ export default function SalesOrderDetailPage() {
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-1.5">
                         {!item.variantId ? <span className="h-1.5 w-1.5 rounded-full bg-rose-500" /> : null}
-                        <p className="truncate font-semibold text-slate-900">{displayName}</p>
+                        <p className="truncate font-semibold text-white">{displayName}</p>
                       </div>
                       {windowSummary ? (
                         <p className="mt-0.5 truncate text-[11px] text-slate-500">{windowSummary}</p>
@@ -2805,7 +2613,7 @@ export default function SalesOrderDetailPage() {
                     ) : (
                       <div className="px-2 text-right text-sm text-slate-700">${Number(item.lineDiscount || 0).toFixed(2)}</div>
                     )}
-                    <div className="px-2 text-right font-semibold text-slate-900">
+                    <div className="px-2 text-right font-semibold text-white">
                       $
                       {mode === "edit"
                         ? Number.isFinite(liveLineTotal)
@@ -2840,25 +2648,26 @@ export default function SalesOrderDetailPage() {
                 );
               })}
               {filteredItems.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-[#6B7280]">No matching items.</div>
+                <div className="px-4 py-6 text-sm text-slate-500">No matching items.</div>
               ) : null}
             </div>
 
-            <div className="flex justify-end border-t border-white/70 px-3 py-2">
+                <div className="flex justify-end border-t border-white/10 px-4 py-3">
               <div className="w-full max-w-xs space-y-1 text-sm">
-                <div className="flex items-center justify-between text-[#6B7280]">
+                <div className="flex items-center justify-between text-slate-400">
                   <span>Subtotal</span>
                   <span>${Number(data.subtotal).toFixed(2)}</span>
                 </div>
-                <div className="flex items-center justify-between text-[#6B7280]">
+                <div className="flex items-center justify-between text-slate-400">
                   <span>Tax</span>
                   <span>${Number(data.tax).toFixed(2)}</span>
                 </div>
-                <div className="flex items-center justify-between font-semibold text-[#111827]">
+                <div className="flex items-center justify-between font-semibold text-white">
                   <span>Total</span>
                   <span className="text-sm">${Number(data.total).toFixed(2)}</span>
                 </div>
               </div>
+            </div>
             </div>
           </article>
 
@@ -3040,23 +2849,24 @@ export default function SalesOrderDetailPage() {
             </div>
           ) : null}
 
-          <div className="border-t border-[#E5E7EB] pt-2">
-            <div className="sticky top-2 z-20 mb-2 flex items-center gap-1 border-b border-[#E5E7EB] bg-[#F3F4F6]/95 pb-2 pt-1 backdrop-blur-sm">
+          <div className="border-t border-white/10 pt-6">
+            <div className="mb-4 flex items-center gap-1 border-b border-white/10 pb-3">
               {[
                 { id: "PAYMENTS", label: "Payments" },
                 { id: "FULFILLMENT", label: "Fulfillment" },
                 { id: "TICKETS", label: "Tickets" },
+                { id: "ACTIVITY", label: "Activity" },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() =>
-                    setActiveBottomTab(tab.id as "PAYMENTS" | "FULFILLMENT" | "TICKETS")
+                    setActiveBottomTab(tab.id as "PAYMENTS" | "FULFILLMENT" | "TICKETS" | "ACTIVITY")
                   }
-                  className={`inline-flex h-8 items-center rounded-md border px-3 text-xs ${
+                  className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
                     activeBottomTab === tab.id
-                      ? "border-[#CBD5E1] bg-white text-[#111827]"
-                      : "border-transparent bg-transparent text-[#6B7280] hover:bg-slate-100"
+                      ? "border-white/20 bg-white/10 text-white"
+                      : "border-transparent text-slate-400 hover:bg-white/5 hover:text-slate-300"
                   }`}
                 >
                   {tab.label}
@@ -3065,13 +2875,14 @@ export default function SalesOrderDetailPage() {
             </div>
 
             {activeBottomTab === "PAYMENTS" ? (
-              <article className="so-panel p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-slate-900">Payments</h2>
+              <article className="glass-card p-4">
+                <div className="glass-card-content">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-white">Payments</h2>
                   <button
                     type="button"
                     onClick={() => setOpenPayment(true)}
-                    className="ios-primary-btn h-8 px-3 text-xs"
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10"
                   >
                     Add Payment
                   </button>
@@ -3082,7 +2893,7 @@ export default function SalesOrderDetailPage() {
                   <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
                       <thead>
-                        <tr className="border-b border-slate-100 text-left text-slate-500">
+                        <tr className="border-b border-white/10 text-left text-slate-400">
                           <th className="py-2 pr-4">Received</th>
                           <th className="py-2 pr-4">Method</th>
                           <th className="py-2 pr-4">Reference</th>
@@ -3095,8 +2906,8 @@ export default function SalesOrderDetailPage() {
                         {data.payments.map((payment) => (
                           <tr
                             key={payment.id}
-                            className={`border-b border-slate-100 ${
-                              payment.status === "VOIDED" ? "text-slate-400" : ""
+                            className={`border-b border-white/10 transition hover:bg-white/[0.04] ${
+                              payment.status === "VOIDED" ? "text-slate-500" : "text-white/90"
                             }`}
                           >
                             <td className="py-2 pr-4">
@@ -3109,10 +2920,10 @@ export default function SalesOrderDetailPage() {
                             <td className="py-2 pr-4">${Number(payment.amount).toFixed(2)}</td>
                             <td className="py-2 pr-4">
                               <span
-                                className={`so-chip ${
+                                className={`rounded-full border px-2 py-0.5 text-xs ${
                                   payment.status === "VOIDED"
-                                    ? "bg-slate-100 text-slate-500"
-                                    : "bg-emerald-100 text-emerald-700"
+                                    ? "border-white/10 bg-white/5 text-slate-500"
+                                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
                                 }`}
                               >
                                 {payment.status === "VOIDED" ? "Voided" : "Posted"}
@@ -3159,17 +2970,19 @@ export default function SalesOrderDetailPage() {
                     </table>
                   </div>
                 )}
+                </div>
               </article>
             ) : null}
 
             {activeBottomTab === "FULFILLMENT" ? (
-              <article className="so-panel p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-slate-900">Fulfillment</h2>
+              <article className="glass-card p-4">
+                <div className="glass-card-content">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-white">Fulfillment</h2>
                   <button
                     type="button"
                     onClick={() => setOpenFulfillment(true)}
-                    className="ios-primary-btn h-8 px-3 text-xs"
+                    className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10"
                   >
                     Create Pickup / Delivery
                   </button>
@@ -3189,17 +3002,17 @@ export default function SalesOrderDetailPage() {
                     {data.fulfillments.map((fulfillment) => (
                       <div
                         key={fulfillment.id}
-                        className="so-panel rounded-xl p-3 text-sm"
+                        className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-semibold text-slate-900">{fulfillment.type}</span>
+                          <span className="font-semibold text-white">{fulfillment.type}</span>
                           <span className="text-xs text-slate-500">
                             {new Date(fulfillment.scheduledDate).toLocaleDateString("en-US", {
                               timeZone: "UTC",
                             })}
                           </span>
                         </div>
-                        <p className="mt-1 text-slate-600">
+                        <p className="mt-1 text-slate-400">
                           Status:{" "}
                           {fulfillment.status === "SCHEDULED"
                             ? "pending"
@@ -3214,21 +3027,21 @@ export default function SalesOrderDetailPage() {
                           <button
                             type="button"
                             onClick={() => updateFulfillmentStatus(fulfillment.id, "READY")}
-                            className="ios-secondary-btn h-8 px-2 text-xs"
+                            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/90 transition hover:bg-white/10"
                           >
                             Mark Ready
                           </button>
                           <button
                             type="button"
                             onClick={() => updateFulfillmentStatus(fulfillment.id, "COMPLETED")}
-                            className="ios-secondary-btn h-8 px-2 text-xs"
+                            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/90 transition hover:bg-white/10"
                           >
                             Mark Completed
                           </button>
                           <button
                             type="button"
                             onClick={() => updateFulfillmentStatus(fulfillment.id, "VOIDED")}
-                            className="ios-secondary-btn h-8 px-2 text-xs"
+                            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/90 transition hover:bg-white/10"
                           >
                             Void
                           </button>
@@ -3237,13 +3050,15 @@ export default function SalesOrderDetailPage() {
                     ))}
                   </div>
                 )}
+                </div>
               </article>
             ) : null}
 
             {activeBottomTab === "TICKETS" ? (
-              <article className="so-panel p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-slate-900">Operational Tickets</h2>
+              <article className="glass-card p-4">
+                <div className="glass-card-content">
+                <div className="mb-4 flex items-center justify-between">
+                  <h2 className="text-sm font-semibold text-white">Operational Tickets</h2>
                   <div className="flex items-center gap-2">
                     <select
                       value={ticketStatusFilter}
@@ -3252,7 +3067,7 @@ export default function SalesOrderDetailPage() {
                           e.target.value as "ALL" | "open" | "in_progress" | "done" | "voided",
                         )
                       }
-                      className="ios-input h-9 min-w-[140px] bg-white px-2 text-xs"
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/90 min-w-[140px]"
                     >
                       <option value="ALL">All Status</option>
                       <option value="open">Open</option>
@@ -3263,7 +3078,7 @@ export default function SalesOrderDetailPage() {
                     <button
                       type="button"
                       onClick={() => setOpenTicket(true)}
-                      className="ios-primary-btn h-8 px-3 text-xs"
+                      className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10"
                     >
                       Create Ticket
                     </button>
@@ -3276,17 +3091,17 @@ export default function SalesOrderDetailPage() {
                     {filteredTickets.map((ticket) => (
                       <div
                         key={ticket.id}
-                        className="so-panel rounded-xl p-3 text-sm"
+                        className="rounded-xl border border-white/10 bg-white/[0.04] p-3 text-sm"
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-semibold text-slate-900">{ticket.ticketType}</span>
+                          <span className="font-semibold text-white">{ticket.ticketType}</span>
                           <span className="text-xs text-slate-500">
                             {ticket.scheduledAt
                               ? new Date(ticket.scheduledAt).toLocaleDateString("en-US", { timeZone: "UTC" })
                               : "-"}
                           </span>
                         </div>
-                        <p className="mt-1 text-slate-600">
+                        <p className="mt-1 text-slate-400">
                           Status: {ticket.status}
                           {ticket.fulfillmentId ? ` · Linked fulfillment` : ""}
                         </p>
@@ -3295,21 +3110,21 @@ export default function SalesOrderDetailPage() {
                           <button
                             type="button"
                             onClick={() => updateTicketStatus(ticket.id, "in_progress")}
-                            className="ios-secondary-btn h-8 px-2 text-xs"
+                            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/90 transition hover:bg-white/10"
                           >
                             In Progress
                           </button>
                           <button
                             type="button"
                             onClick={() => updateTicketStatus(ticket.id, "done")}
-                            className="ios-secondary-btn h-8 px-2 text-xs"
+                            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/90 transition hover:bg-white/10"
                           >
                             Mark Done
                           </button>
                           <button
                             type="button"
                             onClick={() => updateTicketStatus(ticket.id, "voided")}
-                            className="ios-secondary-btn h-8 px-2 text-xs"
+                            className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/90 transition hover:bg-white/10"
                           >
                             Void
                           </button>
@@ -3318,8 +3133,19 @@ export default function SalesOrderDetailPage() {
                     ))}
                   </div>
                 )}
+                </div>
               </article>
             ) : null}
+
+            {activeBottomTab === "ACTIVITY" ? (
+              <article className="glass-card p-4">
+                <div className="glass-card-content">
+                  <h2 className="text-sm font-semibold text-white">Activity</h2>
+                  <p className="mt-3 text-sm text-slate-500">Activity log for this order will appear here.</p>
+                </div>
+              </article>
+            ) : null}
+
           </div>
         </>
       )}

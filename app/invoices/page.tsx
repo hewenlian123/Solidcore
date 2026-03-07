@@ -147,17 +147,23 @@ export default function InvoicesPage() {
         </button>
       </div>
 
-      <div className="glass-card flex flex-wrap gap-2 p-4">
-        {(["ALL", "UNPAID", "OVERDUE", "PAID"] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setStatusFilter(value)}
-            className={statusFilter === value ? "so-chip-active" : "so-chip"}
-          >
-            {value}
-          </button>
-        ))}
+      <div className="glass-card p-4">
+        <div className="inline-flex rounded-2xl border border-white/[0.12] bg-white/[0.06] p-1.5 backdrop-blur-xl">
+          {(["ALL", "UNPAID", "OVERDUE", "PAID"] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setStatusFilter(value)}
+              className={`rounded-xl px-4 py-2 text-xs font-semibold uppercase tracking-tight transition-all duration-150 ${
+                statusFilter === value
+                  ? "border-0 bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-[0_2px_8px_rgba(99,102,241,0.35)]"
+                  : "border border-transparent bg-transparent text-white/80 hover:bg-white/[0.06] hover:text-white"
+              }`}
+            >
+              {value}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="glass-card overflow-x-auto p-0">

@@ -1,7 +1,7 @@
 "use client";
 
+import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
 import { useRole } from "@/components/layout/role-provider";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -225,9 +225,8 @@ export default function PickingPage() {
                 </TableRow>
               ) : (
                 rows.map((row) => (
-                  <>
+                  <Fragment key={row.id}>
                     <TableRow
-                      key={row.id}
                       className="border-white/10 text-slate-300 transition-colors hover:bg-white/[0.06]"
                     >
                       <TableCell>
@@ -384,7 +383,7 @@ export default function PickingPage() {
                         </TableCell>
                       </TableRow>
                     ) : null}
-                  </>
+                  </Fragment>
                 ))
               )}
             </TableBody>
