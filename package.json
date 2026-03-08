@@ -6,6 +6,7 @@
     "dev": "WATCHPACK_POLLING=true next dev --webpack -H 127.0.0.1 -p 3001",
     "dev:turbo": "next dev",
     "build": "next build --webpack",
+    "postinstall": "prisma generate",
     "start": "next start",
     "lint": "next lint",
     "test:fulfillment-rules": "node scripts/test-fulfillment-rules.mjs",
