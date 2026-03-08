@@ -1,5 +1,5 @@
-import { SolidcoreOrderEntry } from "@/components/figma/SolidcoreOrderEntry";
+import { redirect } from "next/navigation";
 
 export default function SalesOrderV2NewPage() {
-  return <SolidcoreOrderEntry />;
+  redirect("/sales-orders/new");
 }
