@@ -5,8 +5,6 @@ export default {
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./lib/**/*.{js,ts,jsx,tsx,mdx}",
-    "/Users/wen/Downloads/figma-design/src/**/*.{js,ts,jsx,tsx,mdx}",
-    "/Users/wen/Downloads/销售订单界面 4/src/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   safelist: [
     {

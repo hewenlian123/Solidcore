@@ -12,7 +12,8 @@ type ParentConfig = {
   expectedVariants: number;
 };
 
-const SOURCE_FILE = "/Users/wen/Downloads/Item_Group.csv";
+// Place Item_Group.csv in project root when running this script locally.
+const SOURCE_FILE = "./Item_Group.csv";
 
 const PARENT_CONFIGS: ParentConfig[] = [
   {

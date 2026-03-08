@@ -213,7 +213,7 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
     );
   }, [customerOptions, customerQuery]);
   const customerDropdownList = useMemo(() => {
-    const list: { type: "new" } | { type: "customer"; customer: SalesCustomer }[] = [];
+    const list: ({ type: "new" } | { type: "customer"; customer: SalesCustomer })[] = [];
     list.push({ type: "new" });
     filteredCustomerOptions.forEach((c) => list.push({ type: "customer", customer: c }));
     return list;
