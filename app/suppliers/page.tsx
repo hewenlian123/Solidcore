@@ -70,11 +70,11 @@ export default function SuppliersPage() {
 
   return (
     <section className="space-y-8">
-      <div className="linear-card p-8">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="glass-card p-8">
+        <div className="glass-card-content flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Supplier Management</h1>
-            <p className="mt-2 text-sm text-slate-500">Maintain supplier info and link preferred suppliers to products.</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Supplier Management</h1>
+            <p className="mt-2 text-sm text-slate-400">Maintain supplier info and link preferred suppliers to products.</p>
           </div>
           <button
             type="button"
@@ -88,10 +88,10 @@ export default function SuppliersPage() {
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
       ) : null}
 
-      <div className="linear-card overflow-hidden p-0">
+      <div className="glass-card overflow-hidden p-0">
         <Table>
           <TableHeader>
             <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
@@ -111,19 +111,19 @@ export default function SuppliersPage() {
             ) : (
               suppliers.map((item) => (
                 <TableRow key={item.id} className="border-white/10 transition-colors hover:bg-white/10">
-                  <TableCell className="font-semibold text-slate-900">
+                  <TableCell className="font-semibold text-white">
                     <Link href={`/suppliers/${item.id}`} className="hover:underline">
                       {item.name}
                     </Link>
                   </TableCell>
                   <TableCell>
-                    <span className="inline-flex items-center gap-1 text-slate-700">
+                    <span className="inline-flex items-center gap-1 text-slate-300">
                       <User className="h-3.5 w-3.5 text-slate-500" />
                       {item.contactName}
                     </span>
                   </TableCell>
                   <TableCell>
-                    <span className="inline-flex items-center gap-1 text-slate-700">
+                    <span className="inline-flex items-center gap-1 text-slate-300">
                       <Phone className="h-3.5 w-3.5 text-slate-500" />
                       {item.phone}
                     </span>
@@ -147,14 +147,15 @@ export default function SuppliersPage() {
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]">
-          <div className="linear-card w-full max-w-md p-8">
-            <h3 className="text-base font-semibold text-slate-900">Add Supplier</h3>
+          <div className="glass-card w-full max-w-md p-8">
+            <div className="glass-card-content">
+            <h3 className="text-base font-semibold text-white">Add Supplier</h3>
             <form className="mt-4 space-y-3" onSubmit={onSubmit}>
               <Field label="Supplier Name" value={form.name} onChange={(v) => setForm((p) => ({ ...p, name: v }))} />
               <Field label="Contact" value={form.contactName} onChange={(v) => setForm((p) => ({ ...p, contactName: v }))} />
               <Field label="Contact Phone" value={form.phone} onChange={(v) => setForm((p) => ({ ...p, phone: v }))} />
               <label className="block space-y-1">
-                <span className="text-sm text-slate-600">Primary Category</span>
+                <span className="text-sm text-slate-400">Primary Category</span>
                 <select
                   value={form.category}
                   onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))}
@@ -174,6 +175,7 @@ export default function SuppliersPage() {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       ) : null}
@@ -192,7 +194,7 @@ function Field({
 }) {
   return (
     <label className="block space-y-1">
-      <span className="text-sm text-slate-600">{label}</span>
+      <span className="text-sm text-slate-400">{label}</span>
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}

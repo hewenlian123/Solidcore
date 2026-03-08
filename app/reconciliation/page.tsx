@@ -136,11 +136,11 @@ export default function ReconciliationPage() {
 
   return (
     <section className="space-y-6">
-      <div className="linear-card p-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="glass-card p-8">
+        <div className="glass-card-content flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-slate-900">Reconciliation</h1>
-            <p className="mt-2 text-sm text-slate-500">
+            <h1 className="text-xl font-semibold tracking-tight text-white">Reconciliation</h1>
+            <p className="mt-2 text-sm text-slate-400">
               Match invoices with posted payments, track unmatched records, and close reconciliation rows.
             </p>
           </div>
@@ -148,7 +148,7 @@ export default function ReconciliationPage() {
             Export CSV
           </button>
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-[180px_180px_auto]">
+        <div className="glass-card-content mt-4 grid gap-3 md:grid-cols-[180px_180px_auto]">
           <label className="block space-y-1">
             <span className="text-xs text-slate-500">From</span>
             <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="ios-input h-10 px-3 text-sm" />
@@ -166,37 +166,37 @@ export default function ReconciliationPage() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
       ) : null}
 
-      <div className="linear-card p-5">
-        <div className="grid gap-4 md:grid-cols-5">
+      <div className="glass-card p-5">
+        <div className="glass-card-content grid gap-4 md:grid-cols-5">
           <div>
             <p className="text-xs text-slate-500">Total Invoiced</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{formatMoney(summary.totalInvoiced)}</p>
+            <p className="mt-1 text-lg font-semibold text-white">{formatMoney(summary.totalInvoiced)}</p>
           </div>
           <div>
             <p className="text-xs text-slate-500">Total Paid</p>
-            <p className="mt-1 text-lg font-semibold text-slate-900">{formatMoney(summary.totalPaid)}</p>
+            <p className="mt-1 text-lg font-semibold text-white">{formatMoney(summary.totalPaid)}</p>
           </div>
           <div>
             <p className="text-xs text-slate-500">Outstanding</p>
-            <p className="mt-1 text-lg font-semibold text-rose-700">{formatMoney(summary.totalOutstanding)}</p>
+            <p className="mt-1 text-lg font-semibold text-rose-300">{formatMoney(summary.totalOutstanding)}</p>
           </div>
           <div>
             <p className="text-xs text-slate-500">Unmatched Invoices</p>
-            <p className="mt-1 text-lg font-semibold text-amber-700">{summary.unmatchedInvoices}</p>
+            <p className="mt-1 text-lg font-semibold text-amber-300">{summary.unmatchedInvoices}</p>
           </div>
           <div>
             <p className="text-xs text-slate-500">Unmatched Payments</p>
-            <p className="mt-1 text-lg font-semibold text-amber-700">{summary.unmatchedPayments}</p>
+            <p className="mt-1 text-lg font-semibold text-amber-300">{summary.unmatchedPayments}</p>
           </div>
         </div>
       </div>
 
-      <div className="linear-card p-0">
-        <div className="border-b border-[var(--border)] px-6 py-4">
-          <h2 className="text-base font-semibold text-slate-900">Invoices with Payment Matching</h2>
+      <div className="glass-card p-0">
+        <div className="border-b border-white/10 px-6 py-4">
+          <h2 className="text-base font-semibold text-white">Invoices with Payment Matching</h2>
         </div>
         {loading ? (
           <div className="p-6 text-sm text-slate-500">Loading...</div>
@@ -204,15 +204,15 @@ export default function ReconciliationPage() {
           <Table>
             <TableHeader>
               <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
-                <TableHead>Invoice</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead className="text-right">Invoiced</TableHead>
-                <TableHead className="text-right">Paid</TableHead>
-                <TableHead className="text-right">Outstanding</TableHead>
-                <TableHead>Matched Payments</TableHead>
-                <TableHead>Reconciled</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+                <TableHead className="text-slate-400">Invoice</TableHead>
+                <TableHead className="text-slate-400">Customer</TableHead>
+                <TableHead className="text-slate-400">Date</TableHead>
+                <TableHead className="text-right text-slate-400">Invoiced</TableHead>
+                <TableHead className="text-right text-slate-400">Paid</TableHead>
+                <TableHead className="text-right text-slate-400">Outstanding</TableHead>
+                <TableHead className="text-slate-400">Matched Payments</TableHead>
+                <TableHead className="text-slate-400">Reconciled</TableHead>
+                <TableHead className="text-right text-slate-400">Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -226,22 +226,22 @@ export default function ReconciliationPage() {
                 invoices.map((row) => (
                   <TableRow key={row.id} className={row.unmatched ? "border-white/10 bg-rose-500/10 transition-colors hover:bg-rose-500/20" : "border-white/10 transition-colors hover:bg-white/10"}>
                     <TableCell className="font-medium">
-                      <Link href={`/invoices/${row.id}`} className="text-slate-900 underline">
+                      <Link href={`/invoices/${row.id}`} className="text-white underline hover:text-slate-300">
                         {row.invoiceNumber}
                       </Link>
                     </TableCell>
-                    <TableCell>{row.customerName}</TableCell>
-                    <TableCell>{new Date(row.issueDate).toLocaleDateString("en-US", { timeZone: "UTC" })}</TableCell>
-                    <TableCell className="text-right">{formatMoney(row.total)}</TableCell>
-                    <TableCell className="text-right">{formatMoney(row.paid)}</TableCell>
-                    <TableCell className={`text-right font-semibold ${row.outstanding > 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                    <TableCell className="text-slate-300">{row.customerName}</TableCell>
+                    <TableCell className="text-slate-300">{new Date(row.issueDate).toLocaleDateString("en-US", { timeZone: "UTC" })}</TableCell>
+                    <TableCell className="text-right text-slate-300">{formatMoney(row.total)}</TableCell>
+                    <TableCell className="text-right text-slate-300">{formatMoney(row.paid)}</TableCell>
+                    <TableCell className={`text-right font-semibold ${row.outstanding > 0 ? "text-rose-300" : "text-emerald-300"}`}>
                       {formatMoney(row.outstanding)}
                     </TableCell>
                     <TableCell>
                       {row.matchedPayments.length === 0 ? (
-                        <span className="text-xs text-amber-700">No matched payments</span>
+                        <span className="text-xs text-amber-400">No matched payments</span>
                       ) : (
-                        <div className="space-y-1 text-xs text-slate-600">
+                        <div className="space-y-1 text-xs text-slate-400">
                           {row.matchedPayments.slice(0, 3).map((payment) => (
                             <p key={payment.id}>
                               {payment.method} {formatMoney(payment.amount)} · {new Date(payment.date).toLocaleDateString("en-US", { timeZone: "UTC" })}
@@ -252,7 +252,7 @@ export default function ReconciliationPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${row.reconciled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"}`}>
+                      <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${row.reconciled ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "border border-white/20 bg-white/5 text-slate-400"}`}>
                         {row.reconciled ? "Yes" : "No"}
                       </span>
                     </TableCell>
@@ -274,21 +274,21 @@ export default function ReconciliationPage() {
         )}
       </div>
 
-      <div className="linear-card p-0">
-        <div className="border-b border-[var(--border)] px-6 py-4">
-          <h2 className="text-base font-semibold text-slate-900">Unmatched Payments</h2>
+      <div className="glass-card p-0">
+        <div className="border-b border-white/10 px-6 py-4">
+          <h2 className="text-base font-semibold text-white">Unmatched Payments</h2>
         </div>
         <Table>
           <TableHeader>
             <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
-              <TableHead>Payment ID</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Method</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead>Reference</TableHead>
-              <TableHead>Reconciled</TableHead>
-              <TableHead className="text-right">Action</TableHead>
+              <TableHead className="text-slate-400">Payment ID</TableHead>
+              <TableHead className="text-slate-400">Date</TableHead>
+              <TableHead className="text-slate-400">Customer</TableHead>
+              <TableHead className="text-slate-400">Method</TableHead>
+              <TableHead className="text-right text-slate-400">Amount</TableHead>
+              <TableHead className="text-slate-400">Reference</TableHead>
+              <TableHead className="text-slate-400">Reconciled</TableHead>
+              <TableHead className="text-right text-slate-400">Action</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -300,15 +300,15 @@ export default function ReconciliationPage() {
               </TableRow>
             ) : (
               unmatchedPayments.map((row) => (
-                <TableRow key={row.id} className="bg-amber-50/40 hover:bg-amber-50/60">
-                  <TableCell className="font-medium text-slate-900">{row.id.slice(0, 8)}</TableCell>
-                  <TableCell>{formatDateTime(row.date)}</TableCell>
-                  <TableCell>{row.customerName}</TableCell>
-                  <TableCell>{row.method}</TableCell>
-                  <TableCell className="text-right font-semibold text-slate-900">{formatMoney(row.amount)}</TableCell>
-                  <TableCell>{row.salesOrderNumber ? `SO ${row.salesOrderNumber}` : "-"}</TableCell>
+                <TableRow key={row.id} className="border-white/10 bg-amber-500/10 transition-colors hover:bg-amber-500/20">
+                  <TableCell className="font-medium text-white">{row.id.slice(0, 8)}</TableCell>
+                  <TableCell className="text-slate-300">{formatDateTime(row.date)}</TableCell>
+                  <TableCell className="text-slate-300">{row.customerName}</TableCell>
+                  <TableCell className="text-slate-300">{row.method}</TableCell>
+                  <TableCell className="text-right font-semibold text-white">{formatMoney(row.amount)}</TableCell>
+                  <TableCell className="text-slate-300">{row.salesOrderNumber ? `SO ${row.salesOrderNumber}` : "-"}</TableCell>
                   <TableCell>
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${row.reconciled ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-700"}`}>
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${row.reconciled ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-200" : "border border-white/20 bg-white/5 text-slate-400"}`}>
                       {row.reconciled ? "Yes" : "No"}
                     </span>
                   </TableCell>

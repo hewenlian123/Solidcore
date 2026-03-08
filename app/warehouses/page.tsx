@@ -91,11 +91,11 @@ export default function WarehousesPage() {
 
   return (
     <section className="space-y-8">
-      <div className="linear-card p-8">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="glass-card p-8">
+        <div className="glass-card-content flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Warehouse Management</h1>
-            <p className="mt-2 text-sm text-slate-500">
+            <h1 className="text-2xl font-semibold tracking-tight text-white">Warehouse Management</h1>
+            <p className="mt-2 text-sm text-slate-400">
               Manage stock locations and create new warehouses directly from this page.
             </p>
           </div>
@@ -111,10 +111,10 @@ export default function WarehousesPage() {
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
       ) : null}
 
-      <div className="linear-card overflow-hidden p-0">
+      <div className="glass-card overflow-hidden p-0">
         <Table>
           <TableHeader>
             <TableRow className="border-white/10 bg-white/5 hover:bg-white/5">
@@ -134,20 +134,20 @@ export default function WarehousesPage() {
             ) : (
               rows.map((row) => (
                 <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/10">
-                  <TableCell className="font-semibold text-slate-900">
+                  <TableCell className="font-semibold text-white">
                     <span className="inline-flex items-center gap-2">
                       <Warehouse className="h-4 w-4 text-slate-500" />
                       {row.name}
                     </span>
                   </TableCell>
-                  <TableCell className="text-slate-700">{row.address}</TableCell>
-                  <TableCell className="text-slate-700">{row.managerName}</TableCell>
+                  <TableCell className="text-slate-300">{row.address}</TableCell>
+                  <TableCell className="text-slate-300">{row.managerName}</TableCell>
                   <TableCell className="text-right">
                     <button
                       type="button"
                       onClick={() => onDelete(row)}
                       disabled={deletingId === row.id}
-                      className="ios-secondary-btn h-9 px-3 text-xs text-rose-700 hover:text-rose-800 disabled:opacity-60"
+                      className="ios-secondary-btn h-9 px-3 text-xs text-rose-300 hover:text-rose-200 disabled:opacity-60"
                     >
                       <span className="inline-flex items-center gap-1.5">
                         <Trash2 className="h-3.5 w-3.5" />
@@ -164,8 +164,9 @@ export default function WarehousesPage() {
 
       {open ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]">
-          <div className="linear-card w-full max-w-lg p-8">
-            <h3 className="text-base font-semibold text-slate-900">Add Warehouse</h3>
+          <div className="glass-card w-full max-w-lg p-8">
+            <div className="glass-card-content">
+            <h3 className="text-base font-semibold text-white">Add Warehouse</h3>
             <form className="mt-4 space-y-3" onSubmit={onSubmit}>
               <Field
                 label="Warehouse Name"
@@ -191,6 +192,7 @@ export default function WarehousesPage() {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       ) : null}
@@ -209,7 +211,7 @@ function Field({
 }) {
   return (
     <label className="block space-y-1">
-      <span className="text-sm text-slate-600">{label}</span>
+      <span className="text-sm text-slate-400">{label}</span>
       <input value={value} onChange={(event) => onChange(event.target.value)} className="ios-input h-12 w-full" />
     </label>
   );

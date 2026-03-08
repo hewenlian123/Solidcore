@@ -352,12 +352,12 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
   }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-transparent text-slate-100 tracking-tight">
+    <div className="relative flex min-h-screen overflow-hidden bg-transparent text-slate-100 tracking-tight">
 
       {open ? <button type="button" className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm xl:hidden" onClick={() => setOpen(false)} /> : null}
 
       <aside
-        className={`glass-sidebar fixed inset-y-4 left-4 z-40 w-[248px] overflow-hidden rounded-[16px] shadow-[0_10px_40px_rgba(0,0,0,0.4)] transition-transform duration-200 ${
+        className={`glass-sidebar fixed inset-y-4 left-0 z-40 w-[260px] overflow-hidden rounded-[16px] shadow-[0_10px_40px_rgba(0,0,0,0.4)] transition-transform duration-200 ${
           open ? "translate-x-0" : "-translate-x-[120%] xl:translate-x-0"
         }`}
       >
@@ -493,37 +493,46 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
         </div>
       </aside>
 
-      <div className="relative z-10 xl:pl-[282px]">
-        {!isSalesOrderEditor ? (
-          <header className="sticky top-0 z-20 border-b border-white/[0.08] bg-white/[0.03] px-6 pb-0 pt-4 backdrop-blur-2xl md:px-8 shadow-[0_4px_30px_rgba(0,0,0,0.2)]">
-            <div className="rounded-2xl px-6 py-4">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div className="flex items-start gap-3">
-                  <button type="button" className="rounded-xl border border-white/[0.1] bg-white/[0.06] p-2.5 text-slate-400 hover:text-white xl:hidden" onClick={() => setOpen(true)}>
-                    <Menu className="h-4 w-4" />
-                  </button>
-                  <div>
-                    <h1 className="text-[32px] font-semibold leading-none tracking-tight text-white">{title ?? toTitle(pathname)}</h1>
-                    <p className="mt-1.5 text-[14px] text-slate-400">{subtitle ?? "Welcome back, Admin 👋"}</p>
-                  </div>
-                </div>
+      {/* Spacer for fixed sidebar on desktop so flex content aligns */}
+      <div className="hidden w-[260px] shrink-0 xl:block" aria-hidden="true" />
 
-                <div className="flex items-center gap-2.5">
-                <div ref={searchContainerRef} className="relative hidden w-[430px] xl:block">
-                  <div className="flex items-center gap-2 rounded-xl border border-white/[0.10] bg-white/[0.05] px-4 py-2.5 backdrop-blur-xl">
-                    <Search className="h-4 w-4 text-white/60" />
-                    <input
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      onFocus={() => {
-                        if (searchQuery.trim().length >= 2) setSearchOpen(true);
-                      }}
-                      placeholder="Search products, orders, customers..."
-                      className="w-full bg-transparent text-sm text-white outline-none placeholder:text-white/40"
-                    />
-                  </div>
-                  {searchOpen ? (
-                    <div className="absolute left-0 right-0 top-[48px] z-50 max-h-[420px] overflow-y-auto rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-2 shadow-[0_10px_40px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col pl-4 pr-6">
+        {!isSalesOrderEditor ? (
+          <header className="sticky top-0 z-20 flex min-h-[72px] items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-6 backdrop-blur-xl">
+            {/* LEFT: Page title + Subtitle */}
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <button
+                type="button"
+                className="shrink-0 rounded-lg border border-white/[0.1] bg-white/[0.06] p-2 text-slate-400 hover:text-white xl:hidden"
+                onClick={() => setOpen(true)}
+              >
+                <Menu className="h-4 w-4" />
+              </button>
+              <div className="min-w-0">
+                <h1 className="truncate text-xl font-semibold leading-tight tracking-tight text-white">
+                  {title ?? toTitle(pathname)}
+                </h1>
+                <p className="truncate text-sm text-slate-400">{subtitle ?? "Welcome back, Admin"}</p>
+              </div>
+            </div>
+
+            {/* RIGHT: Search + Notification + Admin dropdown + Date range + User avatar */}
+            <div className="flex shrink-0 items-center gap-3">
+              <div ref={searchContainerRef} className="relative hidden w-[420px] xl:block">
+                <div className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2">
+                  <Search className="h-4 w-4 shrink-0 text-white/50" />
+                  <input
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onFocus={() => {
+                      if (searchQuery.trim().length >= 2) setSearchOpen(true);
+                    }}
+                    placeholder="Search products, orders, customers..."
+                    className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                  />
+                </div>
+                {searchOpen ? (
+                  <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[420px] overflow-y-auto rounded-lg border border-white/[0.08] bg-slate-900/98 p-2 shadow-xl backdrop-blur-xl">
                       {searchLoading ? (
                         <div className="px-3 py-2 text-xs text-white/50">Searching...</div>
                       ) : (
@@ -628,47 +637,45 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
                     </div>
                   ) : null}
                 </div>
-                <button type="button" className="rounded-xl border border-white/[0.1] bg-white/[0.06] p-2.5 text-slate-400 transition hover:bg-white/10 hover:text-white">
-                  <RefreshCcw className="h-4 w-4" />
-                </button>
-                <button type="button" className="relative rounded-xl border border-white/[0.1] bg-white/[0.06] p-2.5 text-slate-400 transition hover:bg-white/10 hover:text-white">
-                  <Bell className="h-4 w-4" />
-                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-rose-500" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.06] px-3 text-sm text-slate-200"
-                >
-                  {role}
-                  <ChevronDown className="h-4 w-4 text-slate-400" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.06] px-3 text-sm text-slate-200"
-                >
-                  Last 7 days
-                  <ChevronDown className="h-4 w-4 text-slate-400" />
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-white/[0.1] bg-white/[0.06] px-2.5 text-sm text-slate-200"
-                  onClick={async () => {
-                    await fetch("/api/auth/logout", { method: "POST" });
-                    window.location.href = "/login";
-                  }}
-                >
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-600 text-xs font-semibold text-white">
-                    {userName?.slice(0, 1)?.toUpperCase() || "A"}
-                  </span>
-                  <span>{userName || "Admin"}</span>
-                </button>
-              </div>
+              <button type="button" className="rounded-lg border border-white/[0.08] bg-white/[0.04] p-2 text-slate-400 transition hover:bg-white/[0.06] hover:text-white" aria-label="Refresh">
+                <RefreshCcw className="h-4 w-4" />
+              </button>
+              <button type="button" className="relative rounded-lg border border-white/[0.08] bg-white/[0.04] p-2 text-slate-400 transition hover:bg-white/[0.06] hover:text-white" aria-label="Notifications">
+                <Bell className="h-4 w-4" />
+                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-rose-500" />
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 text-sm text-slate-200"
+              >
+                {role}
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 text-sm text-slate-200"
+              >
+                Last 7 days
+                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.04] px-2.5 text-sm text-slate-200"
+                onClick={async () => {
+                  await fetch("/api/auth/logout", { method: "POST" });
+                  window.location.href = "/login";
+                }}
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-600 text-xs font-semibold text-white">
+                  {userName?.slice(0, 1)?.toUpperCase() || "A"}
+                </span>
+                <span className="hidden sm:inline">{userName || "Admin"}</span>
+              </button>
             </div>
-          </div>
-        </header>
+          </header>
         ) : null}
 
-        <main className={`px-6 pb-10 md:px-8 ${isSalesOrderEditor ? "pt-0" : "pt-6"}`}>{canView ? children : <AccessDenied />}</main>
+        <main className={`pb-10 ${isSalesOrderEditor ? "pt-0 flex flex-1 min-h-0 flex-col" : "pt-6"}`}>{canView ? children : <AccessDenied />}</main>
       </div>
     </div>
   );

@@ -1777,13 +1777,13 @@ export default function SalesOrderDetailPage() {
                 className="h-full flex-1 bg-slate-900/20"
                 onClick={() => setOpenDetailsDrawer(false)}
               />
-              <aside className="h-full w-full max-w-lg overflow-y-auto border-l border-[#E5E7EB] bg-white p-4">
-                <div className="mb-3 flex items-center justify-between border-b border-[#E5E7EB] pb-2">
-                  <h3 className="text-sm font-semibold text-[#111827]">Edit Details</h3>
+              <aside className="h-full w-full max-w-lg overflow-y-auto border-l border-white/10 bg-[#0F172A] p-4 shadow-2xl">
+                <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-2">
+                  <h3 className="text-sm font-semibold text-white">Edit Details</h3>
                   <button
                     type="button"
                     onClick={() => setOpenDetailsDrawer(false)}
-                    className="inline-flex h-8 items-center rounded-md border border-[#E5E7EB] px-3 text-xs text-[#374151] hover:bg-slate-50"
+                    className="inline-flex h-8 items-center rounded-lg border border-white/10 bg-white/5 px-3 text-xs text-slate-300 hover:bg-white/10 hover:text-white"
                   >
                     Close
                   </button>
@@ -1792,16 +1792,16 @@ export default function SalesOrderDetailPage() {
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <label className="block space-y-1 md:col-span-2">
-                      <span className="text-xs text-[#6B7280]">Search Customer</span>
+                      <span className="text-xs text-slate-400">Search Customer</span>
                       <input
                         value={customerQuery}
                         onChange={(e) => setCustomerQuery(e.target.value)}
                         placeholder="Name / phone / email"
-                        className="h-9 w-full rounded-md border border-[#E5E7EB] px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                        className="ios-input h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-sm text-white placeholder:text-slate-500 outline-none focus:ring-1 focus:ring-white/20"
                       />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-xs text-[#6B7280]">Customer</span>
+                      <span className="text-xs text-slate-400">Customer</span>
                       <select
                         value={data.customer.id}
                         onChange={(e) => {
@@ -1810,7 +1810,7 @@ export default function SalesOrderDetailPage() {
                           if (!selectedCustomer) return;
                           setData((prev) => (prev ? applyCustomerToOrder(prev, selectedCustomer, true) : prev));
                         }}
-                        className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                        className="ios-input h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
                       >
                         {walkInCustomerId ? <option value={walkInCustomerId}>Walk-in Customer</option> : null}
                         {customerOptions.map((customer) => (
@@ -1822,20 +1822,20 @@ export default function SalesOrderDetailPage() {
                       </select>
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-xs text-[#6B7280]">Project</span>
+                      <span className="text-xs text-slate-400">Project</span>
                       <input
                         value={data.projectName ?? ""}
                         placeholder="Kitchen Renovation"
                         onChange={(e) => setData((prev) => (prev ? { ...prev, projectName: e.target.value } : prev))}
-                        className="h-9 w-full rounded-md border border-[#E5E7EB] px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                        className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                       />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-xs text-[#6B7280]">Salesperson</span>
+                      <span className="text-xs text-slate-400">Salesperson</span>
                       <select
                         value={data.salespersonName ?? ""}
                         onChange={(e) => setData((prev) => (prev ? { ...prev, salespersonName: e.target.value } : prev))}
-                        className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                        className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                       >
                         <option value="">Select salesperson</option>
                         {data.salespersonName &&
@@ -1850,7 +1850,7 @@ export default function SalesOrderDetailPage() {
                       </select>
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-xs text-[#6B7280]">Discount</span>
+                      <span className="text-xs text-slate-400">Discount</span>
                       <input
                         type="number"
                         min="0"
@@ -1868,11 +1868,11 @@ export default function SalesOrderDetailPage() {
                             return { ...prev, discount: nextDiscount, tax: String(nextTax) };
                           })
                         }
-                        className="h-9 w-full rounded-md border border-[#E5E7EB] px-2 text-right text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                        className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-right text-sm outline-none focus:ring-1 focus:ring-white/20"
                       />
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-xs text-[#6B7280]">
+                      <span className="text-xs text-slate-400">
                         Tax Rate{" "}
                         {data.customer.taxExempt ? <span className="font-medium text-emerald-700">(Tax Exempt)</span> : null}
                       </span>
@@ -1895,23 +1895,23 @@ export default function SalesOrderDetailPage() {
                               return { ...prev, taxRate: nextRate, tax: String(nextTax) };
                             })
                           }
-                          className="h-9 w-full rounded-md border border-[#E5E7EB] px-2 pr-6 text-right text-sm outline-none focus:ring-1 focus:ring-slate-300 disabled:bg-slate-100"
+                          className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white pr-6 text-right text-sm outline-none focus:ring-1 focus:ring-white/20 disabled:bg-slate-100"
                         />
-                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#6B7280]">
+                        <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-400">
                           %
                         </span>
                       </div>
-                      <p className="text-[11px] text-[#6B7280]">Tax Amount: ${Number(data.tax || 0).toFixed(2)}</p>
+                      <p className="text-[11px] text-slate-400">Tax Amount: ${Number(data.tax || 0).toFixed(2)}</p>
                     </label>
                     <label className="block space-y-1">
-                      <span className="text-xs text-[#6B7280]">Tax Amount</span>
+                      <span className="text-xs text-slate-400">Tax Amount</span>
                       <input
                         type="number"
                         min="0"
                         step="0.01"
                         value={data.tax}
                         readOnly
-                        className="h-9 w-full rounded-md border border-[#E5E7EB] bg-slate-50 px-2 text-right text-sm text-[#6B7280]"
+                        className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-right text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
                       />
                     </label>
                   </div>
@@ -1939,24 +1939,24 @@ export default function SalesOrderDetailPage() {
                   </label>
 
                   {data.specialOrder ? (
-                    <div className="space-y-3 rounded-md border border-[#E5E7EB] bg-[#F3F4F6] p-3">
+                    <div className="space-y-3 rounded-md border border-white/10 bg-[#F3F4F6] p-3">
                       <label className="block space-y-1">
-                        <span className="text-xs text-[#6B7280]">Search Supplier</span>
+                        <span className="text-xs text-slate-400">Search Supplier</span>
                         <input
                           value={supplierQuery}
                           onChange={(e) => setSupplierQuery(e.target.value)}
                           placeholder="Name / contact / phone"
-                          className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                          className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                         />
                       </label>
                       <label className="block space-y-1">
-                        <span className="text-xs text-[#6B7280]">Supplier</span>
+                        <span className="text-xs text-slate-400">Supplier</span>
                         <select
                           value={data.supplierId ?? ""}
                           onChange={(e) =>
                             setData((prev) => (prev ? { ...prev, supplierId: e.target.value || null } : prev))
                           }
-                          className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                          className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                         >
                           <option value="">Select supplier</option>
                           {filteredSuppliers.map((supplier) => (
@@ -1968,24 +1968,24 @@ export default function SalesOrderDetailPage() {
                       </label>
                       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <label className="block space-y-1">
-                          <span className="text-xs text-[#6B7280]">ETA Date</span>
+                          <span className="text-xs text-slate-400">ETA Date</span>
                           <input
                             type="date"
                             value={data.etaDate ? new Date(data.etaDate).toISOString().slice(0, 10) : ""}
                             onChange={(e) =>
                               setData((prev) => (prev ? { ...prev, etaDate: e.target.value || null } : prev))
                             }
-                            className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                           />
                         </label>
                         <label className="block space-y-1">
-                          <span className="text-xs text-[#6B7280]">Special Order Status</span>
+                          <span className="text-xs text-slate-400">Special Order Status</span>
                           <select
                             value={data.specialOrderStatus ?? ""}
                             onChange={(e) =>
                               setData((prev) => (prev ? { ...prev, specialOrderStatus: e.target.value || null } : prev))
                             }
-                            className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                           >
                             <option value="">Select status</option>
                             <option value="REQUESTED">Requested</option>
@@ -1997,23 +1997,23 @@ export default function SalesOrderDetailPage() {
                         </label>
                       </div>
                       <label className="block space-y-1">
-                        <span className="text-xs text-[#6B7280]">Supplier Communication Notes</span>
+                        <span className="text-xs text-slate-400">Supplier Communication Notes</span>
                         <textarea
                           value={data.supplierNotes ?? ""}
                           onChange={(e) =>
                             setData((prev) => (prev ? { ...prev, supplierNotes: e.target.value } : prev))
                           }
-                          className="w-full rounded-md border border-[#E5E7EB] bg-white p-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                          className="w-full rounded-lg border border-white/10 bg-white/5 p-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
                           rows={2}
                         />
                       </label>
                     </div>
                   ) : null}
 
-                  <div className="space-y-3 rounded-md border border-[#E5E7EB] bg-[#F8FAFC] p-3">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Fulfillment</h4>
+                  <div className="space-y-3 rounded-md border border-white/10 bg-[#F8FAFC] p-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-400">Fulfillment</h4>
                     <label className="block space-y-1">
-                      <span className="text-xs text-[#6B7280]">Delivery Method</span>
+                      <span className="text-xs text-slate-400">Delivery Method</span>
                       <select
                         value={data.fulfillmentMethod ?? "PICKUP"}
                         onChange={(e) =>
@@ -2041,7 +2041,7 @@ export default function SalesOrderDetailPage() {
                               : prev,
                           )
                         }
-                        className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                        className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                       >
                         <option value="PICKUP">Pickup</option>
                         <option value="DELIVERY">Delivery</option>
@@ -2052,80 +2052,80 @@ export default function SalesOrderDetailPage() {
                       <>
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           <label className="block space-y-1">
-                            <span className="text-xs text-[#6B7280]">Contact name</span>
+                            <span className="text-xs text-slate-400">Contact name</span>
                             <input
                               value={data.deliveryName ?? ""}
                               onChange={(e) =>
                                 setData((prev) => (prev ? { ...prev, deliveryName: e.target.value } : prev))
                               }
-                              className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                              className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                             />
                           </label>
                           <label className="block space-y-1">
-                            <span className="text-xs text-[#6B7280]">Phone</span>
+                            <span className="text-xs text-slate-400">Phone</span>
                             <input
                               value={data.deliveryPhone ?? ""}
                               onChange={(e) =>
                                 setData((prev) => (prev ? { ...prev, deliveryPhone: e.target.value } : prev))
                               }
-                              className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                              className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                             />
                           </label>
                         </div>
                         <label className="block space-y-1">
-                          <span className="text-xs text-[#6B7280]">Address 1 *</span>
+                          <span className="text-xs text-slate-400">Address 1 *</span>
                           <input
                             value={data.deliveryAddress1 ?? ""}
                             onChange={(e) =>
                               setData((prev) => (prev ? { ...prev, deliveryAddress1: e.target.value } : prev))
                             }
-                            className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                           />
                         </label>
                         <label className="block space-y-1">
-                          <span className="text-xs text-[#6B7280]">Address 2</span>
+                          <span className="text-xs text-slate-400">Address 2</span>
                           <input
                             value={data.deliveryAddress2 ?? ""}
                             onChange={(e) =>
                               setData((prev) => (prev ? { ...prev, deliveryAddress2: e.target.value } : prev))
                             }
-                            className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                           />
                         </label>
                         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                           <label className="block space-y-1">
-                            <span className="text-xs text-[#6B7280]">City *</span>
+                            <span className="text-xs text-slate-400">City *</span>
                             <input
                               value={data.deliveryCity ?? ""}
                               onChange={(e) =>
                                 setData((prev) => (prev ? { ...prev, deliveryCity: e.target.value } : prev))
                               }
-                              className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                              className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                             />
                           </label>
                           <label className="block space-y-1">
-                            <span className="text-xs text-[#6B7280]">State *</span>
+                            <span className="text-xs text-slate-400">State *</span>
                             <input
                               value={data.deliveryState ?? ""}
                               onChange={(e) =>
                                 setData((prev) => (prev ? { ...prev, deliveryState: e.target.value } : prev))
                               }
-                              className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                              className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                             />
                           </label>
                           <label className="block space-y-1">
-                            <span className="text-xs text-[#6B7280]">Zip *</span>
+                            <span className="text-xs text-slate-400">Zip *</span>
                             <input
                               value={data.deliveryZip ?? ""}
                               onChange={(e) =>
                                 setData((prev) => (prev ? { ...prev, deliveryZip: e.target.value } : prev))
                               }
-                              className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                              className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                             />
                           </label>
                         </div>
                         <label className="block space-y-1">
-                          <span className="text-xs text-[#6B7280]">Requested delivery date/time</span>
+                          <span className="text-xs text-slate-400">Requested delivery date/time</span>
                           <input
                             type="datetime-local"
                             value={
@@ -2145,30 +2145,30 @@ export default function SalesOrderDetailPage() {
                                   : prev,
                               )
                             }
-                            className="h-9 w-full rounded-md border border-[#E5E7EB] bg-white px-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-white text-sm outline-none focus:ring-1 focus:ring-white/20"
                           />
                         </label>
                         <label className="block space-y-1">
-                          <span className="text-xs text-[#6B7280]">Delivery notes</span>
+                          <span className="text-xs text-slate-400">Delivery notes</span>
                           <textarea
                             value={data.deliveryNotes ?? ""}
                             onChange={(e) =>
                               setData((prev) => (prev ? { ...prev, deliveryNotes: e.target.value } : prev))
                             }
-                            className="w-full rounded-md border border-[#E5E7EB] bg-white p-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                            className="w-full rounded-lg border border-white/10 bg-white/5 p-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
                             rows={2}
                           />
                         </label>
                       </>
                     ) : (
                       <label className="block space-y-1">
-                        <span className="text-xs text-[#6B7280]">Pickup notes</span>
+                        <span className="text-xs text-slate-400">Pickup notes</span>
                         <textarea
                           value={data.pickupNotes ?? ""}
                           onChange={(e) =>
                             setData((prev) => (prev ? { ...prev, pickupNotes: e.target.value } : prev))
                           }
-                          className="w-full rounded-md border border-[#E5E7EB] bg-white p-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                          className="w-full rounded-lg border border-white/10 bg-white/5 p-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
                           rows={2}
                         />
                       </label>
@@ -2176,17 +2176,17 @@ export default function SalesOrderDetailPage() {
                   </div>
 
                   <label className="block space-y-1">
-                    <span className="text-xs text-[#6B7280]">Notes / 备注</span>
+                    <span className="text-xs text-slate-400">Notes / 备注</span>
                     <textarea
                       value={data.notes ?? ""}
                       onChange={(e) => setData((prev) => (prev ? { ...prev, notes: e.target.value } : prev))}
-                      className="w-full rounded-md border border-[#E5E7EB] p-2 text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                      className="w-full rounded-md border border-white/10 p-2 text-sm outline-none focus:ring-1 focus:ring-white/20"
                       rows={3}
                     />
                   </label>
 
-                  <label className="flex items-center justify-between gap-3 rounded-md border border-[#E5E7EB] px-2 py-2">
-                    <span className="text-xs text-[#6B7280]">Deposit Required</span>
+                  <label className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-2 text-white py-2">
+                    <span className="text-xs text-slate-400">Deposit Required</span>
                     <input
                       type="number"
                       min="0"
@@ -2195,7 +2195,7 @@ export default function SalesOrderDetailPage() {
                       onChange={(e) =>
                         setData((prev) => (prev ? { ...prev, depositRequired: e.target.value } : prev))
                       }
-                      className="h-8 w-28 rounded-md border border-[#E5E7EB] px-2 text-right text-sm outline-none focus:ring-1 focus:ring-slate-300"
+                      className="h-8 w-28 rounded-lg border border-white/10 bg-white/5 px-2 text-white text-right text-sm outline-none focus:ring-1 focus:ring-white/20"
                     />
                   </label>
 
@@ -2275,7 +2275,7 @@ export default function SalesOrderDetailPage() {
                   onChange={(e) => setQuickAddQty(e.target.value)}
                   className="ios-input h-9 rounded-xl px-2 text-right text-xs text-[#111827]"
                 />
-                <div className="so-panel flex h-9 items-center rounded-xl px-2 text-right text-xs text-[#6B7280]">
+                <div className="so-panel flex h-9 items-center rounded-xl px-2 text-right text-xs text-slate-400">
                   {quickAddCandidates[quickAddActiveIndex]
                     ? `$${Number(quickAddCandidates[quickAddActiveIndex].price || 0).toFixed(2)}`
                     : "-"}
@@ -2297,7 +2297,7 @@ export default function SalesOrderDetailPage() {
                 {quickAddOpen ? (
                   <div className="so-panel absolute left-0 right-0 top-10 z-20 max-h-64 overflow-y-auto rounded-xl">
                     {quickAddCandidates.length === 0 ? (
-                      <div className="px-3 py-2 text-xs text-[#6B7280]">No products found.</div>
+                      <div className="px-3 py-2 text-xs text-slate-400">No products found.</div>
                     ) : (
                       quickAddCandidates.map((product, index) => {
                         const isActive = index === quickAddActiveIndex;
@@ -2320,10 +2320,10 @@ export default function SalesOrderDetailPage() {
                               void quickAddVariant(product, true);
                             }}
                             className={`w-full border-b border-slate-100 px-3 py-2 text-left last:border-b-0 ${
-                              isActive ? "bg-slate-100" : "hover:bg-slate-50"
+                              isActive ? "bg-white/10" : "hover:bg-white/5"
                             }`}
                           >
-                            <p className="truncate text-sm font-medium text-slate-900">{formattedName}</p>
+                            <p className="truncate text-sm font-medium text-white">{formattedName}</p>
                             <p className="text-xs text-slate-500">
                               SKU: {product.sku || "-"} · Stock {onHand.toFixed(2)} / {available.toFixed(2)} · $
                               {Number(product.price || 0).toFixed(2)} · Unit{" "}
@@ -2573,7 +2573,7 @@ export default function SalesOrderDetailPage() {
                           value={draft.quantity}
                           onClick={(e) => e.stopPropagation()}
                           onChange={(e) => updateRowDraft(item.id, "quantity", e.target.value)}
-                          className="h-8 w-full rounded-md border border-transparent bg-white px-2 text-right text-sm outline-none hover:bg-slate-100 focus:border-slate-200 focus:ring-1 focus:ring-sky-200"
+                          className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-right text-sm text-white outline-none hover:bg-white/10 focus:ring-1 focus:ring-white/20"
                         />
                         <p className="truncate text-[10px] text-slate-500">
                           {formatSellingUnitLabel(itemSellingUnit === "BOX" ? "BOX" : itemSellingUnit)}
@@ -2595,7 +2595,7 @@ export default function SalesOrderDetailPage() {
                         value={draft.unitPrice}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => updateRowDraft(item.id, "unitPrice", e.target.value)}
-                        className="h-8 rounded-md border border-transparent bg-white px-2 text-right text-sm outline-none hover:bg-slate-100 focus:border-slate-200 focus:ring-1 focus:ring-sky-200"
+                        className="h-8 rounded-lg border border-white/10 bg-white/5 px-2 text-right text-sm text-white outline-none hover:bg-white/10 focus:ring-1 focus:ring-white/20"
                       />
                     ) : (
                       <div className="px-2 text-right text-sm text-slate-700">${Number(item.unitPrice || 0).toFixed(2)}</div>
@@ -2608,7 +2608,7 @@ export default function SalesOrderDetailPage() {
                         value={draft.lineDiscount}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => updateRowDraft(item.id, "lineDiscount", e.target.value)}
-                        className="h-8 rounded-md border border-transparent bg-white px-2 text-right text-sm outline-none hover:bg-slate-100 focus:border-slate-200 focus:ring-1 focus:ring-sky-200"
+                        className="h-8 rounded-lg border border-white/10 bg-white/5 px-2 text-right text-sm text-white outline-none hover:bg-white/10 focus:ring-1 focus:ring-white/20"
                       />
                     ) : (
                       <div className="px-2 text-right text-sm text-slate-700">${Number(item.lineDiscount || 0).toFixed(2)}</div>
@@ -2679,16 +2679,16 @@ export default function SalesOrderDetailPage() {
                 className="h-full flex-1 bg-slate-900/20"
                 onClick={closeLineItemDrawer}
               />
-              <aside className="flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-white shadow-xl">
-                <div className="mb-1 flex items-center justify-between border-b border-slate-200 px-4 py-3">
+              <aside className="flex h-full w-full max-w-md flex-col border-l border-white/10 bg-[#0F172A] shadow-2xl">
+                <div className="mb-1 flex items-center justify-between border-b border-white/10 px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold text-slate-900">Line Item Detail</h3>
-                    {isDrawerDirty ? <span className="text-xs text-amber-600">Unsaved changes</span> : null}
+                    <h3 className="text-sm font-semibold text-white">Line Item Detail</h3>
+                    {isDrawerDirty ? <span className="text-xs text-amber-400">Unsaved changes</span> : null}
                   </div>
                   <button
                     type="button"
                     onClick={closeLineItemDrawer}
-                    className="inline-flex h-8 items-center rounded-md px-2 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    className="inline-flex h-8 items-center rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-slate-400 hover:bg-white/10 hover:text-white"
                   >
                     Close
                   </button>
@@ -2713,7 +2713,7 @@ export default function SalesOrderDetailPage() {
                     return (
                       <>
                   <p className="text-xs text-slate-500">Product</p>
-                  <p className="text-sm font-semibold text-slate-900">
+                  <p className="text-sm font-semibold text-white">
                         {drawerFlooringSummary
                           ? String(
                               activeDrawerItem.variant?.displayName ??
@@ -2736,14 +2736,14 @@ export default function SalesOrderDetailPage() {
                   })()}
                 </section>
 
-                <section className="mt-4 rounded-md border border-slate-100 p-2">
-                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Product Detail</h4>
+                <section className="mt-4 rounded-lg border border-white/10 p-3">
+                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Product Detail</h4>
                   {activeDrawerDetails.length > 0 ? (
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       {activeDrawerDetails.map((row) => (
-                        <div key={`${activeDrawerItem.id}-${row.label}`} className="rounded-md bg-slate-50 px-2 py-1">
+                        <div key={`${activeDrawerItem.id}-${row.label}`} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
                           <p className="text-[11px] text-slate-500">{row.label}</p>
-                          <p className="text-slate-800">{row.value}</p>
+                          <p className="text-slate-200">{row.value}</p>
                         </div>
                       ))}
                     </div>
@@ -2757,7 +2757,7 @@ export default function SalesOrderDetailPage() {
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     {getWindowSpecs(activeDrawerItem.lineDescription).length > 0 ? (
                       getWindowSpecs(activeDrawerItem.lineDescription).map((pair) => (
-                        <div key={`${activeDrawerItem.id}-${pair.label}`} className="rounded-md bg-slate-50 px-2 py-1">
+                        <div key={`${activeDrawerItem.id}-${pair.label}`} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1">
                           <p className="text-[11px] text-slate-500">{pair.label}</p>
                           <p className="text-slate-800">{pair.value}</p>
                         </div>
@@ -2777,7 +2777,7 @@ export default function SalesOrderDetailPage() {
                         updateRowDraft(activeDrawerItem.id, "lineDescription", e.target.value)
                       }
                       readOnly={mode !== "edit"}
-                      className="mt-1 w-full rounded-md border border-slate-200 bg-white p-2 text-sm outline-none focus:ring-1 focus:ring-sky-200 read-only:bg-slate-50 read-only:text-slate-500"
+                      className="mt-1 w-full rounded-lg border border-white/10 bg-white/5 p-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20 read-only:bg-white/5 read-only:text-slate-500"
                       rows={4}
                       placeholder="Optional line note"
                     />
@@ -2791,7 +2791,7 @@ export default function SalesOrderDetailPage() {
                       value={rowDraftsByItemId[activeDrawerItem.id]?.lineTax ?? ""}
                       onChange={(e) => updateRowDraft(activeDrawerItem.id, "lineTax", e.target.value)}
                       readOnly={mode !== "edit"}
-                      className="mt-1 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-right text-sm outline-none focus:ring-1 focus:ring-sky-200 read-only:bg-slate-50 read-only:text-slate-500"
+                      className="mt-1 h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-right text-sm text-white outline-none focus:ring-1 focus:ring-white/20 read-only:bg-white/5 read-only:text-slate-500"
                     />
                   </label>
                   <button
@@ -2815,7 +2815,7 @@ export default function SalesOrderDetailPage() {
                       value={activeDrawerDraft?.fulfillQty ?? ""}
                       onChange={(e) => updateRowDraft(activeDrawerItem.id, "fulfillQty", e.target.value)}
                       readOnly={mode !== "edit"}
-                      className="mt-1 h-8 w-full rounded-md border border-slate-200 bg-white px-2 text-right text-sm outline-none focus:ring-1 focus:ring-sky-200 read-only:bg-slate-50 read-only:text-slate-500"
+                      className="mt-1 h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-right text-sm text-white outline-none focus:ring-1 focus:ring-white/20 read-only:bg-white/5 read-only:text-slate-500"
                       title="Fulfilled quantity"
                     />
                   </label>
@@ -2826,7 +2826,7 @@ export default function SalesOrderDetailPage() {
                   ) : null}
                 </section>
                 </div>
-                <div className="sticky bottom-0 border-t border-slate-200 bg-white px-4 py-3">
+                <div className="sticky bottom-0 border-t border-white/10 bg-[#0F172A] px-4 py-3">
                   <div className="flex items-center justify-end gap-2">
                     <button
                       type="button"
@@ -3153,7 +3153,7 @@ export default function SalesOrderDetailPage() {
       {openPayment ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4 backdrop-blur-sm">
           <div className="so-modal-shell w-full max-w-md p-6">
-            <h3 className="text-base font-semibold text-slate-900">Add Payment</h3>
+            <h3 className="text-base font-semibold text-white">Add Payment</h3>
             <form className="mt-3 space-y-3" onSubmit={submitPayment}>
               <input
                 required
@@ -3244,7 +3244,7 @@ export default function SalesOrderDetailPage() {
       {openFulfillment ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4 backdrop-blur-sm">
           <div className="so-modal-shell w-full max-w-md p-6">
-            <h3 className="text-base font-semibold text-slate-900">Create Fulfillment</h3>
+            <h3 className="text-base font-semibold text-white">Create Fulfillment</h3>
             <form className="mt-3 space-y-3" onSubmit={addFulfillment}>
               <select
                 value={fulfillmentForm.type}
@@ -3302,7 +3302,7 @@ export default function SalesOrderDetailPage() {
       {openStartFulfillmentDialog ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4 backdrop-blur-sm">
           <div className="so-modal-shell w-full max-w-sm p-6">
-            <h3 className="text-base font-semibold text-slate-900">Start Fulfillment</h3>
+            <h3 className="text-base font-semibold text-white">Start Fulfillment</h3>
             <p className="mt-2 text-sm text-slate-500">
               Choose fulfillment type for this sales order.
             </p>
@@ -3338,7 +3338,7 @@ export default function SalesOrderDetailPage() {
       {openTicket ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4 backdrop-blur-sm">
           <div className="so-modal-shell w-full max-w-md p-6">
-            <h3 className="text-base font-semibold text-slate-900">Create Operational Ticket</h3>
+            <h3 className="text-base font-semibold text-white">Create Operational Ticket</h3>
             <form className="mt-3 space-y-3" onSubmit={addTicket}>
               <select
                 value={ticketForm.ticketType}

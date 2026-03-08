@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, Suspense, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Plus, Trash2, Search, Package, User, Truck, Save, Check, X, ShoppingCart, DollarSign, History, Printer, ChevronRight, ChevronLeft, ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
@@ -124,6 +124,8 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
   const [customerQuery, setCustomerQuery] = useState("");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [openCustomerDropdown, setOpenCustomerDropdown] = useState(false);
+  const [customerDropdownHighlight, setCustomerDropdownHighlight] = useState(0);
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
   const [projectName, setProjectName] = useState("");
   const [fulfillmentMethod, setFulfillmentMethod] = useState<"PICKUP" | "DELIVERY">("PICKUP");
   const [deliveryAddress, setDeliveryAddress] = useState("");
@@ -166,9 +168,15 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
   const [orderInfoModalOpen, setOrderInfoModalOpen] = useState(false);
   const [productsPanelCollapsed, setProductsPanelCollapsed] = useState(false);
   const [categoriesExpanded, setCategoriesExpanded] = useState(true);
-  const [productListShowAll, setProductListShowAll] = useState(false);
-  const PRODUCT_LIST_INITIAL_ROWS = 12;
   const quickSearchRef = useRef<HTMLDivElement | null>(null);
+  const productListScrollRef = useRef<HTMLDivElement | null>(null);
+  const [productListScroll, setProductListScroll] = useState({ scrollTop: 0, clientHeight: 500 });
+  const PRODUCT_ROW_HEIGHT_PX = 44;
+  const handleProductListScroll = useCallback(() => {
+    const el = productListScrollRef.current;
+    if (!el) return;
+    setProductListScroll({ scrollTop: el.scrollTop, clientHeight: el.clientHeight });
+  }, []);
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     phone: "",
@@ -194,6 +202,23 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
     ];
   }, [customers, selectedCustomerId, selectedCustomer]);
 
+  const filteredCustomerOptions = useMemo(() => {
+    const q = customerQuery.trim().toLowerCase();
+    if (!q) return customerOptions;
+    return customerOptions.filter(
+      (c) =>
+        String(c.name ?? "").toLowerCase().includes(q) ||
+        String(c.phone ?? "").replace(/\D/g, "").includes(q.replace(/\D/g, "")) ||
+        String(c.email ?? "").toLowerCase().includes(q),
+    );
+  }, [customerOptions, customerQuery]);
+  const customerDropdownList = useMemo(() => {
+    const list: { type: "new" } | { type: "customer"; customer: SalesCustomer }[] = [];
+    list.push({ type: "new" });
+    filteredCustomerOptions.forEach((c) => list.push({ type: "customer", customer: c }));
+    return list;
+  }, [filteredCustomerOptions]);
+
   const filteredProducts = useMemo(() => {
     let list = products;
     if (selectedCategory !== "all") {
@@ -212,16 +237,50 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
     return list;
   }, [products, selectedCategory, productSearchQuery]);
 
+  const productListVisibleRange = useMemo(() => {
+    const total = filteredProducts.length;
+    if (total === 0) return { start: 0, end: 0 };
+    const { scrollTop, clientHeight } = productListScroll;
+    const overscan = 5;
+    const start = Math.max(0, Math.floor(scrollTop / PRODUCT_ROW_HEIGHT_PX) - overscan);
+    const visibleCount = Math.ceil(clientHeight / PRODUCT_ROW_HEIGHT_PX) + overscan * 2;
+    const end = Math.min(total, start + visibleCount);
+    return { start, end };
+  }, [filteredProducts.length, productListScroll]);
+
+  useEffect(() => {
+    const el = productListScrollRef.current;
+    if (!el) return;
+    setProductListScroll((prev) => ({ ...prev, clientHeight: el.clientHeight }));
+  }, [filteredProducts.length]);
+
   const loadCustomers = async (q = "") => {
-    const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
-    const res = await fetch(`/api/sales-orders/customers?${params.toString()}`, {
-      cache: "no-store",
-      headers: { "x-user-role": role },
-    });
-    const payload = await res.json();
-    if (!res.ok) throw new Error(payload.error ?? "Failed to fetch customers");
-    setCustomers(payload.data ?? []);
+    try {
+      const params = new URLSearchParams();
+      if (q.trim()) params.set("q", q.trim());
+      const url = params.toString() ? `/api/customers?${params.toString()}` : "/api/customers";
+      const res = await fetch(url, {
+        cache: "no-store",
+        headers: { "x-user-role": role },
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to fetch customers");
+      const raw = payload.data ?? [];
+      const mapped: SalesCustomer[] = raw.map(
+        (row: { id: string; name: string; phone: string | null; email: string | null; installAddress?: string | null; billingAddress?: string | null; taxExempt?: boolean; taxRate?: number | null }) => ({
+          id: row.id,
+          name: row.name,
+          phone: row.phone ?? null,
+          email: row.email ?? null,
+          address: row.installAddress ?? row.billingAddress ?? null,
+          taxExempt: Boolean(row.taxExempt ?? false),
+          taxRate: row.taxRate != null ? Number(row.taxRate) : null,
+        }),
+      );
+      setCustomers(mapped);
+    } catch (e) {
+      throw e;
+    }
   };
 
   const loadProducts = async (q = "") => {
@@ -437,12 +496,8 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
   }, [quickSkuInput, role]);
 
   useEffect(() => {
-    const walkIn = customers.find((c) => /walk[\s-]?in/i.test(String(c.name ?? "")));
-    if (walkIn && !selectedCustomerId) {
-      setSelectedCustomerId(walkIn.id);
-      setCustomerQuery(walkIn.name);
-    }
-  }, [selectedCustomerId, customers]);
+    if (openCustomerDropdown) setCustomerDropdownHighlight(0);
+  }, [openCustomerDropdown, customerDropdownList.length]);
 
   useEffect(() => {
     if (!quickSearchOpen) return;
@@ -877,48 +932,83 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
   }
 
   return (
-    <div className="min-h-screen so-entry-page" style={{ background: "linear-gradient(180deg, #0B0F19 0%, #0F172A 100%)" }}>
+    <div className="flex flex-1 min-h-0 flex-col overflow-hidden so-entry-page" style={{ background: "linear-gradient(180deg, #0B0F19 0%, #0F172A 100%)" }}>
       {error && (
-        <div className="px-6 py-2 bg-rose-500/10 border-b border-rose-400/20 text-rose-200 text-sm">
+        <div className="shrink-0 px-6 py-2 bg-rose-500/10 border-b border-rose-400/20 text-rose-200 text-sm">
           {error}
         </div>
       )}
 
-      {/* POS Workspace — single system glass panel (Orders/Inventory/Dashboard pattern) */}
-      <div className="glass-card overflow-hidden flex flex-col mx-4 mt-4 mb-6" style={{ minHeight: "calc(100vh - 6rem)" }}>
-        <div className="glass-card-content flex flex-col flex-1 min-h-0 p-6">
-          {/* Panel header: Back, Quick Sale, Draft | Customer, Salesperson, Warehouse, Pickup/Delivery | Details, Save Draft, Confirm Order */}
-          <header className="flex flex-wrap items-center gap-x-3 gap-y-2 pb-4 border-b border-white/[0.08] shrink-0">
+      {/* POS Workspace — fixed top toolbar, scrollable middle, fixed bottom checkout */}
+      <div className="glass-card flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="glass-card-content flex flex-col flex-1 min-h-0 overflow-hidden p-6">
+          {/* 1) Fixed top toolbar */}
+          <header className="shrink-0 flex flex-wrap items-center gap-x-3 gap-y-2 pb-4 border-b border-white/[0.08]">
             <Link href="/orders" className="text-slate-400 hover:text-white text-sm font-medium transition-colors">← Back</Link>
             <span className="text-white/20">·</span>
             <span className="font-semibold text-white">Quick Sale</span>
             <span className="rounded-md bg-amber-500/15 text-amber-400/90 px-1.5 py-0.5 text-[10px] font-medium border border-amber-400/20">Draft</span>
             <span className="text-white/20">·</span>
-            <div className="relative">
+            <div className="relative" ref={customerDropdownRef}>
               <input
                 value={customerQuery}
                 onChange={(e) => { setCustomerQuery(e.target.value); setOpenCustomerDropdown(true); }}
                 onFocus={() => setOpenCustomerDropdown(true)}
                 onBlur={() => setTimeout(() => setOpenCustomerDropdown(false), 150)}
-                placeholder="Customer"
-                className="h-8 w-[120px] px-2.5 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder:text-slate-500 text-xs outline-none focus:ring-1 focus:ring-white/20"
+                onKeyDown={(e) => {
+                  if (!openCustomerDropdown || customerDropdownList.length === 0) {
+                    if (e.key === "ArrowDown") setOpenCustomerDropdown(true);
+                    return;
+                  }
+                  if (e.key === "ArrowDown") { e.preventDefault(); setCustomerDropdownHighlight((i) => (i + 1) % customerDropdownList.length); return; }
+                  if (e.key === "ArrowUp") { e.preventDefault(); setCustomerDropdownHighlight((i) => (i - 1 + customerDropdownList.length) % customerDropdownList.length); return; }
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const item = customerDropdownList[customerDropdownHighlight];
+                    if (!item) return;
+                    if (item.type === "new") { setOpenCustomerModal(true); setOpenCustomerDropdown(false); return; }
+                    if (item.type === "customer") {
+                      const c = item.customer;
+                      setSelectedCustomerId(c.id); setCustomerQuery(c.name ?? "");
+                      if (c.taxExempt) setTaxRate("0"); else setTaxRate(String(Number(c.taxRate ?? defaultTaxRate)));
+                      if (fulfillmentMethod === "DELIVERY") setDeliveryAddress((prev) => prev || (String(c.address ?? "")));
+                      setOpenCustomerDropdown(false);
+                    }
+                    return;
+                  }
+                  if (e.key === "Escape") { setOpenCustomerDropdown(false); (e.target as HTMLInputElement).blur(); }
+                }}
+                placeholder="Search customer"
+                className="h-8 w-[180px] px-2.5 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white placeholder:text-slate-500 text-xs outline-none focus:ring-1 focus:ring-white/20"
               />
               {openCustomerDropdown && (
-                <div className="absolute z-50 left-0 top-full mt-1 w-52 max-h-44 overflow-y-auto rounded-lg border border-white/[0.08] bg-slate-900/98 backdrop-blur py-1 shadow-xl">
-                  <button type="button" onMouseDown={(e) => { e.preventDefault(); setOpenCustomerModal(true); setOpenCustomerDropdown(false); }} className="w-full px-2 py-1.5 text-left text-xs text-slate-400 hover:bg-white/5">+ New customer</button>
-                  {customerOptions.map((c) => (
-                    <button key={c.id} type="button" onMouseDown={(e) => { e.preventDefault(); setSelectedCustomerId(c.id); setCustomerQuery(c.name); if (c.taxExempt) setTaxRate("0"); else setTaxRate(String(Number(c.taxRate ?? defaultTaxRate))); if (fulfillmentMethod === "DELIVERY") setDeliveryAddress((prev) => prev || (String(c.address ?? ""))); setOpenCustomerDropdown(false); }} className={`w-full px-2 py-1.5 text-left text-xs truncate ${selectedCustomerId === c.id ? "bg-white/10 text-white" : "text-slate-200"}`}>{c.name}</button>
-                  ))}
+                <div className="absolute z-50 left-0 top-full mt-1 w-64 max-h-56 overflow-y-auto rounded-lg border border-white/[0.08] bg-slate-900/98 backdrop-blur py-1 shadow-xl">
+                  {customerDropdownList.map((item, idx) => {
+                    if (item.type === "new") {
+                      return (
+                        <button key="new-customer" type="button" onMouseDown={(e) => { e.preventDefault(); setOpenCustomerModal(true); setOpenCustomerDropdown(false); }} onMouseEnter={() => setCustomerDropdownHighlight(idx)} className={`w-full px-3 py-2 text-left text-xs font-medium ${idx === customerDropdownHighlight ? "bg-white/10 text-white" : "text-slate-400 hover:bg-white/5"}`}>
+                          + New Customer
+                        </button>
+                      );
+                    }
+                    const c = item.customer;
+                    return (
+                      <button key={c.id} type="button" onMouseDown={(e) => { e.preventDefault(); setSelectedCustomerId(c.id); setCustomerQuery(c.name ?? ""); if (c.taxExempt) setTaxRate("0"); else setTaxRate(String(Number(c.taxRate ?? defaultTaxRate))); if (fulfillmentMethod === "DELIVERY") setDeliveryAddress((prev) => prev || (String(c.address ?? ""))); setOpenCustomerDropdown(false); }} onMouseEnter={() => setCustomerDropdownHighlight(idx)} className={`w-full px-3 py-2 text-left text-xs truncate ${selectedCustomerId === c.id ? "bg-white/10 text-white" : idx === customerDropdownHighlight ? "bg-white/10 text-white" : "text-slate-200"}`} title={c.phone ?? undefined}>
+                        <span className="block truncate">{c.name}</span>
+                        {c.phone ? <span className="block truncate text-slate-500 text-[11px] mt-0.5">{c.phone}</span> : null}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
             <span className="text-white/20">·</span>
-            <select value={salespersonName} onChange={(e) => setSalespersonName(e.target.value)} className="h-8 w-[100px] px-2.5 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-xs outline-none focus:ring-1 focus:ring-white/20">
+            <select value={salespersonName} onChange={(e) => setSalespersonName(e.target.value)} className="h-8 min-w-[120px] px-2.5 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-xs outline-none focus:ring-1 focus:ring-white/20">
               <option value="">Salesperson</option>
               {salespeople.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
             </select>
             <span className="text-white/20">·</span>
-            <select value={warehouse} onChange={(e) => setWarehouse(e.target.value)} className="h-8 w-[90px] px-2.5 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-xs outline-none focus:ring-1 focus:ring-white/20">
+            <select value={warehouse} onChange={(e) => setWarehouse(e.target.value)} className="h-8 min-w-[100px] px-2.5 rounded-lg border border-white/[0.08] bg-white/[0.04] text-white text-xs outline-none focus:ring-1 focus:ring-white/20">
               <option value="">Warehouse</option>
               <option value="central">Central</option>
               <option value="north">North</option>
@@ -937,8 +1027,8 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
             </div>
           </header>
 
-          {/* Two columns: Products (collapsible) | Cart */}
-          <div className="flex flex-1 min-h-0 gap-6 mt-4">
+          {/* 2) Scrollable middle workspace: products panel (left) + cart panel (right) */}
+          <div className="flex flex-1 min-h-0 gap-6 mt-4 overflow-hidden">
             {/* Products — 35% or collapsed to narrow strip */}
             {productsPanelCollapsed ? (
               <button
@@ -951,9 +1041,10 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
                 <span className="text-[11px] font-medium text-slate-400">Products</span>
               </button>
             ) : (
-            <aside className="w-[35%] min-w-0 flex flex-col shrink-0">
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] overflow-hidden flex flex-col flex-1 min-h-0">
-                <div className="p-3 border-b border-white/[0.06] flex items-center gap-2">
+            <aside className="w-[35%] min-w-0 flex flex-col shrink-0 min-h-0">
+              {/* ProductsPanel: limited height; Search + Categories + ProductTableHeader (fixed) + ProductTableBody (scrolls, max 420px) */}
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] overflow-hidden flex flex-col max-h-[85vh]">
+                <div className="p-3 border-b border-white/[0.06] flex items-center gap-2 shrink-0">
                   <div className="relative flex-1 min-w-0">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/50" />
                     <input
@@ -969,7 +1060,7 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
                   </button>
                 </div>
                 {/* Collapsible Categories */}
-                <div className="border-b border-white/[0.06]">
+                <div className="border-b border-white/[0.06] shrink-0">
                   <button
                     type="button"
                     onClick={() => setCategoriesExpanded((e) => !e)}
@@ -996,49 +1087,63 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
                     </div>
                   )}
                 </div>
-                <div className="flex-1 overflow-y-auto min-h-0">
+                <div className="flex flex-col overflow-hidden min-h-0">
                   {filteredProducts.length === 0 ? (
                     <p className="text-slate-500 text-sm text-center py-8">No products found</p>
                   ) : (
                     <>
-                    <table className="w-full text-sm border-collapse">
-                      <thead className="sticky top-0 bg-white/[0.04] border-b border-white/[0.06] z-10">
-                        <tr className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                          <th className="text-left py-2 px-3">Product Name</th>
-                          <th className="text-right py-2 px-3 w-20">Price</th>
-                          <th className="text-right py-2 px-2 w-16">Stock</th>
-                          <th className="text-right py-2 pr-3 w-12">Add</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(productListShowAll ? filteredProducts : filteredProducts.slice(0, PRODUCT_LIST_INITIAL_ROWS)).map((product) => {
-                          const stock = Number(product.availableStock || 0);
-                          const displayName = cleanProductDisplayName(product.name);
-                          const unit = (product.unit || "pcs").toLowerCase();
-                          return (
-                            <tr key={product.id} className="border-b border-white/[0.04] hover:bg-white/[0.03]">
-                              <td className="py-2 px-3 min-w-0">
-                                <span className="text-slate-200 text-sm truncate block" title={displayName}>{displayName}</span>
-                              </td>
-                              <td className="py-2 px-3 text-right text-slate-200 text-sm font-medium tabular-nums">${Number(product.price || 0).toFixed(2)}</td>
-                              <td className="py-2 px-2 text-right">
-                                <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium bg-white/[0.06] border border-white/[0.08] text-slate-400 tabular-nums">{stock} {unit}</span>
-                              </td>
-                              <td className="py-2 pr-3 text-right">
-                                <button type="button" onClick={() => addLine(product)} className="h-7 w-7 rounded-lg border border-white/[0.12] bg-white/[0.04] text-slate-400 hover:bg-emerald-600/80 hover:border-emerald-500/50 hover:text-white inline-flex items-center justify-center transition-colors" title="Add to cart">
-                                  <Plus className="h-4 w-4" />
-                                </button>
-                              </td>
+                      {/* ProductTableHeader — sticky, does not scroll */}
+                      <div className="sticky top-0 z-10 bg-white/[0.04] border-b border-white/[0.06] shrink-0">
+                        <table className="w-full text-sm border-collapse">
+                          <thead>
+                            <tr className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                              <th className="text-left py-2 px-3 h-11">Product Name</th>
+                              <th className="text-right py-2 px-3 w-20 h-11">Price</th>
+                              <th className="text-right py-2 px-2 w-16 h-11">Stock</th>
+                              <th className="text-right py-2 pr-3 w-12 h-11">Add</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    {!productListShowAll && filteredProducts.length > PRODUCT_LIST_INITIAL_ROWS && (
-                      <button type="button" onClick={() => setProductListShowAll(true)} className="w-full py-2.5 text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.04] border-t border-white/[0.04] transition-colors">
-                        Show more ({filteredProducts.length - PRODUCT_LIST_INITIAL_ROWS} more)
-                      </button>
-                    )}
+                          </thead>
+                        </table>
+                      </div>
+                      {/* ProductTableBody — limited height, rows scroll inside; virtual list renders only visible rows */}
+                      <div
+                        ref={productListScrollRef}
+                        className="max-h-[420px] min-h-0 overflow-y-auto"
+                        onScroll={handleProductListScroll}
+                      >
+                        <div style={{ height: filteredProducts.length * PRODUCT_ROW_HEIGHT_PX }}>
+                          <table
+                            className="w-full text-sm border-collapse"
+                            style={{ transform: `translateY(${productListVisibleRange.start * PRODUCT_ROW_HEIGHT_PX}px)` }}
+                          >
+                            <tbody>
+                              {filteredProducts
+                                .slice(productListVisibleRange.start, productListVisibleRange.end)
+                                .map((product) => {
+                                  const stock = Number(product.availableStock || 0);
+                                  const displayName = cleanProductDisplayName(product.name);
+                                  const unit = (product.unit || "pcs").toLowerCase();
+                                  return (
+                                    <tr key={product.id} className="h-11 border-b border-white/[0.04] hover:bg-white/[0.03]">
+                                      <td className="py-2 px-3 min-w-0">
+                                        <span className="text-slate-200 text-sm leading-tight truncate block" title={displayName}>{displayName}</span>
+                                      </td>
+                                      <td className="py-2 px-3 text-right text-slate-200 text-sm font-medium tabular-nums">${Number(product.price || 0).toFixed(2)}</td>
+                                      <td className="py-2 px-2 text-right">
+                                        <span className="inline-flex px-1.5 py-0.5 rounded text-xs font-medium leading-tight bg-white/[0.06] border border-white/[0.08] text-slate-400 tabular-nums">{stock} {unit}</span>
+                                      </td>
+                                      <td className="py-2 pr-3 text-right">
+                                        <button type="button" onClick={() => addLine(product)} className="h-6 w-6 rounded-lg border border-white/[0.12] bg-white/[0.04] text-slate-400 hover:bg-emerald-600/80 hover:border-emerald-500/50 hover:text-white inline-flex items-center justify-center transition-colors" title="Add to cart">
+                                          <Plus className="h-3.5 w-3.5" />
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
                     </>
                   )}
                 </div>
@@ -1046,10 +1151,10 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
             </aside>
             )}
 
-            {/* Cart — 65% or flex-1 when products collapsed */}
-            <main className={productsPanelCollapsed ? "flex-1 min-w-0 flex flex-col min-h-0" : "w-[65%] min-w-0 flex flex-col flex-1 min-h-0"}>
+            {/* CartPanel: flex column with CartBody (scrollable) + CheckoutFooter (fixed) */}
+            <main className={productsPanelCollapsed ? "flex-1 min-w-0 flex flex-col min-h-0 overflow-hidden" : "w-[65%] min-w-0 flex flex-col flex-1 min-h-0 overflow-hidden"}>
               <div className="rounded-xl border border-white/[0.08] bg-white/[0.04] flex flex-col flex-1 min-h-0 overflow-hidden">
-                <div className="p-3 border-b border-white/[0.06] flex flex-wrap items-center gap-3">
+                <div className="p-3 border-b border-white/[0.06] flex flex-wrap items-center gap-3 shrink-0">
                   <div ref={quickSearchRef} className="relative flex-1 min-w-[160px]">
                     <input
                       value={quickSkuInput}
@@ -1121,14 +1226,28 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
                     </div>
                   </div>
 
+                {/* CartBody: only this scrolls; order notes live here */}
+                <div className="flex-1 min-h-0 overflow-y-auto">
                 {items.filter((i) => i.variantId).length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center py-12 px-4 text-center min-h-0">
-                    <ShoppingCart className="h-9 w-9 text-slate-500 mb-3" />
-                    <p className="text-white font-medium text-sm mb-1">Cart is empty</p>
-                    <p className="text-slate-500 text-xs">Scan SKU or add products from the list</p>
+                  <div className="flex flex-col min-h-full">
+                    <div className="flex flex-col items-center justify-center py-12 px-4 text-center flex-1">
+                      <ShoppingCart className="h-9 w-9 text-slate-500 mb-3" />
+                      <p className="text-white font-medium text-sm mb-1">Cart is empty</p>
+                      <p className="text-slate-500 text-xs">Scan SKU or add products from the list</p>
+                    </div>
+                    <div className="shrink-0 p-3 border-t border-white/[0.06]">
+                      <label className="block text-slate-400 text-xs font-medium mb-1.5">Order notes</label>
+                      <textarea
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Order notes..."
+                        rows={2}
+                        className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white placeholder:text-slate-500 text-xs outline-none focus:ring-1 focus:ring-white/20 resize-none"
+                      />
+                    </div>
                   </div>
                 ) : (
-                  <div className="flex-1 overflow-y-auto min-h-0">
+                  <>
                     <table className="w-full text-xs border-collapse">
                       <thead className="sticky top-0 bg-white/[0.04] border-b border-white/[0.06] z-10">
                         <tr className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
@@ -1204,39 +1323,40 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
                     <div className="p-3 border-t border-white/[0.04]">
                       <button type="button" onClick={() => addLine()} className="w-full py-2 text-xs text-slate-500 hover:text-white hover:bg-white/[0.04] rounded-lg font-medium">+ Add line</button>
                     </div>
-                  </div>
+                  </>
                 )}
+                </div>
+              </div>
+
+              {/* CheckoutFooter: sibling of cart card, never scrolls */}
+              <div className="shrink-0 mt-3 pt-4 border-t border-white/[0.08] bg-[#0F172A]/95 rounded-b-xl flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between gap-6 text-slate-400">
+                    <span>Subtotal</span>
+                    <span className="font-medium text-white tabular-nums">${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between gap-6 text-slate-400">
+                    <span>Tax</span>
+                    <span className="font-medium text-white tabular-nums">${taxAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-baseline pt-2 border-t border-white/[0.08] gap-6">
+                    <span className="text-sm font-bold text-white uppercase tracking-wider">Total</span>
+                    <span className="text-2xl font-bold text-white tabular-nums">${total.toFixed(2)}</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={saving} onClick={() => handleSaveOrder(true)} className="btn-primary-emerald h-10 px-5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
+                    <Check className="h-4 w-4" /> Confirm Order
+                  </button>
+                  <button type="button" disabled={saving} onClick={() => handleSaveOrder(false)} className="h-10 px-4 rounded-lg border border-white/[0.12] text-slate-300 hover:bg-white/[0.06] text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50">
+                    <Save className="h-4 w-4" /> Save Draft
+                  </button>
+                  <button type="button" onClick={() => router.push("/orders")} className="h-10 px-4 rounded-lg border border-white/[0.08] text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 text-sm font-medium flex items-center justify-center gap-2">
+                    <X className="h-4 w-4" /> Cancel
+                  </button>
+                </div>
               </div>
             </main>
-          </div>
-
-          {/* Checkout footer — panel footer (same as Orders/Inventory pattern) */}
-          <div className="shrink-0 border-t border-white/[0.08] pt-4 mt-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-            <div className="space-y-1 text-sm">
-              <div className="flex justify-between gap-6 text-slate-400">
-                <span>Subtotal</span>
-                <span className="font-medium text-white tabular-nums">${subtotal.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between gap-6 text-slate-400">
-                <span>Tax</span>
-                <span className="font-medium text-white tabular-nums">${taxAmount.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-baseline pt-2 border-t border-white/[0.08] gap-6">
-                <span className="text-sm font-bold text-white uppercase tracking-wider">Total</span>
-                <span className="text-2xl font-bold text-white tabular-nums">${total.toFixed(2)}</span>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={saving} onClick={() => handleSaveOrder(true)} className="btn-primary-emerald h-10 px-5 rounded-lg text-white text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
-                <Check className="h-4 w-4" /> Confirm Order
-              </button>
-              <button type="button" disabled={saving} onClick={() => handleSaveOrder(false)} className="h-10 px-4 rounded-lg border border-white/[0.12] text-slate-300 hover:bg-white/[0.06] text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50">
-                <Save className="h-4 w-4" /> Save Draft
-              </button>
-              <button type="button" onClick={() => router.push("/orders")} className="h-10 px-4 rounded-lg border border-white/[0.08] text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 text-sm font-medium flex items-center justify-center gap-2">
-                <X className="h-4 w-4" /> Cancel
-              </button>
-            </div>
           </div>
         </div>
       </div>
@@ -1319,19 +1439,53 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
                     onChange={(e) => { setCustomerQuery(e.target.value); setOpenCustomerDropdown(true); }}
                     onFocus={() => setOpenCustomerDropdown(true)}
                     onBlur={() => setTimeout(() => setOpenCustomerDropdown(false), 150)}
-                    placeholder="Search customer"
+                    onKeyDown={(e) => {
+                      if (!openCustomerDropdown || customerDropdownList.length === 0) {
+                        if (e.key === "ArrowDown") setOpenCustomerDropdown(true);
+                        return;
+                      }
+                      if (e.key === "ArrowDown") { e.preventDefault(); setCustomerDropdownHighlight((i) => (i + 1) % customerDropdownList.length); return; }
+                      if (e.key === "ArrowUp") { e.preventDefault(); setCustomerDropdownHighlight((i) => (i - 1 + customerDropdownList.length) % customerDropdownList.length); return; }
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        const item = customerDropdownList[customerDropdownHighlight];
+                        if (!item) return;
+                        if (item.type === "new") { setOpenCustomerModal(true); setOrderInfoModalOpen(false); setOpenCustomerDropdown(false); return; }
+                        if (item.type === "customer") {
+                          const c = item.customer;
+                          setSelectedCustomerId(c.id); setCustomerQuery(c.name ?? "");
+                          if (c.taxExempt) setTaxRate("0"); else setTaxRate(String(Number(c.taxRate ?? defaultTaxRate)));
+                          if (fulfillmentMethod === "DELIVERY") setDeliveryAddress((prev) => prev || (String(c.address ?? "")));
+                          setOpenCustomerDropdown(false);
+                        }
+                        return;
+                      }
+                      if (e.key === "Escape") { setOpenCustomerDropdown(false); (e.target as HTMLInputElement).blur(); }
+                    }}
+                    placeholder="Search by name or phone"
                     className="w-full h-9 px-3 rounded-lg bg-white/[0.05] border border-white/[0.10] text-white placeholder:text-white/40 text-sm outline-none backdrop-blur-xl focus:ring-2 focus:ring-cyan-400/30"
                   />
                   {openCustomerDropdown && (
-                    <div className="absolute z-20 mt-1 left-0 right-0 max-h-52 overflow-y-auto rounded-xl border border-white/[0.10] bg-gradient-to-b from-white/10 to-white/[0.03] backdrop-blur-2xl py-1">
-                      <button type="button" onMouseDown={(e) => { e.preventDefault(); setOpenCustomerModal(true); setOrderInfoModalOpen(false); setOpenCustomerDropdown(false); }} className="w-full px-3 py-2 text-left text-sm text-slate-300 font-medium hover:bg-white/[0.06]">+ Quick Add Customer</button>
-                      {customerOptions.map((c) => (
-                        <button key={c.id} type="button" onMouseDown={(e) => { e.preventDefault(); setSelectedCustomerId(c.id); setCustomerQuery(c.name); if (c.taxExempt) setTaxRate("0"); else setTaxRate(String(Number(c.taxRate ?? defaultTaxRate))); if (fulfillmentMethod === "DELIVERY") setDeliveryAddress((prev) => prev || (String(c.address ?? ""))); setOpenCustomerDropdown(false); }} className={`w-full px-3 py-2.5 text-left text-sm ${selectedCustomerId === c.id ? "text-slate-200 bg-slate-500/10" : "text-white"}`}>{c.name}{c.phone ? ` (${c.phone})` : ""}</button>
-                      ))}
+                    <div className="absolute z-20 mt-1 left-0 right-0 max-h-56 overflow-y-auto rounded-xl border border-white/[0.10] bg-slate-900/98 backdrop-blur-xl py-1 shadow-xl">
+                      {customerDropdownList.map((item, idx) => {
+                        if (item.type === "new") {
+                          return (
+                            <button key="new-customer" type="button" onMouseDown={(e) => { e.preventDefault(); setOpenCustomerModal(true); setOrderInfoModalOpen(false); setOpenCustomerDropdown(false); }} onMouseEnter={() => setCustomerDropdownHighlight(idx)} className={`w-full px-3 py-2.5 text-left text-sm font-medium ${idx === customerDropdownHighlight ? "bg-white/[0.10] text-white" : "text-slate-300 hover:bg-white/[0.06]"}`}>
+                              + New Customer
+                            </button>
+                          );
+                        }
+                        const c = item.customer;
+                        return (
+                          <button key={c.id} type="button" onMouseDown={(e) => { e.preventDefault(); setSelectedCustomerId(c.id); setCustomerQuery(c.name ?? ""); if (c.taxExempt) setTaxRate("0"); else setTaxRate(String(Number(c.taxRate ?? defaultTaxRate))); if (fulfillmentMethod === "DELIVERY") setDeliveryAddress((prev) => prev || (String(c.address ?? ""))); setOpenCustomerDropdown(false); }} onMouseEnter={() => setCustomerDropdownHighlight(idx)} className={`w-full px-3 py-2.5 text-left text-sm ${selectedCustomerId === c.id ? "bg-white/[0.10] text-slate-100" : idx === customerDropdownHighlight ? "bg-white/[0.10] text-white" : "text-white"}`}>
+                            <span className="block font-medium truncate">{c.name}</span>
+                            {c.phone ? <span className="block text-slate-400 text-xs mt-0.5 truncate">{c.phone}</span> : null}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
-                <button type="button" onClick={() => { setOpenCustomerModal(true); setOrderInfoModalOpen(false); }} className="mt-2 text-xs text-slate-400 hover:text-slate-300 hover:underline">Quick Add +</button>
               </div>
               <div>
                 <label className="so-entry-text-secondary text-xs uppercase tracking-[0.12em] font-semibold block mb-2">Salesperson</label>
