@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Plus, Search, Trash2 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useRole } from "@/components/layout/role-provider";
 import { Spinner } from "@/components/ui/spinner";
@@ -61,6 +61,7 @@ type InventoryAlertsPayload = {
 
 export default function OrdersPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { role } = useRole();
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -70,6 +71,16 @@ export default function OrdersPage() {
   const [docTypeFilter, setDocTypeFilter] = useState<"QUOTE" | "SALES_ORDER">("SALES_ORDER");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [creatingDocType, setCreatingDocType] = useState<"QUOTE" | "SALES_ORDER" | null>(null);
+
+  // When visiting /orders without docType, default to SALES_ORDER so content renders
+  useEffect(() => {
+    const docType = searchParams.get("docType");
+    if (docType === "QUOTE" || docType === "SALES_ORDER") {
+      setDocTypeFilter(docType);
+    } else {
+      router.replace("/orders?docType=SALES_ORDER");
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 250);

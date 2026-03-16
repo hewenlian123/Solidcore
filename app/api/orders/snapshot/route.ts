@@ -3,17 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { buildProductDisplayName } from "@/lib/product-display-format";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
-const INCLUDED_STATUSES = ["CONFIRMED", "READY", "PARTIALLY_FULFILLED", "FULFILLED"] as const;
+// All non-cancelled statuses count toward month sales (sales_orders)
+const INCLUDED_STATUSES = ["DRAFT", "QUOTED", "CONFIRMED", "READY", "PARTIALLY_FULFILLED", "FULFILLED"] as const;
 
-function getHonoluluMonthRange(now = new Date()) {
-  // Honolulu is UTC-10 year-round (no DST).
-  const honoluluNowMs = now.getTime() - 10 * 60 * 60 * 1000;
-  const honoluluNow = new Date(honoluluNowMs);
-  const year = honoluluNow.getUTCFullYear();
-  const month = honoluluNow.getUTCMonth(); // 0-based
-  const startUtc = new Date(Date.UTC(year, month, 1, 10, 0, 0, 0));
-  const nextStartUtc = new Date(Date.UTC(year, month + 1, 1, 10, 0, 0, 0));
-  return { startUtc, nextStartUtc };
+function getCurrentMonthRange(now = new Date()) {
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const start = new Date(year, month, 1, 0, 0, 0, 0);
+  const next = new Date(year, month + 1, 1, 0, 0, 0, 0);
+  return { start, next };
 }
 
 export async function GET(request: NextRequest) {
@@ -21,7 +19,7 @@ export async function GET(request: NextRequest) {
     const role = getRequestRole(request);
     if (!hasOneOf(role, ["ADMIN", "SALES", "WAREHOUSE"])) return deny();
 
-    const { startUtc, nextStartUtc } = getHonoluluMonthRange();
+    const { start: startUtc, next: nextStartUtc } = getCurrentMonthRange();
     const orderWhere = {
       docType: "SALES_ORDER" as const,
       status: { in: [...INCLUDED_STATUSES] },

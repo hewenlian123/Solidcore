@@ -4,16 +4,20 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  BarChart3,
   Boxes,
   ChevronDown,
   ClipboardList,
   Factory,
   FileBarChart2,
   FileText,
+  FlaskConical,
+  Heart,
   LayoutDashboard,
   MapPin,
   Package,
   PackageCheck,
+  ScrollText,
   Settings,
   ShieldCheck,
   ShoppingCart,
@@ -46,7 +50,7 @@ type NavItem = {
 };
 
 type NavGroup = {
-  key: "overview" | "sales" | "fulfillment" | "inventory" | "purchasing" | "priceManagement" | "afterSales" | "finance" | "analytics" | "settings";
+  key: "overview" | "sales" | "fulfillment" | "inventory" | "purchasing" | "priceManagement" | "afterSales" | "finance" | "analytics" | "system" | "settings";
   label: string;
   roles: Role[];
   items: NavItem[];
@@ -152,6 +156,19 @@ const navGroups: NavGroup[] = [
       { label: "Sales Analytics", href: "/analytics/sales", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
       { label: "Inventory Analytics", href: "/analytics/inventory", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
       { label: "Customer Analytics", href: "/analytics/customers", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
+    ],
+  },
+  {
+    key: "system",
+    label: "System",
+    roles: ["ADMIN"],
+    items: [
+      { label: "System Health", href: "/system/health", icon: Heart, roles: ["ADMIN"] },
+      { label: "Run All Tests", href: "/system/tests", icon: FlaskConical, roles: ["ADMIN"] },
+      { label: "Feature Tests", href: "/system/feature-tests", icon: Package, roles: ["ADMIN"] },
+      { label: "UI Tests", href: "/system/ui-tests", icon: LayoutDashboard, roles: ["ADMIN"] },
+      { label: "System Metrics", href: "/system/metrics", icon: BarChart3, roles: ["ADMIN"] },
+      { label: "System Logs", href: "/system/logs", icon: ScrollText, roles: ["ADMIN"] },
     ],
   },
   {

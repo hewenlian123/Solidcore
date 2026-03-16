@@ -5,7 +5,7 @@ import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 export async function GET(request: NextRequest) {
   try {
     const role = getRequestRole(request);
-    if (!hasOneOf(role, ["ADMIN", "WAREHOUSE"])) {
+    if (!hasOneOf(role, ["ADMIN", "WAREHOUSE", "SALES"])) {
       return deny();
     }
 

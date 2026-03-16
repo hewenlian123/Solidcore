@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -776,15 +776,17 @@ model SalesOrderItem {
 }
 
 model PurchaseOrder {
-  id              String   @id @default(uuid())
-  poNumber        String   @unique @map("po_number")
-  supplierId      String   @map("supplier_id")
+  id              String    @id @default(uuid())
+  poNumber        String    @unique @map("po_number")
+  supplierId      String    @map("supplier_id")
   status          String
-  orderDate       DateTime @map("order_date")
-  expectedArrival DateTime? @map("expected_arrival")
-  totalCost       Decimal  @default(0) @map("total_cost")
+  orderDate       DateTime  @map("order_date")
+  expectedArrival DateTime?  @map("expected_arrival")
+  dueDate         DateTime?  @map("due_date")
+  totalCost       Decimal   @default(0) @map("total_cost")
+  paidAmount      Decimal   @default(0) @map("paid_amount")
   notes           String?
-  createdAt       DateTime @default(now()) @map("created_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   supplier        Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
   specialOrderItems SalesOrderItem[]
@@ -865,6 +867,36 @@ model Settings {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("settings")
+}
+
+model CategoryMarginDefault {
+  category  String   @id
+  marginPct Decimal  @map("margin_pct")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("category_margin_defaults")
+}
+
+model VariantMarginOverride {
+  variantId  String   @id @map("variant_id")
+  marginPct  Decimal  @map("margin_pct")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("variant_margin_overrides")
+}
+
+model Promotion {
+  id        String    @id @default(uuid())
+  name      String
+  type      String    @map("type")
+  value     Decimal
+  category  String?   @map("category")
+  startAt   DateTime  @map("start_date")
+  endAt     DateTime  @map("end_date")
+  enabled   Boolean   @default(true) @map("active")
+  createdAt DateTime? @default(now()) @map("created_at")
+
+  @@map("promotions")
 }
 
 model InvoiceItem {

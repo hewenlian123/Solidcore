@@ -19,7 +19,7 @@ export function normalizeRole(input: string | null | undefined): Role {
 }
 
 export function canViewPath(role: Role, path: string) {
-  if (role === "ADMIN") return true;
+  if (role === "ADMIN") return true; // ADMIN includes /system
   if (role === "SALES")
     return (
       path.startsWith("/dashboard") ||
