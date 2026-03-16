@@ -13,7 +13,7 @@ export type LogEntry = {
 const LOG_BUFFER: LogEntry[] = [];
 const MAX_LOGS = 200;
 
-export function appendLog(entry: Omit<LogEntry, "time" | "id">) {
+function appendLog(entry: Omit<LogEntry, "time" | "id">) {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const time = new Date().toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
   LOG_BUFFER.unshift({ ...entry, time, id });
