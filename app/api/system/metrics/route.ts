@@ -10,7 +10,7 @@ let latencyN = 0;
 const windowStart = Date.now();
 const ONE_MINUTE = 60 * 1000;
 
-export function recordRequest(latencyMs: number, isError?: boolean) {
+function recordRequest(latencyMs: number, isError?: boolean) {
   const now = Date.now();
   if (now - windowStart > ONE_MINUTE) return; // optional: reset or use sliding window
   requestCount += 1;
