@@ -1,10 +1,9 @@
 "use client";
 
 import { FormEvent, Suspense, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 
 function LoginPageContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("admin123");
@@ -24,11 +23,10 @@ function LoginPageContent() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? "Failed to login.");
       const next = String(searchParams.get("next") ?? "/dashboard");
-      router.replace(next.startsWith("/") ? next : "/dashboard");
-      router.refresh();
+      // Hard navigation ensures Safari commits the cookie before the next page loads
+      window.location.href = next.startsWith("/") ? next : "/dashboard";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to login.");
-    } finally {
       setSubmitting(false);
     }
   };
@@ -80,4 +78,3 @@ export default function LoginPage() {
     </Suspense>
   );
 }
-
