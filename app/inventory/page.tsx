@@ -72,7 +72,7 @@ export default function InventorySummaryPage() {
 
   return (
     <section className="space-y-6">
-      <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-6 backdrop-blur-2xl">
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-4 backdrop-blur-2xl">
         <h1 className="text-2xl font-semibold tracking-tight text-white">Inventory Summary</h1>
         <p className="mt-1 text-sm text-white/60">Main inventory dashboard with stock value and category-level breakdown.</p>
       </div>
@@ -88,27 +88,27 @@ export default function InventorySummaryPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <article className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-6 backdrop-blur-2xl">
+            <article className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-4 backdrop-blur-2xl">
               <p className="text-xs text-white/60">Total Products</p>
               <p className="mt-2 text-2xl font-semibold text-white/90">{formatNumber(data.cards.totalProducts)}</p>
             </article>
-            <article className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-6 backdrop-blur-2xl">
+            <article className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-4 backdrop-blur-2xl">
               <p className="text-xs text-white/60">Total SKUs</p>
               <p className="mt-2 text-2xl font-semibold text-white/90">{formatNumber(data.cards.totalSkus)}</p>
             </article>
-            <article className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-6 backdrop-blur-2xl">
+            <article className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-4 backdrop-blur-2xl">
               <p className="text-xs text-white/60">Total Units In Stock</p>
               <p className="mt-2 text-2xl font-semibold text-white/90">{formatNumber(data.cards.totalUnitsInStock)}</p>
             </article>
-            <article className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-6 backdrop-blur-2xl">
+            <article className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-4 backdrop-blur-2xl">
               <p className="text-xs text-white/60">Total Cost Value</p>
               <p className="mt-2 text-2xl font-semibold text-white/90">{formatCurrency(data.cards.totalCostValue)}</p>
             </article>
-            <article className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-6 backdrop-blur-2xl">
+            <article className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-4 backdrop-blur-2xl">
               <p className="text-xs text-white/60">Total Retail Value</p>
               <p className="mt-2 text-2xl font-semibold text-white/90">{formatCurrency(data.cards.totalRetailValue)}</p>
             </article>
-            <article className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-6 backdrop-blur-2xl">
+            <article className="rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4 backdrop-blur-2xl">
               <p className="text-xs text-amber-300">Low Stock Items</p>
               <p className="mt-2 text-2xl font-semibold text-amber-300">{formatNumber(data.cards.lowStockItems)}</p>
             </article>

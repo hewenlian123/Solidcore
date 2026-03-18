@@ -155,7 +155,7 @@ export default function CustomersPage() {
 
   return (
     <section className="space-y-6">
-      <div className="glass-card p-6">
+      <div className="glass-card p-4">
         <div className="glass-card-content flex items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-white">Customer Management</h1>

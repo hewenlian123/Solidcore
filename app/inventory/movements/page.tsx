@@ -162,7 +162,7 @@ export default function InventoryMovementsPage() {
         <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
       ) : null}
 
-      <div className="linear-card flex flex-wrap items-end gap-3 p-6">
+      <div className="linear-card flex flex-wrap items-end gap-3 p-4">
         <label className="block">
           <span className="mb-1 block text-xs text-slate-500">Search</span>
           <input

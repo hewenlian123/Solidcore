@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     const data = await prisma.purchaseOrder.findMany({
       include: {
-        supplier: { select: { id: true, name: true, contactName: true, phone: true } },
+        supplier: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
       take: 200,
@@ -29,7 +29,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
     console.error("GET /api/purchase-orders error:", error);
-    return NextResponse.json({ error: "Failed to fetch purchase orders." }, { status: 500 });
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to fetch purchase orders.", data: [] },
+      { status: 500 },
+    );
   }
 }
 
@@ -66,7 +69,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
     console.error("POST /api/purchase-orders error:", error);
-    return NextResponse.json({ error: "Failed to create purchase order." }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Failed to create purchase order.";
+    return NextResponse.json({ error: message, data: null }, { status: 500 });
   }
 }
 

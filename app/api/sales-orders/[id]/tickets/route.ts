@@ -7,18 +7,28 @@ type Params = {
 };
 
 const TICKET_TYPES = ["PICK", "DELIVERY", "RETURN"] as const;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function resolveSalesOrderId(idOrNumber: string): Promise<string | null> {
+  const raw = String(idOrNumber ?? "").trim();
+  if (!raw) return null;
+  const byId = await prisma.salesOrder.findUnique({ where: { id: raw }, select: { id: true } });
+  if (byId) return byId.id;
+  const byNumber = await prisma.salesOrder.findFirst({
+    where: { orderNumber: { equals: raw, mode: "insensitive" } },
+    select: { id: true },
+  });
+  return byNumber?.id ?? null;
+}
 
 export async function GET(request: NextRequest, { params }: Params) {
   try {
     const role = getRequestRole(request);
     if (!hasOneOf(role, ["ADMIN", "SALES", "WAREHOUSE"])) return deny();
     const { id } = await params;
-    if (!UUID_RE.test(id)) {
-      return NextResponse.json({ error: "Invalid sales order id." }, { status: 400 });
-    }
+    const salesOrderId = await resolveSalesOrderId(id);
+    if (!salesOrderId) return NextResponse.json({ error: "Sales order not found." }, { status: 404 });
     const data = await prisma.salesOrderTicket.findMany({
-      where: { salesOrderId: id },
+      where: { salesOrderId },
       orderBy: { createdAt: "desc" },
     });
     return NextResponse.json({ data }, { status: 200 });
@@ -33,9 +43,8 @@ export async function POST(request: NextRequest, { params }: Params) {
     const role = getRequestRole(request);
     if (!hasOneOf(role, ["ADMIN", "SALES", "WAREHOUSE"])) return deny();
     const { id } = await params;
-    if (!UUID_RE.test(id)) {
-      return NextResponse.json({ error: "Invalid sales order id." }, { status: 400 });
-    }
+    const salesOrderId = await resolveSalesOrderId(id);
+    if (!salesOrderId) return NextResponse.json({ error: "Sales order not found." }, { status: 404 });
     const payload = await request.json();
     const ticketType = String(payload.ticketType ?? "").toUpperCase();
     if (!TICKET_TYPES.includes(ticketType as (typeof TICKET_TYPES)[number])) {
@@ -43,7 +52,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
     const created = await prisma.salesOrderTicket.create({
       data: {
-        salesOrderId: id,
+        salesOrderId,
         fulfillmentId: payload.fulfillmentId ? String(payload.fulfillmentId) : null,
         ticketType,
         status: String(payload.status ?? "open"),

@@ -381,6 +381,24 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error("GET /api/dashboard error:", error);
-    return NextResponse.json({ error: "Failed to fetch dashboard data." }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Failed to fetch dashboard data.";
+    return NextResponse.json(
+      {
+        error: message,
+        data: {
+          metrics: {},
+          trendData: [],
+          pieData: [],
+          topProducts: [],
+          recentOrders: [],
+          followUpReminders: [],
+          todayDeliveries: [],
+          todayPickups: [],
+          overdueDeliveries: [],
+          topUnpaidOrders: [],
+        },
+      },
+      { status: 500 },
+    );
   }
 }

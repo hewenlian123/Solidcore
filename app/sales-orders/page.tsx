@@ -106,7 +106,7 @@ export default function SalesOrdersPage() {
         </div>
       </div>
 
-      <div className="linear-card p-6">
+      <div className="linear-card p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="relative w-full md:max-w-sm">
             <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-white/60" />

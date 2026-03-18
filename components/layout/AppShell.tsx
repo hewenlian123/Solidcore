@@ -375,7 +375,7 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
       {open ? <button type="button" className="fixed inset-0 z-30 bg-black/40 backdrop-blur-sm xl:hidden" onClick={() => setOpen(false)} /> : null}
 
       <aside
-        className={`glass-sidebar fixed inset-y-4 left-0 z-40 w-[260px] overflow-hidden rounded-[16px] shadow-[0_10px_40px_rgba(0,0,0,0.4)] transition-transform duration-200 ${
+        className={`glass-sidebar fixed inset-y-4 left-0 z-40 w-[220px] overflow-hidden rounded-[16px] shadow-[0_10px_40px_rgba(0,0,0,0.4)] transition-transform duration-200 ${
           open ? "translate-x-0" : "-translate-x-[120%] xl:translate-x-0"
         }`}
       >
@@ -395,7 +395,7 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
             </div>
           </div>
 
-          <nav className="so-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-2">
+          <nav className="so-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-1">
             <div className="space-y-1.5">
               {visibleItems.map((item) => {
                 const childActive = item.children?.some(
@@ -464,7 +464,7 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
                               key={child.href}
                               href={child.href}
                               prefetch={true}
-                              className={`block rounded-xl px-2.5 py-1.5 text-[12px] transition-all duration-200 ${
+                              className={`block rounded-xl px-2.5 py-1 text-[12px] transition-all duration-200 ${
                                 childIsActive
                                   ? "bg-white/[0.06] font-semibold text-white"
                                   : "text-white/55 hover:bg-white/[0.06] hover:text-white"
@@ -512,11 +512,11 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
       </aside>
 
       {/* Spacer for fixed sidebar on desktop so flex content aligns */}
-      <div className="hidden w-[260px] shrink-0 xl:block" aria-hidden="true" />
+      <div className="hidden w-[220px] shrink-0 xl:block" aria-hidden="true" />
 
-      <div className="relative z-10 flex min-w-0 flex-1 flex-col pl-4 pr-6">
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col pl-4 pr-4">
         {!isSalesOrderEditor ? (
-          <header className="sticky top-0 z-20 flex min-h-[72px] items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-6 backdrop-blur-xl">
+          <header className="sticky top-0 z-20 flex min-h-[52px] items-center justify-between gap-3 border-b border-white/[0.06] bg-white/[0.03] px-4 backdrop-blur-xl">
             {/* LEFT: Page title + Subtitle */}
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <button
@@ -693,7 +693,7 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
           </header>
         ) : null}
 
-        <main className={`pb-10 ${isSalesOrderEditor ? "pt-0 flex flex-1 min-h-0 flex-col" : "pt-6"}`}>{canView ? children : <AccessDenied />}</main>
+        <main className={`pb-6 ${isSalesOrderEditor ? "pt-0 flex flex-1 min-h-0 flex-col" : "pt-4"}`}>{canView ? children : <AccessDenied />}</main>
       </div>
     </div>
   );

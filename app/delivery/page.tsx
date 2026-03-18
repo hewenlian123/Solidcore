@@ -213,7 +213,7 @@ export default function DeliverySchedulePage() {
         </Table>
       </div>
 
-      <article className="linear-card p-6">
+      <article className="linear-card p-4">
         <p className="text-sm text-slate-600">
           Use <Link href="/fulfillment/outbound" className="font-medium text-slate-900 underline">Fulfillment Queue</Link> for loading operations.
         </p>

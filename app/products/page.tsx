@@ -6,6 +6,7 @@ import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as XLSX from "xlsx";
 import { useRole } from "@/components/layout/role-provider";
+import { toast } from "sonner";
 import { FlooringSpecs } from "@/components/product/templates/FlooringSpecs";
 import { WindowSpecs } from "@/components/product/templates/WindowSpecs";
 import { renderTemplateSku } from "@/lib/product-template-engine";
@@ -1259,7 +1260,9 @@ function ProductsPageContent() {
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? (isEdit ? "Failed to update product" : "Failed to add product"));
-      const warnings = extractValidationWarnings(payload);
+      const warnings = extractValidationWarnings(payload).filter(
+        (w) => !/description is empty/i.test(w),
+      );
       setValidationWarnings(warnings);
 
       setOpenNewDialog(false);
@@ -1576,6 +1579,7 @@ function ProductsPageContent() {
       setStockVariantId("");
       setStockAdjustmentQty("");
       await queryClient.invalidateQueries({ queryKey: ["products"] });
+      toast.success("Stock adjusted successfully.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to adjust stock");
     } finally {
@@ -2626,6 +2630,11 @@ function ProductsPageContent() {
                         rows={3}
                         placeholder="Used when variant-level description is empty."
                       />
+                      {!newProductForm.defaultDescription.trim() ? (
+                        <p className="text-xs text-slate-500">
+                          Optional. Adding a description improves order/PDF clarity, but you can leave it blank.
+                        </p>
+                      ) : null}
                     </div>
                   </div>
                 ) : (
@@ -3146,6 +3155,11 @@ function ProductsPageContent() {
                     rows={3}
                     placeholder="Shown on sales order/invoice line when this variant is selected."
                   />
+                  {!newProductForm.variantDescription.trim() ? (
+                    <p className="text-xs text-slate-500">
+                      Optional hint: If left blank, the UI will fall back to the product/default description.
+                    </p>
+                  ) : null}
                 </div>
                 <SelectField
                   label="Unit"

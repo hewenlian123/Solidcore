@@ -8,6 +8,10 @@ export const prisma =
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+globalForPrisma.prisma = prisma;
+
+/**
+ * Use a single PrismaClient instance per process to avoid connection pool exhaustion.
+ * In DATABASE_URL, add: ?connection_limit=5&pool_timeout=10
+ * (Supabase/Postgres: append to existing query string or use &connection_limit=5&pool_timeout=10)
+ */

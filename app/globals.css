@@ -38,6 +38,13 @@ body {
   background: var(--bg);
   color: var(--text);
   font-feature-settings: "cv11", "ss01";
+  -webkit-text-size-adjust: 100%;
+}
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Global dark scrollbar — 全站滚动条深色，避免白条 */
@@ -45,6 +52,43 @@ html,
 body {
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.4) rgba(15, 23, 42, 0.4);
+}
+
+/* iOS Safe Area support (notches / home indicator) */
+@supports (padding: env(safe-area-inset-top)) {
+  .app-safe-area {
+    padding-top: env(safe-area-inset-top);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+  }
+}
+
+/* Smooth scrolling on iOS for scroll containers */
+.overflow-auto,
+.overflow-x-auto,
+.overflow-y-auto,
+.so-sidebar-nav-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Touch targets (Apple recommends 44×44pt) */
+@media (pointer: coarse) {
+  button,
+  [role="button"],
+  a[class] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Prevent iOS zoom on input focus: ensure font-size >= 16px on iOS */
+@supports (-webkit-touch-callout: none) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 /* 所有可滚动区域的滚动条（WebKit） */
 *::-webkit-scrollbar {

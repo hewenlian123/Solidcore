@@ -1683,7 +1683,7 @@ export default function SalesOrderDetailPage() {
             {/* Left: Order Info, Fulfillment Summary, then Items table below */}
             <div className="space-y-6">
               {/* A. Order Info */}
-              <div className="glass-card p-6">
+              <div className="glass-card p-4">
                 <div className="glass-card-content">
                   <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Order Info</h2>
                   <div className="mt-4 grid grid-cols-[100px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm">
@@ -1706,7 +1706,7 @@ export default function SalesOrderDetailPage() {
               </div>
 
               {/* B. Fulfillment Summary */}
-              <div className="glass-card p-6">
+              <div className="glass-card p-4">
                 <div className="glass-card-content">
                   <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fulfillment Summary</h2>
                   <div className="mt-4 grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm">

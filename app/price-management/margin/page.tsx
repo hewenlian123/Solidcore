@@ -98,7 +98,7 @@ export default function MarginControlPage() {
 
   return (
     <section className="space-y-4">
-      <div className="glass-card p-6">
+      <div className="glass-card p-4">
         <div className="glass-card-content">
           <h1 className="text-2xl font-semibold tracking-tight text-white">Margin Control</h1>
           <p className="mt-1 text-sm text-slate-400">Set default margin by category and per-SKU overrides. Cost, suggested price, and actual margin are shown.</p>

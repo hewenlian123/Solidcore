@@ -174,7 +174,7 @@ export default function AfterSalesReturnDetailPage() {
         <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
       ) : null}
 
-      <div className="glass-card p-6">
+      <div className="glass-card p-4">
         <div className="glass-card-content flex flex-wrap items-start justify-between gap-3">
           <div>
             <Link href="/after-sales/returns" className="text-xs text-slate-400 hover:text-white">
@@ -202,7 +202,7 @@ export default function AfterSalesReturnDetailPage() {
         </div>
       </div>
 
-      <div className="glass-card p-6">
+      <div className="glass-card p-4">
         <div className="glass-card-content">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
@@ -222,7 +222,7 @@ export default function AfterSalesReturnDetailPage() {
         </div>
       </div>
 
-      <div className="glass-card p-6">
+      <div className="glass-card p-4">
         <div className="glass-card-content">
         <h2 className="mb-3 text-base font-semibold text-white">Items</h2>
         <div className="overflow-x-auto">

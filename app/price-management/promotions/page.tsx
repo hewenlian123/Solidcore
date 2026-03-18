@@ -113,7 +113,7 @@ export default function PromotionsPage() {
 
   return (
     <section className="space-y-4">
-      <div className="glass-card p-6">
+      <div className="glass-card p-4">
         <div className="glass-card-content flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-white">Promotions</h1>
@@ -131,7 +131,7 @@ export default function PromotionsPage() {
       </div>
 
       {openCreate && (
-        <div className="glass-card p-6">
+        <div className="glass-card p-4">
           <form onSubmit={handleCreate} className="glass-card-content space-y-4">
             <h2 className="text-lg font-medium text-white">Create promotion</h2>
             <div className="grid gap-3 sm:grid-cols-2">

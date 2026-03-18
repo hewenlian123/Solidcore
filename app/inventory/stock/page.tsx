@@ -72,7 +72,7 @@ export default function InventoryStockPage() {
 
   return (
     <section className="space-y-4">
-      <div className="glass-card p-6">
+      <div className="glass-card p-4">
         <div className="glass-card-content">
           <h1 className="text-2xl font-semibold tracking-tight text-white">Stock Levels</h1>
           <p className="mt-1 text-sm text-slate-400">Stock levels from product variants and inventory_stock. Search by product name or SKU.</p>

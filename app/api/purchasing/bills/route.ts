@@ -32,9 +32,10 @@ export async function GET(request: NextRequest) {
 
     const rows: BillRow[] = pos.map((po) => {
       const amount = Number(po.totalCost);
-      const paid = Number(po.paidAmount ?? 0);
+      const paid = 0; // paid_amount column not in DB; use 0 until column exists
       const balance = amount - paid;
-      const status: BillRow["status"] = balance <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
+      const status: BillRow["status"] =
+        po.status === "PAID" ? "paid" : po.status === "PARTIAL_PAID" ? "partial" : balance <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
       return {
         id: po.id,
         billNumber: po.poNumber,
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
         paidAmount: paid,
         balance,
         status,
-        dueDate: po.dueDate ? po.dueDate.toISOString() : po.expectedArrival?.toISOString() ?? null,
+        dueDate: po.expectedArrival?.toISOString() ?? null,
         orderDate: po.orderDate.toISOString(),
       };
     });

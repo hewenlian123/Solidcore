@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { ChevronRight, Plus, Search, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -59,7 +59,20 @@ type InventoryAlertsPayload = {
   lowStockCount: number;
 };
 
-export default function OrdersPage() {
+function OrdersPageFallback() {
+  return (
+    <section className="space-y-4">
+      <div className="glass-card p-4">
+        <div className="glass-card-content flex items-center justify-center py-16">
+          <Spinner className="h-8 w-8 text-white/60" />
+          <span className="ml-3 text-sm text-slate-400">Loading orders...</span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function OrdersContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { role } = useRole();
@@ -180,7 +193,7 @@ export default function OrdersPage() {
 
   return (
     <section className="space-y-4">
-      <div className="glass-card p-6">
+      <div className="glass-card p-4">
         <div className="glass-card-content flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-white">
@@ -499,5 +512,13 @@ export default function OrdersPage() {
         </Table>
       </div>
     </section>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <Suspense fallback={<OrdersPageFallback />}>
+      <OrdersContent />
+    </Suspense>
   );
 }

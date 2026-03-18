@@ -111,7 +111,7 @@ export default function InvoicesPage() {
         <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
       ) : null}
 
-      <div className="glass-card flex flex-wrap items-end gap-3 p-6">
+      <div className="glass-card flex flex-wrap items-end gap-3 p-4">
         <label className="block">
           <span className="mb-1 block text-xs text-slate-500">Search</span>
           <input

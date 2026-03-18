@@ -45,7 +45,7 @@ export function TableSkeletonRows({
             <TableCell
               // eslint-disable-next-line react/no-array-index-key
               key={`sk-${rowIndex}-${colIndex}`}
-              className={cn("px-6 py-4", cellClassName)}
+              className={cn("px-4 py-2", cellClassName)}
             >
               <SkeletonLine
                 className={

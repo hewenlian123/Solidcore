@@ -218,7 +218,7 @@ export default function InventoryReorderPage() {
 
   return (
     <section className="space-y-8">
-      <div className="glass-card p-6">
+      <div className="glass-card p-4">
         <h1 className="text-2xl font-semibold tracking-tight text-white">Reorder List</h1>
         <p className="mt-2 text-sm txt-secondary">
           Suggested replenishment by supplier, based on available boxes and reorder levels.
@@ -288,9 +288,9 @@ export default function InventoryReorderPage() {
 
       <div className="space-y-4">
         {reorderQuery.isLoading ? (
-          <div className="glass-card p-6 text-sm txt-muted">Loading reorder list...</div>
+          <div className="glass-card p-4 text-sm txt-muted">Loading reorder list...</div>
         ) : grouped.length === 0 ? (
-          <div className="glass-card p-6 text-sm txt-muted">No reorder rows found.</div>
+          <div className="glass-card p-4 text-sm txt-muted">No reorder rows found.</div>
         ) : (
           grouped.map((group) => {
             const selectedRows = group.rows.filter((row) => selectedSet.has(row.id));

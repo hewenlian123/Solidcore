@@ -98,7 +98,7 @@ export function KpiCard({ item }: { item: KpiItem }) {
 
   return (
     <article
-      className={`glass-card glass-card-strong ${accent.bg} px-5 py-4 ${accent.hoverGlow}`}
+      className={`glass-card glass-card-strong ${accent.bg} p-4 ${accent.hoverGlow}`}
     >
       <div className="glass-card-content flex items-start justify-between gap-3">
         <div className="min-h-[88px]">

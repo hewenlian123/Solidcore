@@ -175,6 +175,18 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error("GET /api/finance/payments error:", error);
-    return NextResponse.json({ error: "Failed to fetch payment overview." }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Failed to fetch payment overview.";
+    return NextResponse.json(
+      {
+        error: message,
+        data: {
+          kpis: { todayPayments: 0, thisMonthPayments: 0, unpaidInvoices: 0, totalOutstandingBalance: 0 },
+          topCustomersByOutstanding: [],
+          paymentTrend: [],
+          recentPayments: [],
+        },
+      },
+      { status: 500 },
+    );
   }
 }

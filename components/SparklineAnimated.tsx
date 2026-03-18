@@ -22,7 +22,7 @@ export function SparklineAnimated({
   const chartData = (data.length ? data : values).map((value, index) => ({ index, value }));
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <ResponsiveContainer width="100%" height="100%" minHeight={56} minWidth={40}>
       <AreaChart data={chartData} margin={{ left: 0, right: 0, top: 4, bottom: 0 }}>
         <defs>
           <linearGradient id={`sparkline-${id}`} x1="0" y1="0" x2="0" y2="1">

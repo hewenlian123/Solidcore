@@ -238,7 +238,7 @@ function AfterSalesReturnsContent() {
 
   return (
     <section className="space-y-6">
-      <header className="glass-card p-6">
+      <header className="glass-card p-4">
         <div className="glass-card-content flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-white">After-Sales Returns</h1>

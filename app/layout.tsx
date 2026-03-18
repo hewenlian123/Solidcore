@@ -5,6 +5,7 @@ import { RoleProvider } from "@/components/layout/role-provider";
 import { PWARegister } from "@/components/pwa/pwa-register";
 import { AppQueryProvider } from "@/components/providers/query-provider";
 import NextTopLoader from "nextjs-toploader";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Solidcore Building Materials Management",
@@ -14,6 +15,9 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: "#0B0F19",
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -22,9 +26,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en-US">
+    <html lang="en-US" className="text-sm">
       <body className="min-h-screen bg-[#0B0F19] text-[var(--text)] antialiased [font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]">
-        <div className="relative min-h-screen overflow-hidden">
+        <div className="app-safe-area relative min-h-screen overflow-hidden">
           {/* Minimal premium SaaS background — subtle vertical gradient only */}
           <div
             aria-hidden="true"
@@ -46,6 +50,7 @@ export default function RootLayout({
                   speed={280}
                   shadow="0 0 10px rgba(15, 23, 42, 0.3)"
                 />
+                <Toaster theme="dark" richColors closeButton />
                 <PWARegister />
                 <AppShell>{children}</AppShell>
               </RoleProvider>

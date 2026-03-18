@@ -106,9 +106,9 @@ export default function FinancePaymentsPage() {
 
           <article className="glass-card p-8">
             <h2 className="text-base font-semibold text-white">Payment Trend (Last 30 Days)</h2>
-            <div className="mt-4 h-[320px]">
+            <div className="mt-4 min-h-[220px] h-[320px]">
               {mounted ? (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
+                <ResponsiveContainer width="100%" height={220} minHeight={220} minWidth={0}>
                   <LineChart data={data.paymentTrend}>
                     <CartesianGrid strokeDasharray="4 4" stroke="rgba(255,255,255,0.06)" vertical={false} />
                     <XAxis dataKey="date" tickLine={false} axisLine={false} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />

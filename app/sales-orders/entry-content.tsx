@@ -1094,10 +1094,10 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
                     <>
                       {/* ProductTableHeader — sticky, does not scroll */}
                       <div className="sticky top-0 z-10 bg-white/[0.04] border-b border-white/[0.06] shrink-0">
-                        <table className="w-full text-sm border-collapse">
+                        <table className="w-full text-sm border-collapse table-fixed">
                           <thead>
                             <tr className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                              <th className="text-left py-2 px-3 h-11">Product Name</th>
+                              <th className="text-left py-2 px-3 h-11 w-full">Product Name</th>
                               <th className="text-right py-2 px-3 w-20 h-11">Price</th>
                               <th className="text-right py-2 px-2 w-16 h-11">Stock</th>
                               <th className="text-right py-2 pr-3 w-12 h-11">Add</th>
@@ -1113,7 +1113,7 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
                       >
                         <div style={{ height: filteredProducts.length * PRODUCT_ROW_HEIGHT_PX }}>
                           <table
-                            className="w-full text-sm border-collapse"
+                            className="w-full text-sm border-collapse table-fixed"
                             style={{ transform: `translateY(${productListVisibleRange.start * PRODUCT_ROW_HEIGHT_PX}px)` }}
                           >
                             <tbody>
@@ -1125,7 +1125,7 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
                                   const unit = (product.unit || "pcs").toLowerCase();
                                   return (
                                     <tr key={product.id} className="h-11 border-b border-white/[0.04] hover:bg-white/[0.03]">
-                                      <td className="py-2 px-3 min-w-0">
+                                      <td className="py-2 px-3 min-w-0 w-full">
                                         <span className="text-slate-200 text-sm leading-tight truncate block" title={displayName}>{displayName}</span>
                                       </td>
                                       <td className="py-2 px-3 text-right text-slate-200 text-sm font-medium tabular-nums">${Number(product.price || 0).toFixed(2)}</td>

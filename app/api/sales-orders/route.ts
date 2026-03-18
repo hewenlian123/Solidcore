@@ -8,6 +8,7 @@ import {
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { resolveSellingUnit } from "@/lib/selling-unit";
 import { getDefaultTaxRate } from "@/lib/settings";
+import { Prisma } from "@prisma/client";
 
 function toNumber(value: unknown, fallback = 0) {
   const parsed = Number(value);
@@ -218,6 +219,8 @@ export async function POST(request: NextRequest) {
           requestedDeliveryAt: payload.requestedDeliveryAt ? new Date(payload.requestedDeliveryAt) : null,
           timeWindow: payload.timeWindow ? String(payload.timeWindow).trim() || null : null,
         },
+        // Avoid selecting non-existent columns in environments where DB is behind schema
+        select: { id: true },
       });
 
       if (items.length > 0) {
@@ -299,6 +302,7 @@ export async function POST(request: NextRequest) {
       await tx.salesOrder.update({
         where: { id: order.id },
         data: { taxRate: resolvedTaxRate, tax: Math.max(0, appliedTax) },
+        select: { id: true },
       });
       updated = await recalculateSalesOrder(tx, order.id);
       return updated;
@@ -317,6 +321,22 @@ export async function POST(request: NextRequest) {
       );
     }
     console.error("POST /api/sales-orders error:", error);
-    return NextResponse.json({ error: "Failed to create sales order." }, { status: 500 });
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      const message = `${error.code}: ${error.message}`;
+      return NextResponse.json(
+        {
+          error:
+            process.env.NODE_ENV === "development"
+              ? message
+              : "Failed to create sales order.",
+        },
+        { status: 500 },
+      );
+    }
+    const message = error instanceof Error ? error.message : "Failed to create sales order.";
+    return NextResponse.json(
+      { error: process.env.NODE_ENV === "development" ? message : "Failed to create sales order." },
+      { status: 500 },
+    );
   }
 }

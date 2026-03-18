@@ -782,9 +782,7 @@ model PurchaseOrder {
   status          String
   orderDate       DateTime  @map("order_date")
   expectedArrival DateTime?  @map("expected_arrival")
-  dueDate         DateTime?  @map("due_date")
   totalCost       Decimal   @default(0) @map("total_cost")
-  paidAmount      Decimal   @default(0) @map("paid_amount")
   notes           String?
   createdAt       DateTime  @default(now()) @map("created_at")
 

@@ -164,7 +164,7 @@ export default function InvoicePaymentDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <article className="glass-card space-y-2 p-6 text-sm">
+        <article className="glass-card space-y-2 p-4 text-sm">
           <div className="glass-card-content">
             <h2 className="text-base font-semibold text-white">Payment Details</h2>
             <div className="flex justify-between"><span className="text-slate-400">Amount</span><span className="text-white">${Number(data.payment.amount).toFixed(2)}</span></div>
@@ -179,7 +179,7 @@ export default function InvoicePaymentDetailPage() {
           </div>
         </article>
 
-        <article className="glass-card space-y-2 p-6 text-sm">
+        <article className="glass-card space-y-2 p-4 text-sm">
           <div className="glass-card-content">
             <h2 className="text-base font-semibold text-white">Invoice Summary</h2>
             <div className="flex justify-between"><span className="text-slate-400">Invoice #</span><span className="text-white/90">{data.invoice.invoiceNumber}</span></div>

@@ -147,9 +147,9 @@ export default function AfterSalesStoreCreditPlaceholderPage() {
 
       <div className="space-y-4">
         {loading ? (
-          <div className="linear-card p-6 text-sm text-slate-500">Loading store credits...</div>
+          <div className="linear-card p-4 text-sm text-slate-500">Loading store credits...</div>
         ) : grouped.length === 0 ? (
-          <div className="linear-card p-6 text-sm text-slate-500">No store credits found.</div>
+          <div className="linear-card p-4 text-sm text-slate-500">No store credits found.</div>
         ) : (
           grouped.map((group) => (
             <div key={group.customerId} className="linear-card p-0">

@@ -241,7 +241,7 @@ export default function ReportsPage() {
         </p>
       </div>
 
-      <div className="linear-card p-6">
+      <div className="linear-card p-4">
         <div className="flex flex-wrap items-center gap-2">
           {presets.map((p) => (
             <button
@@ -323,14 +323,14 @@ export default function ReportsPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <article className="linear-card p-6">
+            <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Total Sales</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">${data.kpis.sales.totalSales.toFixed(2)}</p>
               <p className="mt-1 text-xs text-slate-500">
                 {data.kpis.sales.salesOrderCount} orders · Avg ${data.kpis.sales.avgOrderValue.toFixed(2)}
               </p>
             </article>
-            <article className="linear-card p-6">
+            <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Cash Collected</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">
                 ${data.kpis.cashCollected.totalCollected.toFixed(2)}
@@ -340,19 +340,19 @@ export default function ReportsPage() {
                 ${data.kpis.cashCollected.voidedPaymentsTotal.toFixed(2)})
               </p>
             </article>
-            <article className="linear-card p-6">
+            <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Accounts Receivable</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">${data.kpis.ar.outstandingBalance.toFixed(2)}</p>
               <p className="mt-1 text-xs text-slate-500">{data.kpis.ar.unpaidOrPartialCount} unpaid/partial orders</p>
             </article>
-            <article className="linear-card p-6">
+            <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Operational</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">{data.kpis.operational.outboundPendingCount}</p>
               <p className="mt-1 text-xs text-slate-500">
                 Pending queue · In progress {data.kpis.operational.outboundInProgressCount} · Ready {data.kpis.operational.readyOrInProgressOrdersCount}
               </p>
             </article>
-            <article className="linear-card p-6">
+            <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Special Orders</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">{data.kpis.specialOrders.specialOrdersCount}</p>
               <p className="mt-1 text-xs text-slate-500">
@@ -362,19 +362,19 @@ export default function ReportsPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <article className="linear-card p-6">
+            <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Revenue</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">
                 ${Number(data.summaries?.revenueVsCost?.revenue ?? 0).toFixed(2)}
               </p>
             </article>
-            <article className="linear-card p-6">
+            <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Cost</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">
                 ${Number(data.summaries?.revenueVsCost?.cost ?? 0).toFixed(2)}
               </p>
             </article>
-            <article className="linear-card p-6">
+            <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Gross Margin</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">
                 ${Number(data.summaries?.revenueVsCost?.margin ?? 0).toFixed(2)}
@@ -386,11 +386,11 @@ export default function ReportsPage() {
           </div>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-            <article className="linear-card p-6">
+            <article className="linear-card p-4">
               <h2 className="text-base font-semibold text-slate-900">Daily Collected ($)</h2>
-              <div className="mt-3 h-[240px]">
+              <div className="mt-3 min-h-[180px] h-[240px]">
                 {mounted ? (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
+                  <ResponsiveContainer width="100%" height={180} minHeight={180} minWidth={0}>
                     <BarChart data={data.charts.dailyCollected}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} />
@@ -404,11 +404,11 @@ export default function ReportsPage() {
                 )}
               </div>
             </article>
-            <article className="linear-card p-6">
+            <article className="linear-card p-4">
               <h2 className="text-base font-semibold text-slate-900">Daily Sales ($)</h2>
-              <div className="mt-3 h-[240px]">
+              <div className="mt-3 min-h-[180px] h-[240px]">
                 {mounted ? (
-                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={180}>
+                  <ResponsiveContainer width="100%" height={180} minHeight={180} minWidth={0}>
                     <BarChart data={data.charts.dailySales}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} />
@@ -424,7 +424,7 @@ export default function ReportsPage() {
             </article>
           </div>
 
-          <div className="linear-card p-6">
+          <div className="linear-card p-4">
             <h3 className="text-sm font-semibold text-slate-900">Sales by Date Range Summary</h3>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-100 bg-white p-3">

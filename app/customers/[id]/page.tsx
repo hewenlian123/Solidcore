@@ -121,6 +121,7 @@ export default function CustomerDetailPage() {
   const [invoices, setInvoices] = useState<CustomerInvoiceRow[]>([]);
   const [openCreditBalance, setOpenCreditBalance] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"ORDERS" | "NOTES">("ORDERS");
   const [orderFilter, setOrderFilter] = useState<
     "ALL" | "OPEN" | "UNPAID" | "PENDING_DELIVERY" | "SPECIAL_ORDER"
@@ -273,10 +274,13 @@ export default function CustomerDetailPage() {
   useEffect(() => {
     const load = async () => {
       try {
+        setLoading(true);
         setError(null);
         await Promise.all([loadProfileAndSummary(), loadOrders("ALL"), loadNotes(), loadReturnsAndCredits(), loadInvoices()]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load customer details");
+      } finally {
+        setLoading(false);
       }
     };
     if (id) load();
@@ -338,11 +342,39 @@ export default function CustomerDetailPage() {
     setActiveTab("ORDERS");
   };
 
+  if (loading && !profile) {
+    return (
+      <section className="mx-auto max-w-[1400px] space-y-6 px-4 py-8 text-white">
+        <div className="glass-card p-4">
+          <div className="route-skeleton h-8 w-64" />
+          <div className="route-skeleton mt-3 h-4 w-80" />
+          <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <div key={idx} className="route-skeleton h-14" />
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, idx) => (
+            <div key={idx} className="glass-card p-4">
+              <div className="route-skeleton h-24" />
+            </div>
+          ))}
+        </div>
+        <div className="glass-card p-4">
+          {Array.from({ length: 8 }).map((_, idx) => (
+            <div key={idx} className="route-skeleton mb-2 h-10 last:mb-0" />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="mx-auto max-w-[1400px] space-y-10 px-4 py-8 text-white">
       {/* 1) Customer profile summary — structured */}
       <header className="glass-card overflow-hidden">
-        <div className="glass-card-content p-6 md:p-8">
+        <div className="glass-card-content p-4 md:p-6">
           <div className="grid grid-cols-1 gap-8 md:grid-cols-[1fr_auto] md:gap-10">
             <div>
               <h1 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">

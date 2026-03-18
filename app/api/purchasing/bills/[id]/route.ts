@@ -14,19 +14,19 @@ export async function PATCH(
 
     const { id } = await params;
     const body = await request.json().catch(() => ({}));
-    const paidAmount = body.paidAmount != null ? Number(body.paidAmount) : undefined;
     const status = typeof body.status === "string" ? body.status.trim() : undefined;
+    const paidAmount = body.paidAmount != null ? Number(body.paidAmount) : undefined;
 
     const po = await prisma.purchaseOrder.findUnique({ where: { id } });
     if (!po) return NextResponse.json({ error: "Bill not found." }, { status: 404 });
 
-    const updates: { paidAmount?: number; status?: string } = {};
-    if (typeof paidAmount === "number" && paidAmount >= 0) {
-      const total = Number(po.totalCost);
-      updates.paidAmount = Math.min(paidAmount, total);
-      updates.status = updates.paidAmount >= total ? "PAID" : updates.paidAmount > 0 ? "PARTIAL_PAID" : po.status;
-    }
+    // paid_amount column not in DB; persist only status (e.g. PAID when user marks paid)
+    const updates: { status?: string } = {};
     if (status) updates.status = status;
+    else if (typeof paidAmount === "number" && paidAmount >= 0) {
+      const total = Number(po.totalCost);
+      updates.status = paidAmount >= total ? "PAID" : paidAmount > 0 ? "PARTIAL_PAID" : po.status;
+    }
 
     const updated = await prisma.purchaseOrder.update({
       where: { id },
@@ -35,7 +35,7 @@ export async function PATCH(
     });
 
     const amount = Number(updated.totalCost);
-    const paid = Number(updated.paidAmount ?? 0);
+    const paid = 0; // paid_amount column not in DB
     const billStatus = amount - paid <= 0 ? "paid" : paid > 0 ? "partial" : "unpaid";
     return NextResponse.json({
       data: {

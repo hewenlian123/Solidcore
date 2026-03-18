@@ -5,19 +5,29 @@ import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 type Params = {
   params: Promise<{ id: string; ticketId: string }>;
 };
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function resolveSalesOrderId(idOrNumber: string): Promise<string | null> {
+  const raw = String(idOrNumber ?? "").trim();
+  if (!raw) return null;
+  const byId = await prisma.salesOrder.findUnique({ where: { id: raw }, select: { id: true } });
+  if (byId) return byId.id;
+  const byNumber = await prisma.salesOrder.findFirst({
+    where: { orderNumber: { equals: raw, mode: "insensitive" } },
+    select: { id: true },
+  });
+  return byNumber?.id ?? null;
+}
 
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
     const role = getRequestRole(request);
     if (!hasOneOf(role, ["ADMIN", "SALES", "WAREHOUSE"])) return deny();
     const { id, ticketId } = await params;
-    if (!UUID_RE.test(id) || !UUID_RE.test(ticketId)) {
-      return NextResponse.json({ error: "Invalid ticket id." }, { status: 400 });
-    }
+    const salesOrderId = await resolveSalesOrderId(id);
+    if (!salesOrderId) return NextResponse.json({ error: "Sales order not found." }, { status: 404 });
     const payload = await request.json();
     const existing = await prisma.salesOrderTicket.findUnique({ where: { id: ticketId } });
-    if (!existing || existing.salesOrderId !== id) {
+    if (!existing || existing.salesOrderId !== salesOrderId) {
       return NextResponse.json({ error: "Ticket not found." }, { status: 404 });
     }
     const updated = await prisma.salesOrderTicket.update({

@@ -249,7 +249,7 @@ export default function AfterSalesPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         {tickets.map((ticket) => (
-          <div key={ticket.id} className="glass-card p-6">
+          <div key={ticket.id} className="glass-card p-4">
             <div className="glass-card-content">
             <p className="text-sm font-semibold text-white">
               {ticket.order.orderNo} · {ticket.customer.name}

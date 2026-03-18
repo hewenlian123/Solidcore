@@ -78,11 +78,11 @@ export function SalesByRegionCard({ rows }: { rows: RegionRow[] }) {
       <h3 className="glass-card-content text-[19px] font-semibold text-white">Sales by Region</h3>
       <div className="glass-card-content mt-3 flex items-center gap-4">
         <motion.div
-          className="relative h-[176px] w-[176px] shrink-0"
+          className="relative min-h-[176px] h-[176px] min-w-[176px] w-[176px] shrink-0"
           animate={reducedMotion ? undefined : { scale: [1, 1.015, 1] }}
           transition={reducedMotion ? undefined : { duration: 7.2, ease: "easeInOut", repeat: Infinity }}
         >
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height={176} minHeight={176} minWidth={176}>
             <PieChart>
               <Pie
                 data={rows}

@@ -87,9 +87,9 @@ export default function FinancePage() {
 
           <article className="glass-card p-8">
             <h2 className="text-base font-semibold text-white">12-month cashflow comparison</h2>
-            <div className="mt-4 h-[320px]">
+            <div className="mt-4 min-h-[220px] h-[320px]">
               {mounted ? (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
+                <ResponsiveContainer width="100%" height={220} minHeight={220} minWidth={0}>
                   <BarChart data={data.cashflow}>
                     <CartesianGrid strokeDasharray="4 4" stroke="rgba(255,255,255,0.06)" vertical={false} />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fill: "rgba(255,255,255,0.55)", fontSize: 11 }} />

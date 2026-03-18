@@ -40,8 +40,8 @@ export default function UITestsPage() {
   const score = total > 0 ? Math.round((passed / total) * 100) : 0;
 
   return (
-    <section className="space-y-6 p-4 sm:p-6">
-      <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-6 backdrop-blur-2xl">
+    <section className="space-y-4 p-4 sm:p-4">
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-white/10 to-white/[0.03] p-4 backdrop-blur-2xl">
         <h1 className="text-2xl font-semibold tracking-tight text-white">UI Tests</h1>
         <p className="mt-1 text-sm text-white/60">Simulated flows: login, create order, add product, save invoice, upload file.</p>
       </div>

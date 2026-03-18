@@ -35,7 +35,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   if (isDashboardHome) {
     return (
       <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] tracking-tight">
-        <main className="px-6 pb-10 pt-8 md:px-10">{canView ? children : <AccessDenied />}</main>
+        <main className="px-4 pb-6 pt-4 md:px-6">{canView ? children : <AccessDenied />}</main>
       </div>
     );
   }
@@ -46,7 +46,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
 
       <div className="md:pl-72">
         <TopBar onOpenSidebar={() => setSidebarOpen(true)} />
-        <main className="px-6 pb-10 pt-8 md:px-10">{canView ? children : <AccessDenied />}</main>
+        <main className="px-4 pb-6 pt-4 md:px-6">{canView ? children : <AccessDenied />}</main>
       </div>
     </div>
   );

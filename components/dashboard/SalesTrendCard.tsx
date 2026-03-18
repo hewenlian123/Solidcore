@@ -85,7 +85,7 @@ export function SalesTrendCard({ data }: { data: SalesTrendPoint[] }) {
         </div>
       </div>
 
-      <div ref={chartContainerRef} className="glass-card-content relative h-[300px]">
+      <div ref={chartContainerRef} className="glass-card-content relative min-h-[220px] h-[300px]">
         <div className="pointer-events-none absolute inset-0 z-0">
           <span className="absolute left-[12%] top-[74%] h-2.5 w-2.5 rounded-full bg-blue-200/40 blur-[8px]" />
           <span className="absolute left-[22%] top-[26%] h-2 w-2 rounded-full bg-blue-100/35 blur-[10px]" />
@@ -95,7 +95,7 @@ export function SalesTrendCard({ data }: { data: SalesTrendPoint[] }) {
           <span className="absolute left-[79%] top-[46%] h-2.5 w-2.5 rounded-full bg-amber-200/35 blur-[10px]" />
           <span className="absolute left-[86%] top-[18%] h-2 w-2 rounded-full bg-blue-100/35 blur-[9px]" />
         </div>
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height={220} minHeight={220}>
           <AreaChart key={`trend-${mode}`} data={chartData} margin={{ left: 2, right: 2, top: 10, bottom: 0 }}>
             <defs>
               <linearGradient id="trendBlueAiryFill" x1="0" y1="0" x2="0" y2="1">
