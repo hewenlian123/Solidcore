@@ -13,6 +13,61 @@ import { getEffectiveSpecs, getInternalSpecLine } from "@/lib/specs/glass";
 import { formatFlooringSubtitle } from "@/lib/specs/effective";
 import { formatBoxesSqftSummary, formatSellingUnitLabel, resolveSellingUnit } from "@/lib/selling-unit";
 
+// ---------------------------------------------------------------------------
+// Module-level caches for reference data that rarely changes during a session.
+// This prevents duplicate fetches from React StrictMode double-invoke and from
+// multiple useEffect calls that all request the same static data.
+// ---------------------------------------------------------------------------
+type _SalesProduct = {
+  id: string; productId: string; name: string; title: string | null; sku: string;
+  generatedDescription?: string | null; variantDescription?: string | null; defaultDescription?: string | null;
+  brand: string | null; collection: string | null; onHandStock?: string; availableStock: string;
+  price: string; unit?: string | null; sellingUnit?: "BOX" | "PIECE" | "SQFT";
+  category?: string | null; flooringBoxCoverageSqft?: number | null;
+};
+type _SupplierOption = { id: string; name: string; contactName: string; phone: string };
+type _SalesCustomerOption = { id: string; name: string; phone: string | null; email: string | null; address: string | null; taxExempt: boolean; taxRate: number | null };
+type _SalespersonOption = { id: string; name: string };
+
+const _soDetailCache: {
+  products: _SalesProduct[] | null;
+  productsP: Promise<_SalesProduct[]> | null;
+  suppliers: _SupplierOption[] | null;
+  suppliersP: Promise<_SupplierOption[]> | null;
+  salespeople: _SalespersonOption[] | null;
+  salespeopleP: Promise<_SalespersonOption[]> | null;
+  customers: _SalesCustomerOption[] | null;
+  customersP: Promise<_SalesCustomerOption[]> | null;
+} = {
+  products: null, productsP: null,
+  suppliers: null, suppliersP: null,
+  salespeople: null, salespeopleP: null,
+  customers: null, customersP: null,
+};
+
+function _fetchRefData<T>(
+  key: "products" | "suppliers" | "salespeople" | "customers",
+  url: string,
+  role: string,
+): Promise<T[]> {
+  const promiseKey = `${key}P` as keyof typeof _soDetailCache;
+  if (_soDetailCache[key]) return Promise.resolve(_soDetailCache[key] as T[]);
+  if (_soDetailCache[promiseKey]) return _soDetailCache[promiseKey] as Promise<T[]>;
+
+  const p: Promise<T[]> = fetch(url, { cache: "no-store", headers: { "x-user-role": role } })
+    .then((res) => res.json())
+    .then((payload) => {
+      const data = (payload?.data ?? []) as T[];
+      _soDetailCache[key] = data as never;
+      return data;
+    })
+    .catch(() => [] as T[])
+    .finally(() => { (_soDetailCache as Record<string, unknown>)[promiseKey] = null; });
+
+  (_soDetailCache as Record<string, unknown>)[promiseKey] = p;
+  return p;
+}
+
 type SalesOrderDetail = {
   id: string;
   orderNumber: string;
@@ -469,6 +524,9 @@ export default function SalesOrderDetailPage() {
   const [pdfPreview, setPdfPreview] = useState<{ title: string; src: string } | null>(null);
   const [activeFulfillmentDetail, setActiveFulfillmentDetail] = useState<FulfillmentDetailPreview | null>(null);
   const quickAddSearchRef = useRef<HTMLInputElement | null>(null);
+  // Tracks the last "id:role" combination we loaded data for, preventing duplicate
+  // fetches when role initializes from its default and then updates to the real value.
+  const loadedForRef = useRef("");
   const [paymentQuickHint, setPaymentQuickHint] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
@@ -503,6 +561,13 @@ export default function SalesOrderDetailPage() {
   const [rowDraftsByItemId, setRowDraftsByItemId] = useState<Record<string, ItemRowDraft>>({});
 
   const loadCustomers = async (q = "") => {
+    // When query is empty, serve from cache (already loaded during initial load())
+    if (!q.trim()) {
+      if (_soDetailCache.customers) {
+        setCustomers(_soDetailCache.customers as SalesCustomerOption[]);
+        return;
+      }
+    }
     const params = new URLSearchParams();
     if (q.trim()) params.set("q", q.trim());
     const query = params.toString();
@@ -512,68 +577,42 @@ export default function SalesOrderDetailPage() {
     });
     const payload = await res.json();
     if (!res.ok) throw new Error(payload.error ?? "Failed to fetch customers");
+    // Only update cache for unfiltered results
+    if (!q.trim()) _soDetailCache.customers = payload.data ?? [];
     setCustomers(payload.data ?? []);
   };
 
   const load = async () => {
     try {
-      const [detailRes, productRes, supplierRes, ticketRes, invoiceRes, returnRes, customerRes, salespersonRes] =
+      // Fetch order-specific data fresh every time (these change); use cache for static reference data
+      const [detailRes, ticketRes, invoiceRes, returnRes, products, suppliers, customers, salespeople] =
         await Promise.all([
-        fetch(`/api/sales-orders/${id}`, {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        }),
-        fetch("/api/sales-orders/products", {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        }),
-        fetch("/api/suppliers", {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        }),
-        fetch(`/api/sales-orders/${id}/tickets`, {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        }),
-        fetch(`/api/invoices?salesOrderId=${id}`, {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        }),
-        fetch(`/api/after-sales/returns?salesOrderId=${id}`, {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        }),
-        fetch("/api/sales-orders/customers", {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        }),
-        fetch("/api/sales-orders/salespeople", {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        }),
-      ]);
+          fetch(`/api/sales-orders/${id}`, { cache: "no-store", headers: { "x-user-role": role } }),
+          fetch(`/api/sales-orders/${id}/tickets`, { cache: "no-store", headers: { "x-user-role": role } }),
+          fetch(`/api/invoices?salesOrderId=${id}`, { cache: "no-store", headers: { "x-user-role": role } }),
+          fetch(`/api/after-sales/returns?salesOrderId=${id}`, { cache: "no-store", headers: { "x-user-role": role } }),
+          // Static reference data — served from module-level cache after first fetch
+          _fetchRefData<SalesProduct>("products", "/api/sales-orders/products", role),
+          _fetchRefData<SupplierOption>("suppliers", "/api/suppliers", role),
+          _fetchRefData<SalesCustomerOption>("customers", "/api/sales-orders/customers", role),
+          _fetchRefData<SalespersonOption>("salespeople", "/api/sales-orders/salespeople", role),
+        ]);
+
       const detailPayload = await detailRes.json();
-      const productPayload = await productRes.json();
-      const suppliersPayload = await supplierRes.json();
       const ticketPayload = await ticketRes.json();
       const invoicePayload = await invoiceRes.json();
       const returnPayload = await returnRes.json();
-      const customerPayload = await customerRes.json();
-      const salespersonPayload = await salespersonRes.json();
+
       if (!detailRes.ok) throw new Error(detailPayload.error ?? "Failed to fetch order");
-      if (!productRes.ok) throw new Error(productPayload.error ?? "Failed to fetch products");
-      if (!supplierRes.ok) throw new Error(suppliersPayload.error ?? "Failed to fetch suppliers");
       if (!ticketRes.ok) throw new Error(ticketPayload.error ?? "Failed to fetch tickets");
       if (!invoiceRes.ok) throw new Error(invoicePayload.error ?? "Failed to fetch invoice");
       if (!returnRes.ok) throw new Error(returnPayload.error ?? "Failed to fetch returns");
-      if (!customerRes.ok) throw new Error(customerPayload.error ?? "Failed to fetch customers");
-      if (!salespersonRes.ok) throw new Error(salespersonPayload.error ?? "Failed to fetch salespeople");
-      if (!Array.isArray(suppliersPayload.data)) throw new Error("Failed to fetch suppliers");
+
       setData(detailPayload.data);
-      setProducts(productPayload.data ?? []);
-      setSuppliers(suppliersPayload.data ?? []);
-      setCustomers(customerPayload.data ?? []);
-      setSalespeople(salespersonPayload.data ?? []);
+      setProducts(products);
+      setSuppliers(suppliers);
+      setCustomers(customers);
+      setSalespeople(salespeople);
       setTickets(ticketPayload.data ?? []);
       setInvoiceId(invoicePayload.data?.[0]?.id ?? null);
       setHasRelatedReturns(Array.isArray(returnPayload.data) && returnPayload.data.length > 0);
@@ -659,10 +698,20 @@ export default function SalesOrderDetailPage() {
 
   useEffect(() => {
     if (!id) return;
+    // Guard against double-firing when `role` transitions from its default value
+    // ("ADMIN") to the session-loaded value on cold start. Without this, every
+    // order-specific API call would fire twice in production.
+    // Using `id:role` as the key so a genuine role switch still re-fetches.
+    const key = `${id}:${role}`;
+    if (loadedForRef.current === key) return;
+    loadedForRef.current = key;
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, role]);
   useEffect(() => {
+    // Skip the initial empty-query fire — load() already fetches the full customer list.
+    // Only re-fetch when the user types a real search query.
+    if (!customerQuery.trim()) return;
     const timer = window.setTimeout(() => {
       void loadCustomers(customerQuery).catch((err) =>
         setError(err instanceof Error ? err.message : "Failed to fetch customers"),

@@ -26,6 +26,12 @@ type Customer = {
   notes: string | null;
 };
 
+type BlockingRelations = {
+  salesOrders: Array<{ id: string; orderNumber: string; status: string }>;
+  storeCredits: Array<{ id: string; amount: number | string; status: string }>;
+  afterSalesReturns: Array<{ id: string; returnNumber: string; status: string }>;
+} | null;
+
 export default function CustomersPage() {
   const router = useRouter();
   const { role } = useRole();
@@ -35,6 +41,9 @@ export default function CustomersPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [openCreateModal, setOpenCreateModal] = useState(false);
   const [submittingCreate, setSubmittingCreate] = useState(false);
+  const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [blockingRelations, setBlockingRelations] = useState<BlockingRelations>(null);
   const [defaultTaxRate, setDefaultTaxRate] = useState("0");
   const [newCustomerForm, setNewCustomerForm] = useState({
     name: "",
@@ -144,6 +153,31 @@ export default function CustomersPage() {
       setError(err instanceof Error ? err.message : "Failed to create customer");
     } finally {
       setSubmittingCreate(false);
+    }
+  };
+
+  const handleDeleteCustomer = async (id: string) => {
+    setDeletingCustomerId(id);
+    setBlockingRelations(null);
+    try {
+      const res = await fetch(`/api/customers/${id}`, {
+        method: "DELETE",
+        headers: { "x-user-role": role },
+      });
+      const payload = await res.json();
+      if (res.status === 409 && payload.blocking) {
+        setBlockingRelations(payload.blocking);
+        return;
+      }
+      if (!res.ok) throw new Error(payload.error ?? "Failed to delete customer");
+      setToast("Customer deleted.");
+      setTimeout(() => setToast(null), 2200);
+      setConfirmDeleteId(null);
+      await loadRows();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete customer");
+    } finally {
+      setDeletingCustomerId(null);
     }
   };
 
@@ -281,6 +315,16 @@ export default function CustomersPage() {
                         }}
                       >
                         New Order
+                      </button>
+                      <button
+                        type="button"
+                        className="ios-secondary-btn h-9 px-3 py-2 text-sm text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setConfirmDeleteId(item.id);
+                        }}
+                      >
+                        Delete
                       </button>
                       <span
                         className="ml-1 inline-flex items-center text-slate-500 opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
@@ -432,6 +476,110 @@ export default function CustomersPage() {
             </div>
           </form>
         </Modal>
+      ) : null}
+      {confirmDeleteId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+          <div className="so-modal-shell w-full max-w-sm p-6">
+            <h3 className="mb-2 text-base font-semibold text-white">Delete Customer</h3>
+            {blockingRelations ? (
+              <>
+                <p className="mb-3 text-sm text-slate-400">
+                  This customer has linked records and cannot be deleted.
+                </p>
+                <div className="mb-5 max-h-72 space-y-3 overflow-y-auto rounded-lg border border-white/10 bg-white/5 p-3">
+                  <div>
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Sales Orders</p>
+                    {blockingRelations.salesOrders.length === 0 ? (
+                      <p className="text-xs text-slate-500">None</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {blockingRelations.salesOrders.map((order) => (
+                          <button
+                            key={order.id}
+                            type="button"
+                            onClick={() => {
+                              setConfirmDeleteId(null);
+                              setBlockingRelations(null);
+                              router.push(`/sales-orders/${order.id}`);
+                            }}
+                            className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-left text-xs text-white/90 hover:bg-white/10"
+                          >
+                            {order.orderNumber} · {order.status}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Store Credits</p>
+                    {blockingRelations.storeCredits.length === 0 ? (
+                      <p className="text-xs text-slate-500">None</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {blockingRelations.storeCredits.map((credit) => (
+                          <div key={credit.id} className="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/80">
+                            {credit.id} · ${Number(credit.amount).toFixed(2)} · {credit.status}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">After-Sales Returns</p>
+                    {blockingRelations.afterSalesReturns.length === 0 ? (
+                      <p className="text-xs text-slate-500">None</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {blockingRelations.afterSalesReturns.map((ret) => (
+                          <div key={ret.id} className="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/80">
+                            {ret.returnNumber} · {ret.status}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmDeleteId(null);
+                    setBlockingRelations(null);
+                  }}
+                  className="ios-secondary-btn h-10 w-full text-sm"
+                >
+                  Close
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="mb-6 text-sm text-slate-400">
+                  Are you sure you want to delete{" "}
+                  <span className="font-medium text-white">
+                    {rows.find((r) => r.id === confirmDeleteId)?.name}
+                  </span>
+                  ? This action cannot be undone.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="ios-secondary-btn h-10 flex-1 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingCustomerId === confirmDeleteId}
+                    onClick={() => handleDeleteCustomer(confirmDeleteId)}
+                    className="ios-primary-btn h-10 flex-1 bg-rose-600 text-sm hover:bg-rose-500 disabled:opacity-60"
+                  >
+                    {deletingCustomerId === confirmDeleteId ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       ) : null}
     </section>
   );

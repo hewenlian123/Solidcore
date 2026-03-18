@@ -20,49 +20,75 @@ const RoleContext = createContext<RoleContextValue>({
   setRole: () => {},
 });
 
+// Module-level cache: persists across React remounts within the same browser session.
+// This prevents showing "Loading session..." on every page navigation.
+type SessionCache = { role: Role; userName: string } | null;
+let _sessionCache: SessionCache = null;
+let _sessionPromise: Promise<SessionCache> | null = null;
+
+async function fetchSession(): Promise<SessionCache> {
+  if (_sessionCache) return _sessionCache;
+  if (_sessionPromise) return _sessionPromise;
+
+  _sessionPromise = fetch("/api/auth/session", { cache: "no-store" })
+    .then(async (res) => {
+      if (!res.ok) return null;
+      const payload = await res.json().catch(() => ({}));
+      const result: SessionCache = {
+        role: payload?.data?.role ?? "ADMIN",
+        userName: String(payload?.data?.name ?? ""),
+      };
+      _sessionCache = result;
+      return result;
+    })
+    .catch(() => null)
+    .finally(() => {
+      _sessionPromise = null;
+    });
+
+  return _sessionPromise;
+}
+
 export function RoleProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [role, setRoleState] = useState<Role>("ADMIN");
-  const [userName, setUserName] = useState("");
-  const [authenticated, setAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [role, setRoleState] = useState<Role>(() => _sessionCache?.role ?? "ADMIN");
+  const [userName, setUserName] = useState(() => _sessionCache?.userName ?? "");
+  const [authenticated, setAuthenticated] = useState(() => _sessionCache !== null);
+  const [loading, setLoading] = useState(() => _sessionCache === null);
 
   useEffect(() => {
+    // If already cached from a previous mount, nothing to do.
+    if (_sessionCache) {
+      setRoleState(_sessionCache.role);
+      setUserName(_sessionCache.userName);
+      setAuthenticated(true);
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     const loadSession = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch("/api/auth/session", { cache: "no-store" });
-        const payload = await res.json().catch(() => ({}));
-        if (cancelled) return;
-        if (!res.ok) {
-          setAuthenticated(false);
-          const currentPath = typeof window !== "undefined" ? window.location.pathname : "/dashboard";
-          if (currentPath !== "/login") {
-            router.replace(`/login?next=${encodeURIComponent(currentPath || "/dashboard")}`);
-          }
-          return;
+      const session = await fetchSession();
+      if (cancelled) return;
+      if (!session) {
+        setAuthenticated(false);
+        setLoading(false);
+        const currentPath = typeof window !== "undefined" ? window.location.pathname : "/dashboard";
+        if (currentPath !== "/login") {
+          router.replace(`/login?next=${encodeURIComponent(currentPath || "/dashboard")}`);
         }
-        setRoleState(payload?.data?.role ?? "ADMIN");
-        setUserName(String(payload?.data?.name ?? ""));
-        setAuthenticated(true);
-      } catch {
-        if (!cancelled) {
-          setAuthenticated(false);
-          const currentPath = typeof window !== "undefined" ? window.location.pathname : "/dashboard";
-          if (currentPath !== "/login") {
-            router.replace(`/login?next=${encodeURIComponent(currentPath || "/dashboard")}`);
-          }
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
+        return;
       }
+      setRoleState(session.role);
+      setUserName(session.userName);
+      setAuthenticated(true);
+      setLoading(false);
     };
+
     void loadSession();
     return () => {
       cancelled = true;
     };
-    // Run only on mount so navigation does not trigger a session refetch (fixes slow nav)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -75,7 +101,12 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) return;
-      setRoleState(payload?.data?.role ?? nextRole);
+      const resolvedRole = payload?.data?.role ?? nextRole;
+      // Update module-level cache so subsequent remounts use the new role
+      if (_sessionCache) {
+        _sessionCache = { ..._sessionCache, role: resolvedRole };
+      }
+      setRoleState(resolvedRole);
     } catch {
       // keep UI resilient when session update fails
     }

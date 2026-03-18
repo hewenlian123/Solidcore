@@ -180,3 +180,43 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Failed to update customer." }, { status: 500 });
   }
 }
+
+export async function DELETE(request: NextRequest, { params }: Params) {
+  try {
+    const role = getRequestRole(request);
+    if (!hasOneOf(role, ["ADMIN"])) return deny();
+    const { id } = await params;
+    const existing = await prisma.salesCustomer.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        salesOrders: { select: { id: true, orderNumber: true, status: true }, take: 20 },
+        storeCredits: { select: { id: true, amount: true, status: true }, take: 10 },
+        afterSalesReturns: { select: { id: true, returnNumber: true, status: true }, take: 10 },
+      },
+    });
+    if (!existing) return NextResponse.json({ error: "Customer not found." }, { status: 404 });
+    const hasBlocking =
+      existing.salesOrders.length > 0 ||
+      existing.storeCredits.length > 0 ||
+      existing.afterSalesReturns.length > 0;
+    if (hasBlocking) {
+      return NextResponse.json(
+        {
+          error: "Cannot delete customer with linked records.",
+          blocking: {
+            salesOrders: existing.salesOrders,
+            storeCredits: existing.storeCredits,
+            afterSalesReturns: existing.afterSalesReturns,
+          },
+        },
+        { status: 409 },
+      );
+    }
+    await prisma.salesCustomer.delete({ where: { id } });
+    return NextResponse.json({ success: true }, { status: 200 });
+  } catch (error) {
+    console.error("DELETE /api/customers/[id] error:", error);
+    return NextResponse.json({ error: "Failed to delete customer." }, { status: 500 });
+  }
+}
