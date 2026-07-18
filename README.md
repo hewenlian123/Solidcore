@@ -1,4 +1,4 @@
-# Solidcore
+# Solidcore Webapp
 
 ## Git Workflow
 

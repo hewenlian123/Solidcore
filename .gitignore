@@ -29,3 +29,5 @@ prisma/*.db-journal
 # macOS
 .DS_Store
 .vercel
+.env*
+supabase/.temp/

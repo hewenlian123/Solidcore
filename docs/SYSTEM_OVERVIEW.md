@@ -1,4 +1,4 @@
-# Solidcore – Full System Overview
+# Solidcore Webapp – Full System Overview
 
 **Purpose:** Understand existing modules and features to plan the next development steps for the building materials ERP.
 

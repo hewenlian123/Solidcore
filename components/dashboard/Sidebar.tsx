@@ -39,7 +39,7 @@ export function DashboardSidebar() {
         <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white">
           <Boxes className="h-5 w-5" />
         </div>
-        <h2 className="mt-3 text-[18px] font-semibold tracking-tight text-slate-900">Solidcore</h2>
+        <h2 className="mt-3 text-[18px] font-semibold tracking-tight text-slate-900">Solidcore Webapp</h2>
         <p className="text-xs leading-5 text-slate-500">Building Materials CRM</p>
       </div>
 

@@ -1,4 +1,4 @@
-# Solidcore Luxury SaaS UI Upgrade — Deliverable
+# Solidcore Webapp Luxury SaaS UI Upgrade — Deliverable
 
 **Constraint:** ADD ONLY. No business logic, API, or data model changes. Visual design and component consistency only.
 

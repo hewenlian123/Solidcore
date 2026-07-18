@@ -1,4 +1,4 @@
-# Solidcore Architecture Review — Read-Only
+# Solidcore Webapp Architecture Review — Read-Only
 
 **Date:** 2025-03-05  
 **Scope:** Map current system to target module structure, workflow connectivity, and recommended implementation order.

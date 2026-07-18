@@ -1,6 +1,6 @@
 {
-  "name": "Solidcore Building Materials Management",
-  "short_name": "Solidcore",
+  "name": "Solidcore Webapp",
+  "short_name": "Solidcore Webapp",
   "description": "Integrated Building Materials Platform",
   "start_url": "/dashboard",
   "display": "standalone",

@@ -1,4 +1,4 @@
-# Solidcore — Performance Check Report
+# Solidcore Webapp — Performance Check Report
 
 **Date:** Generated from codebase inspection and build verification.  
 **Scope:** Navigation performance, sidebar routing, large components, layout, Quick Sale, Dashboard.  

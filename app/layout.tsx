@@ -8,7 +8,7 @@ import NextTopLoader from "nextjs-toploader";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "Solidcore Building Materials Management",
+  title: "Solidcore Webapp",
   description: "Integrated management for windows, flooring, mirrors, doors, and warehouse operations",
   manifest: "/manifest.json",
 };

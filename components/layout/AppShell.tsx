@@ -386,7 +386,7 @@ export function AppShell({ children, title, subtitle }: AppShellProps) {
                 <div className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-slate-500 to-slate-700 text-white shadow-lg shadow-slate-500/20">
                   <Boxes className="h-5 w-5" />
                 </div>
-                <h2 className="mt-3 text-[18px] font-semibold tracking-tight text-white">Solidcore</h2>
+                <h2 className="mt-3 text-[18px] font-semibold tracking-tight text-white">Solidcore Webapp</h2>
                 <p className="text-xs leading-5 text-slate-400">Building Materials CRM</p>
               </div>
               <button type="button" className="rounded-xl p-1 text-slate-400 hover:bg-white/10 hover:text-white xl:hidden" onClick={() => setOpen(false)}>
