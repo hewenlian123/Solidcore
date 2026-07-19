@@ -17,6 +17,7 @@ import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { formatLineItemTitle } from "@/lib/display";
 import { getEffectiveSpecs, getInternalSpecLine } from "@/lib/specs/glass";
 import { formatFlooringSubtitle } from "@/lib/specs/effective";
+import { parsePositiveQuantity } from "@/lib/sales-order-quantity";
 import { resolveSellingUnit } from "@/lib/selling-unit";
 
 type Params = {
@@ -49,6 +50,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (!hasOneOf(role, ["ADMIN", "SALES"])) return deny();
     const { id, itemId } = await params;
     const payload = await request.json();
+    if (payload.quantity !== undefined) {
+      if (parsePositiveQuantity(payload.quantity) === null) {
+        return NextResponse.json({ error: "Quantity must be greater than 0." }, { status: 400 });
+      }
+    }
     await ensureDescriptionTemplateSeeds();
 
     await prisma.$transaction(async (tx) => {
@@ -56,7 +62,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       if (!existing || existing.salesOrderId !== id) {
         throw new Error("ITEM_NOT_FOUND");
       }
-      let quantity = payload.quantity !== undefined ? toNumber(payload.quantity, Number(existing.quantity)) : Number(existing.quantity);
+      let quantity =
+        payload.quantity !== undefined
+          ? parsePositiveQuantity(payload.quantity) ?? Number(existing.quantity)
+          : Number(existing.quantity);
       const unitPrice = payload.unitPrice !== undefined ? toNumber(payload.unitPrice, Number(existing.unitPrice)) : Number(existing.unitPrice);
       const lineDiscount =
         payload.lineDiscount !== undefined
@@ -66,6 +75,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         payload.fulfillQty !== undefined
           ? toNumber(payload.fulfillQty, Number(existing.fulfillQty))
           : Number(existing.fulfillQty);
+      if (quantity <= 0) {
+        throw new Error("INVALID_QUANTITY");
+      }
 
       const nextProductId =
         payload.productId !== undefined
@@ -410,7 +422,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       }
       await recalculateSalesOrder(tx, id);
       await syncSalesOutboundQueue(tx, id);
-      await syncInventoryReservationForSalesOrder(tx, id);
+      await syncInventoryReservationForSalesOrder(tx, id, {
+        affectedVariantIds: [existing.variantId, nextVariantId],
+      });
     });
 
     const data = await prisma.salesOrder.findUnique({
@@ -430,6 +444,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
     if (error instanceof Error && error.message === "VARIANT_REQUIRED") {
       return NextResponse.json({ error: "Variant is required." }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === "INVALID_QUANTITY") {
+      return NextResponse.json({ error: "Quantity must be greater than 0." }, { status: 400 });
     }
     if (error instanceof Error && error.message.startsWith("FLOORING_OVRSELL:")) {
       const [, need, available] = error.message.split(":");
@@ -485,7 +502,9 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       await tx.salesOrderItem.delete({ where: { id: itemId } });
       await recalculateSalesOrder(tx, id);
       await syncSalesOutboundQueue(tx, id);
-      await syncInventoryReservationForSalesOrder(tx, id);
+      await syncInventoryReservationForSalesOrder(tx, id, {
+        affectedVariantIds: [existing.variantId],
+      });
     });
 
     const data = await prisma.salesOrder.findUnique({

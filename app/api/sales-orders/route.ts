@@ -6,6 +6,7 @@ import {
   recalculateSalesOrder,
 } from "@/lib/sales-orders";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import { parsePositiveQuantity } from "@/lib/sales-order-quantity";
 import { resolveSellingUnit } from "@/lib/selling-unit";
 import { getDefaultTaxRate } from "@/lib/settings";
 import { Prisma } from "@prisma/client";
@@ -116,8 +117,24 @@ export async function POST(request: NextRequest) {
     const requestedCustomerId = String(payload.customerId ?? "").trim();
 
     const items = Array.isArray(payload.items) ? payload.items : [];
+    if (items.length === 0) {
+      return NextResponse.json(
+        { error: "Add at least one line item before saving." },
+        { status: 400 },
+      );
+    }
     if (items.some((item: any) => !item?.variantId)) {
       return NextResponse.json({ error: "Each item must select a variant." }, { status: 400 });
+    }
+    if (
+      items.some((item: any) => {
+        return parsePositiveQuantity(item?.quantity) === null;
+      })
+    ) {
+      return NextResponse.json(
+        { error: "Each line item quantity must be greater than zero." },
+        { status: 400 },
+      );
     }
     const discount = toNumber(payload.discount, 0);
     const requestedTaxAmount = toNumber(payload.tax, 0);
@@ -249,7 +266,7 @@ export async function POST(request: NextRequest) {
         const variantById = new Map(variants.map((row) => [row.id, row]));
         await tx.salesOrderItem.createMany({
           data: items.map((item: any) => {
-            const quantity = toNumber(item.quantity, 0);
+            const quantity = parsePositiveQuantity(item.quantity) ?? 0;
             const unitPrice = toNumber(item.unitPrice, 0);
             const lineDiscount = toNumber(item.lineDiscount, 0);
             const variantId = String(item.variantId);

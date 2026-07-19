@@ -1,0 +1,7 @@
+interface:
+  display_name: "SolidCore Inventory Guard"
+  short_description: "Protect partial fulfillment and stock"
+  default_prompt: "Use $solidcore-inventory-fulfillment-guard to review a partial pickup or delivery change."
+
+policy:
+  allow_implicit_invocation: true

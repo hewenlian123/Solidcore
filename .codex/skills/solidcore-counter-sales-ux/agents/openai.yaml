@@ -1,0 +1,7 @@
+interface:
+  display_name: "SolidCore Counter Sales UX"
+  short_description: "Keep New Sale fast and clear"
+  default_prompt: "Use $solidcore-counter-sales-ux to review a New Sale workflow for speed and clarity."
+
+policy:
+  allow_implicit_invocation: true

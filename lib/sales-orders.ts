@@ -52,6 +52,12 @@ function normalizeReserveUnit(rawUnit: string | null | undefined, hasBoxCoverage
   return unit || "piece";
 }
 
+const RESERVABLE_SALES_ORDER_STATUSES = [
+  "CONFIRMED",
+  "READY",
+  "PARTIALLY_FULFILLED",
+] satisfies SalesOrderStatus[];
+
 export function canTransitionSalesOrderStatus(
   from: SalesOrderStatus,
   to: SalesOrderStatus,
@@ -409,19 +415,39 @@ export async function releaseReservedForSalesOrder(
 export async function syncInventoryReservationForSalesOrder(
   tx: Prisma.TransactionClient,
   salesOrderId: string,
+  options: { affectedVariantIds?: Array<string | null | undefined> } = {},
 ) {
-  const order = await tx.salesOrder.findUnique({
-    where: { id: salesOrderId },
-    select: { id: true, status: true },
-  });
-  if (!order) return;
-
-  const reservableStatuses = ["CONFIRMED", "READY", "PARTIALLY_FULFILLED"];
   const items = await tx.salesOrderItem.findMany({
     where: { salesOrderId },
     select: { variantId: true, productId: true, quantity: true, fulfillQty: true },
   });
-  const productIds = Array.from(new Set(items.map((item) => item.productId).filter(Boolean))) as string[];
+
+  const variantIdsToSync = Array.from(
+    new Set(
+      [
+        ...items.map((item) => item.variantId),
+        ...(options.affectedVariantIds ?? []),
+      ].filter(Boolean),
+    ),
+  ) as string[];
+  if (variantIdsToSync.length === 0) return;
+
+  await tx.$queryRaw(
+    Prisma.sql`SELECT variant_id FROM inventory_stock WHERE variant_id IN (${Prisma.join(
+      variantIdsToSync,
+    )}) FOR UPDATE`,
+  );
+
+  const reservingItems = await tx.salesOrderItem.findMany({
+    where: {
+      variantId: { in: variantIdsToSync },
+      salesOrder: { status: { in: RESERVABLE_SALES_ORDER_STATUSES } },
+    },
+    select: { variantId: true, productId: true, quantity: true, fulfillQty: true },
+  });
+  const productIds = Array.from(
+    new Set(reservingItems.map((item) => item.productId).filter(Boolean)),
+  ) as string[];
   const productMetaRows = productIds.length
     ? await tx.product.findMany({
         where: { id: { in: productIds } },
@@ -430,29 +456,24 @@ export async function syncInventoryReservationForSalesOrder(
     : [];
   const productMetaById = new Map(productMetaRows.map((row) => [row.id, row]));
   const reservationByVariant = new Map<string, number>();
-  if (reservableStatuses.includes(order.status)) {
-    for (const item of items) {
-      if (!item.variantId) continue;
-      const qty = Number(item.quantity || 0);
-      const fulfilled = Number(item.fulfillQty || 0);
-      const productMeta = productMetaById.get(String(item.productId ?? ""));
-      const isFlooring = productMeta?.category === "FLOOR";
-      const reserved = isFlooring
-        ? toFlooringRequiredBoxes(qty, Number(productMeta?.flooringBoxCoverageSqft ?? 0))
-        : Math.max(qty - fulfilled, 0);
-      reservationByVariant.set(
-        item.variantId,
-        roundCurrency((reservationByVariant.get(item.variantId) ?? 0) + reserved),
-      );
-    }
+  for (const item of reservingItems) {
+    if (!item.variantId) continue;
+    const qty = Number(item.quantity || 0);
+    const fulfilled = Number(item.fulfillQty || 0);
+    const productMeta = productMetaById.get(String(item.productId ?? ""));
+    const isFlooring = productMeta?.category === "FLOOR";
+    const reserved = isFlooring
+      ? toFlooringRequiredBoxes(qty, Number(productMeta?.flooringBoxCoverageSqft ?? 0))
+      : Math.max(qty - fulfilled, 0);
+    reservationByVariant.set(
+      item.variantId,
+      roundCurrency((reservationByVariant.get(item.variantId) ?? 0) + reserved),
+    );
   }
 
-  const variantIdsInOrder = Array.from(
-    new Set(items.map((it) => it.variantId).filter(Boolean)),
-  ) as string[];
-  const stockRows = variantIdsInOrder.length
+  const stockRows = variantIdsToSync.length
     ? await tx.inventoryStock.findMany({
-        where: { variantId: { in: variantIdsInOrder } },
+        where: { variantId: { in: variantIdsToSync } },
         select: {
           variantId: true,
           onHand: true,
@@ -468,7 +489,7 @@ export async function syncInventoryReservationForSalesOrder(
     : [];
   const stockByVariant = new Map(stockRows.map((row) => [row.variantId, row]));
 
-  for (const variantId of variantIdsInOrder) {
+  for (const variantId of variantIdsToSync) {
     const targetReserved = Number(reservationByVariant.get(variantId) ?? 0);
     const stock = stockByVariant.get(variantId);
     const onHand = Number(stock?.onHand ?? 0);

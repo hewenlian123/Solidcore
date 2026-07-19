@@ -1,0 +1,7 @@
+interface:
+  display_name: "SolidCore Special Order CRM"
+  short_description: "Connect special orders and follow-up"
+  default_prompt: "Use $solidcore-special-order-crm to plan a Special Order follow-up workflow."
+
+policy:
+  allow_implicit_invocation: true

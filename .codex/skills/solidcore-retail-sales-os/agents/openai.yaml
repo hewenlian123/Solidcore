@@ -1,0 +1,7 @@
+interface:
+  display_name: "SolidCore Retail Sales OS"
+  short_description: "Guard connected sales lifecycle changes"
+  default_prompt: "Use $solidcore-retail-sales-os to plan a connected Quote to Sales Order workflow change."
+
+policy:
+  allow_implicit_invocation: true

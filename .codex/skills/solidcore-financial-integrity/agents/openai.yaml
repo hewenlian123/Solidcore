@@ -1,0 +1,7 @@
+interface:
+  display_name: "SolidCore Financial Integrity"
+  short_description: "Protect invoices, payments, and balances"
+  default_prompt: "Use $solidcore-financial-integrity to review an invoice or payment change for balance safety."
+
+policy:
+  allow_implicit_invocation: true

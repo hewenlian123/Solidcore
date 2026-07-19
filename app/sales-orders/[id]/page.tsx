@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useRole } from "@/components/layout/role-provider";
-import { getSalesOrderStatusBadge, getSalesOrderStatusLabel } from "@/lib/sales-order-ui";
+import { getSalesOrderStatusLabel } from "@/lib/sales-order-ui";
 import { PDFPreviewModal } from "@/components/pdf/PDFPreviewModal";
 import { buildProductDisplayName } from "@/lib/product-display-format";
 import { formatLineItemTitle } from "@/lib/display";
@@ -118,13 +118,30 @@ type SalesOrderDetail = {
     variantId: string | null;
     productSku: string | null;
     productTitle: string | null;
+    skuSnapshot?: string | null;
+    titleSnapshot?: string | null;
+    notes?: string | null;
     description?: string | null;
     lineDescription: string;
+    uomSnapshot?: string | null;
     quantity: string;
     unitPrice: string;
     lineDiscount: string;
     lineTotal: string;
     fulfillQty: string;
+    isSpecialOrder: boolean;
+    specialOrderStatus: string | null;
+    linkedPoId: string | null;
+    specialFollowupDate: string | null;
+    linkedPo?:
+      | {
+          id: string;
+          poNumber: string;
+          status: string;
+          orderDate: string;
+          expectedArrival: string | null;
+        }
+      | null;
     product?:
       | {
           name: string | null;
@@ -248,6 +265,15 @@ type SalespersonOption = {
   name: string;
 };
 
+type PurchaseOrderOption = {
+  id: string;
+  poNumber: string;
+  status: string;
+  orderDate: string;
+  expectedArrival: string | null;
+  supplier?: { id: string; name: string } | null;
+};
+
 type SalesOrderTicket = {
   id: string;
   salesOrderId: string;
@@ -268,6 +294,28 @@ type ItemRowDraft = {
   lineDescription: string;
   fulfillQty: string;
 };
+
+type SpecialOrderHeaderDraft = {
+  supplierId: string;
+  etaDate: string;
+  specialOrderStatus: string;
+  supplierNotes: string;
+};
+
+type SpecialOrderItemDraft = {
+  isSpecialOrder: boolean;
+  specialOrderStatus: string;
+  linkedPoId: string;
+  specialFollowupDate: string;
+};
+
+const SPECIAL_ORDER_STATUS_OPTIONS = [
+  { value: "REQUESTED", label: "Requested" },
+  { value: "ORDERED", label: "Ordered" },
+  { value: "IN_TRANSIT", label: "In Transit" },
+  { value: "ARRIVED", label: "Arrived" },
+  { value: "DELIVERED", label: "Delivered" },
+] as const;
 
 function paymentStatusFromTotals(paidAmount: number, balanceDue: number) {
   if (balanceDue <= 0) return "Paid";
@@ -487,6 +535,688 @@ function getReservedFlooringBoxesFromItems(items: SalesOrderDetail["items"]) {
   }, 0);
 }
 
+function formatMoney(value: string | number | null | undefined) {
+  const amount = Number(value ?? 0);
+  return `$${(Number.isFinite(amount) ? amount : 0).toFixed(2)}`;
+}
+
+function toDateInputValue(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString().slice(0, 10);
+}
+
+function formatDisplayDate(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleDateString("en-US", { timeZone: "UTC" });
+}
+
+function formatSpecialOrderStatus(value: string | null | undefined) {
+  const normalized = String(value ?? "").toUpperCase();
+  const option = SPECIAL_ORDER_STATUS_OPTIONS.find((item) => item.value === normalized);
+  if (option) return option.label;
+  if (!normalized) return "Needs Review";
+  return normalized
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0) + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function getSpecialOrderStatusClass(value: string | null | undefined) {
+  const normalized = String(value ?? "").toUpperCase();
+  if (normalized === "ARRIVED" || normalized === "DELIVERED") {
+    return "border-emerald-400/30 bg-emerald-500/10 text-emerald-100";
+  }
+  if (normalized === "IN_TRANSIT") {
+    return "border-sky-400/30 bg-sky-500/10 text-sky-100";
+  }
+  if (normalized === "ORDERED") {
+    return "border-amber-400/30 bg-amber-500/10 text-amber-100";
+  }
+  return "border-white/15 bg-white/5 text-slate-200";
+}
+
+function formatOperationalQuantity(value: number) {
+  if (!Number.isFinite(value)) return "0";
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, "");
+}
+
+type OperationalMetric = {
+  label: string;
+  value: string;
+};
+
+type OperationalAction = {
+  key: string;
+  label: string;
+  href?: string;
+  onClick?: () => void | Promise<void>;
+  disabled?: boolean;
+  title?: string;
+};
+
+type OperationalHeaderProps = {
+  data: SalesOrderDetail;
+  mode: "view" | "edit";
+  paymentStatus: string;
+  financialMetrics: OperationalMetric[];
+  warehouseMetrics: OperationalMetric[];
+  warehouseHint: string;
+  specialOrderSummary: { supplier: string; eta: string | null; status: string | null } | null;
+  primaryAction: OperationalAction | null;
+  secondaryActions: OperationalAction[];
+};
+
+function OperationalActionControl({
+  action,
+  primary = false,
+  testId,
+}: {
+  action: OperationalAction;
+  primary?: boolean;
+  testId?: string;
+}) {
+  const className = primary
+    ? "inline-flex min-h-10 items-center justify-center rounded-xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/25 disabled:opacity-50"
+    : "inline-flex min-h-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/85 transition hover:bg-white/10 disabled:opacity-50";
+
+  if (action.href && !action.disabled) {
+    return (
+      <Link href={action.href} className={className} title={action.title} data-testid={testId}>
+        {action.label}
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={action.onClick}
+      disabled={action.disabled}
+      title={action.title}
+      className={className}
+      data-testid={testId}
+    >
+      {action.label}
+    </button>
+  );
+}
+
+function OperationalHeader({
+  data,
+  mode,
+  paymentStatus,
+  financialMetrics,
+  warehouseMetrics,
+  warehouseHint,
+  specialOrderSummary,
+  primaryAction,
+  secondaryActions,
+}: OperationalHeaderProps) {
+  const docTypeLabel = data.docType === "QUOTE" ? "Quote" : "Sales Order";
+  const docTypeClass =
+    data.docType === "QUOTE"
+      ? "border-violet-400/40 bg-violet-500/15 text-violet-100"
+      : "border-sky-400/40 bg-sky-500/15 text-sky-100";
+  const hasSpecialOrderMaterial = data.specialOrder || data.items.some((item) => item.isSpecialOrder);
+  const gridClass = specialOrderSummary
+    ? "grid gap-3 lg:grid-cols-[1fr_1fr_0.9fr]"
+    : "grid gap-3 lg:grid-cols-2";
+
+  return (
+    <header className="glass-card px-5 py-4 sm:px-6" data-testid="operational-header">
+      <div className="glass-card-content space-y-4">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${docTypeClass}`}>
+                {docTypeLabel}
+              </span>
+              {hasSpecialOrderMaterial ? (
+                <span className="rounded-full border border-amber-400/40 bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-100">
+                  Special Order
+                </span>
+              ) : null}
+              <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${mode === "edit" ? "border-amber-500/40 bg-amber-500/10 text-amber-200" : "border-white/20 bg-white/5 text-slate-300"}`}>
+                {mode === "edit" ? "EDIT" : "VIEW"}
+              </span>
+              <span className="rounded-full border border-white/20 bg-white/5 px-2.5 py-0.5 text-xs font-medium text-slate-300">
+                {getSalesOrderStatusLabel(data.status)}
+              </span>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
+              <h1 className="break-words text-2xl font-semibold tracking-tight text-white">{data.orderNumber}</h1>
+              <div className="pb-0.5 text-sm text-slate-300">
+                <span className="font-medium text-white/90">{data.customer.name || "-"}</span>
+                {data.customer.phone ? <span className="text-slate-400"> · {data.customer.phone}</span> : null}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+              <span>{data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"}</span>
+              <span className="text-slate-600">·</span>
+              <span>{new Date(data.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</span>
+              <span className="text-slate-600">·</span>
+              <span>{paymentStatus}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center xl:justify-end" data-testid="operational-actions">
+            {primaryAction ? (
+              <OperationalActionControl
+                action={primaryAction}
+                primary
+                testId="operational-primary-action"
+              />
+            ) : null}
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center" data-testid="operational-secondary-actions">
+              {secondaryActions.map((action) => (
+                <OperationalActionControl key={action.key} action={action} />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className={gridClass}>
+          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3" data-testid="operational-financial-summary">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Financial Summary
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {financialMetrics.map((metric) => (
+                <div key={metric.label}>
+                  <div className="text-[11px] text-slate-500">{metric.label}</div>
+                  <div className="text-base font-semibold text-white">{metric.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3" data-testid="operational-warehouse-summary">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                Warehouse Summary
+              </span>
+              <span className="text-[11px] text-slate-500">{warehouseHint}</span>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {warehouseMetrics.map((metric) => (
+                <div key={metric.label}>
+                  <div className="text-[11px] text-slate-500">{metric.label}</div>
+                  <div className="text-base font-semibold text-white">{metric.value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {specialOrderSummary ? (
+            <div className="rounded-lg border border-amber-400/20 bg-amber-500/[0.07] p-3" data-testid="operational-special-order-summary">
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-amber-200/80">
+                Special Order
+              </div>
+              <div className="space-y-1 text-sm">
+                <div className="truncate text-white">{specialOrderSummary.supplier}</div>
+                <div className="text-xs text-slate-400">
+                  {specialOrderSummary.eta ? `ETA ${specialOrderSummary.eta}` : "ETA not set"}
+                  {specialOrderSummary.status ? ` · ${specialOrderSummary.status}` : ""}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function toSpecialOrderHeaderDraft(data: SalesOrderDetail): SpecialOrderHeaderDraft {
+  return {
+    supplierId: data.supplierId ?? "",
+    etaDate: toDateInputValue(data.etaDate),
+    specialOrderStatus: data.specialOrderStatus ?? "",
+    supplierNotes: data.supplierNotes ?? "",
+  };
+}
+
+function toSpecialOrderItemDraft(item: SalesOrderDetail["items"][number]): SpecialOrderItemDraft {
+  return {
+    isSpecialOrder: Boolean(item.isSpecialOrder),
+    specialOrderStatus: item.specialOrderStatus ?? "",
+    linkedPoId: item.linkedPoId ?? "",
+    specialFollowupDate: toDateInputValue(item.specialFollowupDate),
+  };
+}
+
+function isSpecialOrderHeaderDirty(data: SalesOrderDetail, draft: SpecialOrderHeaderDraft) {
+  const current = toSpecialOrderHeaderDraft(data);
+  return (
+    draft.supplierId !== current.supplierId ||
+    draft.etaDate !== current.etaDate ||
+    draft.specialOrderStatus !== current.specialOrderStatus ||
+    draft.supplierNotes !== current.supplierNotes
+  );
+}
+
+function isSpecialOrderItemDirty(item: SalesOrderDetail["items"][number], draft: SpecialOrderItemDraft) {
+  const current = toSpecialOrderItemDraft(item);
+  return (
+    draft.isSpecialOrder !== current.isSpecialOrder ||
+    draft.specialOrderStatus !== current.specialOrderStatus ||
+    draft.linkedPoId !== current.linkedPoId ||
+    draft.specialFollowupDate !== current.specialFollowupDate
+  );
+}
+
+function getSpecialOrderLineTitle(item: SalesOrderDetail["items"][number]) {
+  const snapshotTitle = String(item.titleSnapshot ?? item.productTitle ?? "").trim();
+  if (snapshotTitle) return snapshotTitle;
+  const productName = item.product?.name ?? null;
+  const formatted = formatLineItemTitle({
+    productName,
+    variant: {
+      title: item.productTitle,
+      sku: item.variant?.sku ?? item.skuSnapshot ?? item.productSku,
+      detailText: item.lineDescription,
+    },
+  });
+  return formatted || String(item.lineDescription ?? "").trim() || "-";
+}
+
+type SpecialOrderPanelProps = {
+  data: SalesOrderDetail;
+  suppliers: SupplierOption[];
+  purchaseOrders: PurchaseOrderOption[];
+  specialOrderItems: SalesOrderDetail["items"];
+  normalItemCount: number;
+  headerDraft: SpecialOrderHeaderDraft;
+  itemDrafts: Record<string, SpecialOrderItemDraft>;
+  headerDirty: boolean;
+  savingHeader: boolean;
+  savingItemId: string | null;
+  onHeaderDraftChange: (patch: Partial<SpecialOrderHeaderDraft>) => void;
+  onItemDraftChange: (itemId: string, patch: Partial<SpecialOrderItemDraft>) => void;
+  onSaveHeader: () => void | Promise<void>;
+  onSaveItem: (item: SalesOrderDetail["items"][number]) => void | Promise<void>;
+};
+
+function SpecialOrderPanel({
+  data,
+  suppliers,
+  purchaseOrders,
+  specialOrderItems,
+  normalItemCount,
+  headerDraft,
+  itemDrafts,
+  headerDirty,
+  savingHeader,
+  savingItemId,
+  onHeaderDraftChange,
+  onItemDraftChange,
+  onSaveHeader,
+  onSaveItem,
+}: SpecialOrderPanelProps) {
+  const supplierName =
+    data.supplier?.name ??
+    suppliers.find((supplier) => supplier.id === data.supplierId)?.name ??
+    "";
+  const orderEta = formatDisplayDate(data.etaDate);
+  const firstLineStatus = specialOrderItems.find((item) => item.specialOrderStatus)?.specialOrderStatus ?? null;
+  const currentStatus = data.specialOrderStatus ?? firstLineStatus;
+  const depositRequired = Number(data.depositRequired || 0);
+  const totalPaid = Number(data.paidAmount || 0);
+  const depositStillNeeded = Math.max(depositRequired - totalPaid, 0);
+  const hasUnlinkedLine = specialOrderItems.some((item) => !item.linkedPoId);
+  const hasAnyEta = Boolean(data.etaDate || specialOrderItems.some((item) => item.linkedPo?.expectedArrival));
+  const nextAction = (() => {
+    if (!supplierName && !headerDraft.supplierId) return "Select supplier";
+    if (depositRequired > 0 && depositStillNeeded > 0) return "Collect required deposit";
+    if (hasUnlinkedLine) return "Link existing PO";
+    if (!hasAnyEta) return "Add ETA";
+    const normalized = String(currentStatus ?? "").toUpperCase();
+    if (normalized === "ARRIVED") return "Ready for receiving workflow";
+    if (normalized === "IN_TRANSIT") return "Awaiting arrival";
+    if (normalized === "ORDERED") return "Follow up with supplier";
+    if (normalized === "DELIVERED") return "Special Order delivered";
+    return "Review and order with supplier";
+  })();
+
+  const renderLineControls = (item: SalesOrderDetail["items"][number]) => {
+    const title = getSpecialOrderLineTitle(item);
+    const draft = itemDrafts[item.id] ?? toSpecialOrderItemDraft(item);
+    const dirty = isSpecialOrderItemDirty(item, draft);
+    const saving = savingItemId === item.id;
+    return (
+      <form
+        key={`special-controls-${item.id}`}
+        data-testid={`special-order-line-controls-${item.id}`}
+        className="grid grid-cols-1 gap-2 rounded-lg border border-white/10 bg-white/[0.04] p-3 lg:grid-cols-[minmax(0,1.2fr)_150px_150px_130px_auto]"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void onSaveItem(item);
+        }}
+      >
+        <label className="inline-flex min-w-0 items-center gap-2 text-xs text-slate-300">
+          <input
+            type="checkbox"
+            checked={draft.isSpecialOrder}
+            onChange={(event) => onItemDraftChange(item.id, { isSpecialOrder: event.target.checked })}
+            className="h-4 w-4 rounded border-white/20 bg-white/10"
+            aria-label={`Mark ${title} as Special Order`}
+          />
+          <span className="truncate">{title}</span>
+        </label>
+        <label className="space-y-1 text-xs text-slate-400">
+          <span>Status</span>
+          <select
+            value={draft.specialOrderStatus}
+            onChange={(event) => onItemDraftChange(item.id, { specialOrderStatus: event.target.value })}
+            className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
+            aria-label={`${title} Special Order status`}
+          >
+            <option value="">Use order status</option>
+            {SPECIAL_ORDER_STATUS_OPTIONS.map((status) => (
+              <option key={status.value} value={status.value}>
+                {status.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-xs text-slate-400">
+          <span>Linked PO</span>
+          <select
+            value={draft.linkedPoId}
+            onChange={(event) => onItemDraftChange(item.id, { linkedPoId: event.target.value })}
+            className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
+            aria-label={`${title} linked PO`}
+          >
+            <option value="">No PO linked</option>
+            {item.linkedPo && !purchaseOrders.some((po) => po.id === item.linkedPo?.id) ? (
+              <option value={item.linkedPo.id}>{item.linkedPo.poNumber}</option>
+            ) : null}
+            {purchaseOrders.map((po) => (
+              <option key={po.id} value={po.id}>
+                {po.poNumber}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1 text-xs text-slate-400">
+          <span>Follow-up</span>
+          <input
+            type="date"
+            value={draft.specialFollowupDate}
+            onChange={(event) => onItemDraftChange(item.id, { specialFollowupDate: event.target.value })}
+            className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
+            aria-label={`${title} follow-up date`}
+          />
+        </label>
+        <div className="flex items-end justify-end">
+          <button
+            type="submit"
+            disabled={!dirty || saving}
+            className="inline-flex min-h-9 items-center justify-center rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:opacity-50"
+            data-testid={`save-special-order-line-${item.id}`}
+          >
+            {saving ? "Saving..." : "Save Line"}
+          </button>
+        </div>
+      </form>
+    );
+  };
+
+  return (
+    <section
+      className="glass-card p-4"
+      data-testid="special-order-panel"
+      aria-labelledby="special-order-panel-heading"
+    >
+      <div className="glass-card-content space-y-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 id="special-order-panel-heading" className="text-sm font-semibold text-white">
+                Special Order
+              </h2>
+              <span
+                className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${getSpecialOrderStatusClass(currentStatus)}`}
+                data-testid="special-order-status-badge"
+              >
+                {formatSpecialOrderStatus(currentStatus)}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400">
+              {specialOrderItems.length} special-order line{specialOrderItems.length === 1 ? "" : "s"}
+              {normalItemCount > 0 ? ` · ${normalItemCount} normal line${normalItemCount === 1 ? "" : "s"}` : ""}
+            </p>
+          </div>
+          <div className="rounded-lg border border-amber-400/20 bg-amber-500/[0.08] px-3 py-2 text-sm text-amber-100" data-testid="special-order-next-action">
+            <span className="text-[11px] uppercase tracking-wider text-amber-200/70">Next Action</span>
+            <div className="font-semibold">{nextAction}</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3" data-testid="special-order-financial-summary">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Deposit And Balance
+            </div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div>
+                <div className="text-[11px] text-slate-500">Required Deposit</div>
+                <div className="font-semibold text-white">{formatMoney(data.depositRequired)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-slate-500">Total Paid</div>
+                <div className="font-semibold text-white">{formatMoney(data.paidAmount)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-slate-500">Remaining Order Balance</div>
+                <div className="font-semibold text-white">{formatMoney(data.balanceDue)}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-white/10 bg-white/[0.04] p-3" data-testid="special-order-order-metadata">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Current Metadata
+            </div>
+            <div className="grid grid-cols-[88px_minmax(0,1fr)] gap-x-3 gap-y-1.5 text-sm">
+              {supplierName ? (
+                <>
+                  <span className="text-slate-500">Supplier</span>
+                  <span className="truncate text-white/90">{supplierName}</span>
+                </>
+              ) : null}
+              {orderEta ? (
+                <>
+                  <span className="text-slate-500">ETA</span>
+                  <span className="text-white/90">{orderEta}</span>
+                </>
+              ) : null}
+              {data.supplierNotes ? (
+                <>
+                  <span className="text-slate-500">Supplier Note</span>
+                  <span className="break-words text-white/90">{data.supplierNotes}</span>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <form
+          className="grid grid-cols-1 gap-3 rounded-lg border border-white/10 bg-white/[0.035] p-3 xl:grid-cols-[minmax(180px,1fr)_150px_160px_minmax(220px,1.2fr)_auto]"
+          data-testid="special-order-metadata-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void onSaveHeader();
+          }}
+        >
+          <label className="space-y-1 text-xs text-slate-400">
+            <span>Supplier</span>
+            <select
+              value={headerDraft.supplierId}
+              onChange={(event) => onHeaderDraftChange({ supplierId: event.target.value })}
+              className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
+              aria-label="Special Order supplier"
+            >
+              <option value="">Select supplier</option>
+              {suppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1 text-xs text-slate-400">
+            <span>ETA</span>
+            <input
+              type="date"
+              value={headerDraft.etaDate}
+              onChange={(event) => onHeaderDraftChange({ etaDate: event.target.value })}
+              className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
+              aria-label="Special Order ETA"
+            />
+          </label>
+          <label className="space-y-1 text-xs text-slate-400">
+            <span>Status</span>
+            <select
+              value={headerDraft.specialOrderStatus}
+              onChange={(event) => onHeaderDraftChange({ specialOrderStatus: event.target.value })}
+              className="h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
+              aria-label="Special Order status"
+            >
+              <option value="">Select status</option>
+              {SPECIAL_ORDER_STATUS_OPTIONS.map((status) => (
+                <option key={status.value} value={status.value}>
+                  {status.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1 text-xs text-slate-400">
+            <span>Supplier Note</span>
+            <textarea
+              value={headerDraft.supplierNotes}
+              onChange={(event) => onHeaderDraftChange({ supplierNotes: event.target.value })}
+              className="min-h-9 w-full rounded-lg border border-white/10 bg-white/5 px-2 py-2 text-sm text-white outline-none focus:ring-1 focus:ring-white/20"
+              rows={1}
+              aria-label="Special Order supplier note"
+            />
+          </label>
+          <div className="flex items-end justify-end">
+            <button
+              type="submit"
+              disabled={!headerDirty || savingHeader}
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:bg-amber-500/20 disabled:opacity-50"
+              data-testid="save-special-order-metadata"
+            >
+              {savingHeader ? "Saving..." : "Save Special Order"}
+            </button>
+          </div>
+        </form>
+
+        <div className="space-y-3" data-testid="special-order-lines">
+          {specialOrderItems.length > 0 ? (
+            specialOrderItems.map((item) => {
+              const title = getSpecialOrderLineTitle(item);
+              const sku = item.variant?.sku ?? item.skuSnapshot ?? item.productSku ?? "-";
+              const linkedPo = item.linkedPo;
+              const lineEta = formatDisplayDate(linkedPo?.expectedArrival ?? data.etaDate);
+              const followUp = formatDisplayDate(item.specialFollowupDate);
+              const status = item.specialOrderStatus ?? data.specialOrderStatus;
+              return (
+                <article
+                  key={item.id}
+                  className="rounded-lg border border-amber-400/20 bg-amber-500/[0.055] p-3"
+                  data-testid="special-order-line-card"
+                >
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+                          Special Order Line
+                        </span>
+                        <span className={`rounded-full border px-2 py-0.5 text-[11px] ${getSpecialOrderStatusClass(status)}`}>
+                          {formatSpecialOrderStatus(status)}
+                        </span>
+                      </div>
+                      <h3 className="mt-2 truncate text-sm font-semibold text-white">{title}</h3>
+                      <p className="mt-0.5 text-xs text-slate-400">SKU: {sku}</p>
+                    </div>
+                    <div className="text-left text-sm md:text-right">
+                      <div className="text-[11px] uppercase tracking-wider text-slate-500">Quantity</div>
+                      <div className="font-semibold text-white">
+                        {formatOperationalQuantity(Number(item.quantity || 0))} {formatUnitLabel(item.uomSnapshot)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2 xl:grid-cols-4">
+                    {supplierName ? (
+                      <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5">
+                        <div className="text-[11px] text-slate-500">Supplier</div>
+                        <div className="truncate text-white/90">{supplierName}</div>
+                      </div>
+                    ) : null}
+                    {lineEta ? (
+                      <div className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5">
+                        <div className="text-[11px] text-slate-500">ETA</div>
+                        <div className="text-white/90">{lineEta}</div>
+                      </div>
+                    ) : null}
+                    {linkedPo ? (
+                      <div className="min-w-0 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5">
+                        <div className="text-[11px] text-slate-500">Linked PO</div>
+                        <Link
+                          href={`/purchasing/orders/${linkedPo.id}`}
+                          className="truncate text-amber-100 underline-offset-2 hover:underline"
+                        >
+                          {linkedPo.poNumber}
+                        </Link>
+                        <div className="text-[11px] text-slate-500">{formatSpecialOrderStatus(linkedPo.status)}</div>
+                      </div>
+                    ) : null}
+                    {followUp ? (
+                      <div className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5">
+                        <div className="text-[11px] text-slate-500">Follow-up</div>
+                        <div className="text-white/90">{followUp}</div>
+                      </div>
+                    ) : null}
+                  </div>
+                  {item.notes ? (
+                    <p className="mt-2 rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-xs text-slate-300">
+                      {item.notes}
+                    </p>
+                  ) : null}
+                  <div className="mt-3">{renderLineControls(item)}</div>
+                </article>
+              );
+            })
+          ) : (
+            <p className="rounded-lg border border-amber-400/20 bg-amber-500/[0.055] px-3 py-2 text-sm text-amber-100" data-testid="special-order-no-marked-lines">
+              Order-level Special Order metadata is present. No line is marked Special Order yet.
+            </p>
+          )}
+
+          {normalItemCount > 0 ? (
+            <details className="rounded-lg border border-white/10 bg-white/[0.03] p-3" data-testid="special-order-line-classification">
+              <summary className="cursor-pointer text-sm font-medium text-white">
+                Mark additional normal lines
+              </summary>
+              <div className="mt-3 space-y-2">
+                {data.items.filter((item) => !item.isSpecialOrder).map((item) => renderLineControls(item))}
+              </div>
+            </details>
+          ) : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function SalesOrderDetailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -496,11 +1226,12 @@ export default function SalesOrderDetailPage() {
   const [data, setData] = useState<SalesOrderDetail | null>(null);
   const [products, setProducts] = useState<SalesProduct[]>([]);
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([]);
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrderOption[]>([]);
   const [customers, setCustomers] = useState<SalesCustomerOption[]>([]);
   const [salespeople, setSalespeople] = useState<SalespersonOption[]>([]);
   const [tickets, setTickets] = useState<SalesOrderTicket[]>([]);
   const [invoiceId, setInvoiceId] = useState<string | null>(null);
-  const [activeBottomTab, setActiveBottomTab] = useState<"PAYMENTS" | "FULFILLMENT" | "TICKETS" | "ACTIVITY">("PAYMENTS");
+  const [activeBottomTab, setActiveBottomTab] = useState<"PAYMENTS" | "FULFILLMENT" | "TICKETS">("PAYMENTS");
   const [expandedSpecsByItem, setExpandedSpecsByItem] = useState<Record<string, boolean>>({});
   const [ticketStatusFilter, setTicketStatusFilter] = useState<
     "ALL" | "open" | "in_progress" | "done" | "voided"
@@ -514,6 +1245,8 @@ export default function SalesOrderDetailPage() {
   const [savingHeader, setSavingHeader] = useState(false);
   const [savingDeposit, setSavingDeposit] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [savingSpecialHeader, setSavingSpecialHeader] = useState(false);
+  const [savingSpecialItemId, setSavingSpecialItemId] = useState<string | null>(null);
   const [openPayment, setOpenPayment] = useState(false);
   const [openFulfillment, setOpenFulfillment] = useState(false);
   const [openStartFulfillmentDialog, setOpenStartFulfillmentDialog] = useState(false);
@@ -559,6 +1292,13 @@ export default function SalesOrderDetailPage() {
   const [drawerInitialDraft, setDrawerInitialDraft] = useState<ItemRowDraft | null>(null);
   const [openDetailsDrawer, setOpenDetailsDrawer] = useState(false);
   const [rowDraftsByItemId, setRowDraftsByItemId] = useState<Record<string, ItemRowDraft>>({});
+  const [specialOrderHeaderDraft, setSpecialOrderHeaderDraft] = useState<SpecialOrderHeaderDraft>({
+    supplierId: "",
+    etaDate: "",
+    specialOrderStatus: "",
+    supplierNotes: "",
+  });
+  const [specialOrderItemDrafts, setSpecialOrderItemDrafts] = useState<Record<string, SpecialOrderItemDraft>>({});
 
   const loadCustomers = async (q = "") => {
     // When query is empty, serve from cache (already loaded during initial load())
@@ -585,12 +1325,13 @@ export default function SalesOrderDetailPage() {
   const load = async () => {
     try {
       // Fetch order-specific data fresh every time (these change); use cache for static reference data
-      const [detailRes, ticketRes, invoiceRes, returnRes, products, suppliers, customers, salespeople] =
+      const [detailRes, ticketRes, invoiceRes, returnRes, purchaseOrderRes, products, suppliers, customers, salespeople] =
         await Promise.all([
           fetch(`/api/sales-orders/${id}`, { cache: "no-store", headers: { "x-user-role": role } }),
           fetch(`/api/sales-orders/${id}/tickets`, { cache: "no-store", headers: { "x-user-role": role } }),
           fetch(`/api/invoices?salesOrderId=${id}`, { cache: "no-store", headers: { "x-user-role": role } }),
           fetch(`/api/after-sales/returns?salesOrderId=${id}`, { cache: "no-store", headers: { "x-user-role": role } }),
+          fetch("/api/purchase-orders", { cache: "no-store", headers: { "x-user-role": role } }),
           // Static reference data — served from module-level cache after first fetch
           _fetchRefData<SalesProduct>("products", "/api/sales-orders/products", role),
           _fetchRefData<SupplierOption>("suppliers", "/api/suppliers", role),
@@ -602,15 +1343,18 @@ export default function SalesOrderDetailPage() {
       const ticketPayload = await ticketRes.json();
       const invoicePayload = await invoiceRes.json();
       const returnPayload = await returnRes.json();
+      const purchaseOrderPayload = await purchaseOrderRes.json();
 
       if (!detailRes.ok) throw new Error(detailPayload.error ?? "Failed to fetch order");
       if (!ticketRes.ok) throw new Error(ticketPayload.error ?? "Failed to fetch tickets");
       if (!invoiceRes.ok) throw new Error(invoicePayload.error ?? "Failed to fetch invoice");
       if (!returnRes.ok) throw new Error(returnPayload.error ?? "Failed to fetch returns");
+      if (!purchaseOrderRes.ok) throw new Error(purchaseOrderPayload.error ?? "Failed to fetch purchase orders");
 
       setData(detailPayload.data);
       setProducts(products);
       setSuppliers(suppliers);
+      setPurchaseOrders(purchaseOrderPayload.data ?? []);
       setCustomers(customers);
       setSalespeople(salespeople);
       setTickets(ticketPayload.data ?? []);
@@ -763,14 +1507,6 @@ export default function SalesOrderDetailPage() {
     () => (data ? Number.isFinite(Number(data.total)) : false),
     [data],
   );
-  const liveTotal = useMemo(() => {
-    if (!data) return 0;
-    return roundTo2(Number(data.subtotal || 0) - Number(data.discount || 0) + Number(data.tax || 0));
-  }, [data]);
-  const liveBalanceDue = useMemo(() => {
-    if (!data) return 0;
-    return roundTo2(liveTotal - Number(data.paidAmount || 0));
-  }, [data, liveTotal]);
   const filteredSuppliers = useMemo(() => {
     const q = supplierQuery.trim().toLowerCase();
     if (!q) return suppliers;
@@ -911,6 +1647,30 @@ export default function SalesOrderDetailPage() {
   const showGlobalError = useMemo(
     () => Boolean(error) && !String(error).toLowerCase().includes("variant is required"),
     [error],
+  );
+  useEffect(() => {
+    if (!data) {
+      setSpecialOrderHeaderDraft({ supplierId: "", etaDate: "", specialOrderStatus: "", supplierNotes: "" });
+      setSpecialOrderItemDrafts({});
+      return;
+    }
+    setSpecialOrderHeaderDraft(toSpecialOrderHeaderDraft(data));
+    setSpecialOrderItemDrafts(
+      data.items.reduce<Record<string, SpecialOrderItemDraft>>((acc, item) => {
+        acc[item.id] = toSpecialOrderItemDraft(item);
+        return acc;
+      }, {}),
+    );
+  }, [data]);
+  const specialOrderItems = useMemo(
+    () => data?.items.filter((item) => item.isSpecialOrder) ?? [],
+    [data?.items],
+  );
+  const hasSpecialOrderContext = Boolean(data?.specialOrder || specialOrderItems.length > 0);
+  const normalItemCount = data ? data.items.length - specialOrderItems.length : 0;
+  const specialOrderHeaderDirty = useMemo(
+    () => (data ? isSpecialOrderHeaderDirty(data, specialOrderHeaderDraft) : false),
+    [data, specialOrderHeaderDraft],
   );
   const hasUnsavedItemDrafts = useMemo(() => {
     if (mode !== "edit" || !data) return false;
@@ -1238,6 +1998,80 @@ export default function SalesOrderDetailPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update item");
       return false;
+    }
+  };
+
+  const updateSpecialOrderHeaderDraft = (patch: Partial<SpecialOrderHeaderDraft>) => {
+    setSpecialOrderHeaderDraft((prev) => ({ ...prev, ...patch }));
+  };
+
+  const updateSpecialOrderItemDraft = (itemId: string, patch: Partial<SpecialOrderItemDraft>) => {
+    setSpecialOrderItemDrafts((prev) => ({
+      ...prev,
+      [itemId]: {
+        isSpecialOrder: prev[itemId]?.isSpecialOrder ?? false,
+        specialOrderStatus: prev[itemId]?.specialOrderStatus ?? "",
+        linkedPoId: prev[itemId]?.linkedPoId ?? "",
+        specialFollowupDate: prev[itemId]?.specialFollowupDate ?? "",
+        ...patch,
+      },
+    }));
+  };
+
+  const saveSpecialOrderHeader = async () => {
+    if (!data || savingSpecialHeader) return;
+    setSavingSpecialHeader(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const res = await fetch(`/api/sales-orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-user-role": role },
+        body: JSON.stringify({
+          supplierId: specialOrderHeaderDraft.supplierId || null,
+          etaDate: specialOrderHeaderDraft.etaDate || null,
+          specialOrderStatus: specialOrderHeaderDraft.specialOrderStatus || null,
+          supplierNotes: specialOrderHeaderDraft.supplierNotes.trim() || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to save Special Order details");
+      setData(payload.data);
+      setSuccessMessage("Special Order details saved.");
+    } catch (err) {
+      setSpecialOrderHeaderDraft(toSpecialOrderHeaderDraft(data));
+      setError(err instanceof Error ? err.message : "Special Order details were not saved.");
+    } finally {
+      setSavingSpecialHeader(false);
+    }
+  };
+
+  const saveSpecialOrderItem = async (item: SalesOrderDetail["items"][number]) => {
+    if (savingSpecialItemId) return;
+    const draft = specialOrderItemDrafts[item.id] ?? toSpecialOrderItemDraft(item);
+    setSavingSpecialItemId(item.id);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const res = await fetch(`/api/sales-orders/${id}/items/${item.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-user-role": role },
+        body: JSON.stringify({
+          isSpecialOrder: draft.isSpecialOrder,
+          specialOrderStatus: draft.specialOrderStatus || null,
+          linkedPoId: draft.linkedPoId || null,
+          specialFollowupDate: draft.specialFollowupDate || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to save Special Order line");
+      await load();
+      setSuccessMessage("Special Order line saved.");
+    } catch (err) {
+      setSpecialOrderItemDrafts((prev) => ({ ...prev, [item.id]: toSpecialOrderItemDraft(item) }));
+      setError(err instanceof Error ? err.message : "Special Order line was not saved.");
+    } finally {
+      setSavingSpecialItemId(null);
     }
   };
 
@@ -1658,6 +2492,182 @@ export default function SalesOrderDetailPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [activeDrawerItemId, mode, isDrawerDirty, activeDrawerItem, activeDrawerDraft, rowDraftsByItemId]);
 
+  const operationalFinancialMetrics = useMemo<OperationalMetric[]>(() => {
+    if (!data) return [];
+    return [
+      { label: "Order Total", value: formatMoney(data.total) },
+      { label: "Paid", value: formatMoney(data.paidAmount) },
+      { label: "Balance", value: formatMoney(data.balanceDue) },
+    ];
+  }, [data]);
+
+  const operationalWarehouseSummary = useMemo(() => {
+    if (!data) {
+      return {
+        hint: "qty",
+        metrics: [] as OperationalMetric[],
+      };
+    }
+
+    const units = new Set<string>();
+    let ordered = 0;
+    let fulfilled = 0;
+    let remaining = 0;
+
+    for (const item of data.items) {
+      const quantity = Math.max(0, Number(item.quantity ?? 0));
+      const fulfilledQty = Math.max(0, Number(item.fulfillQty ?? 0));
+      const unit = formatUnitLabel(item.uomSnapshot ?? item.product?.unit ?? null);
+      if (unit !== "-") units.add(unit);
+      ordered += Number.isFinite(quantity) ? quantity : 0;
+      fulfilled += Number.isFinite(fulfilledQty) ? fulfilledQty : 0;
+      remaining += Math.max(0, (Number.isFinite(quantity) ? quantity : 0) - (Number.isFinite(fulfilledQty) ? fulfilledQty : 0));
+    }
+
+    const status = String(data.status ?? "").toUpperCase();
+    const isReserving = ["CONFIRMED", "READY", "PARTIALLY_FULFILLED"].includes(status);
+    const unitHint = units.size === 1 ? Array.from(units)[0] : units.size > 1 ? "mixed units" : "qty";
+    const reserved = isReserving ? remaining : 0;
+
+    return {
+      hint: isReserving ? unitHint : `${unitHint} · not reserving`,
+      metrics: [
+        { label: "Ordered", value: formatOperationalQuantity(ordered) },
+        { label: "Reserved", value: formatOperationalQuantity(reserved) },
+        { label: "Fulfilled", value: formatOperationalQuantity(fulfilled) },
+        { label: "Remaining", value: formatOperationalQuantity(remaining) },
+      ],
+    };
+  }, [data]);
+
+  const operationalSpecialOrderSummary = useMemo(() => {
+    if (!data || !hasSpecialOrderContext) return null;
+    const specialLineCount = specialOrderItems.length;
+    const supplierName =
+      data.supplier?.name ??
+      suppliers.find((supplier) => supplier.id === data.supplierId)?.name ??
+      (specialLineCount > 0
+        ? `${specialLineCount} special-order line${specialLineCount === 1 ? "" : "s"}`
+        : "Supplier not selected");
+    const etaValue = specialOrderItems.find((item) => item.linkedPo?.expectedArrival)?.linkedPo?.expectedArrival ?? data.etaDate;
+    const eta = formatDisplayDate(etaValue) || null;
+    return {
+      supplier: supplierName,
+      eta,
+      status: data.specialOrderStatus ?? specialOrderItems.find((item) => item.specialOrderStatus)?.specialOrderStatus ?? null,
+    };
+  }, [data, hasSpecialOrderContext, specialOrderItems, suppliers]);
+
+  const openDetailPdf = () => {
+    if (!data) return;
+    setPdfPreview({
+      title: `${data.docType === "QUOTE" ? "Quote" : "Sales Order"} ${data.orderNumber}`,
+      src: `/api/pdf/sales-order/${data.id}`,
+    });
+  };
+
+  const editAction: OperationalAction | null = data
+    ? {
+        key: "edit",
+        label: data.docType === "QUOTE" ? "Edit Quote" : "Edit Order",
+        onClick: () => router.push(`/sales-orders/edit/${data.id}`),
+      }
+    : null;
+  const invoiceAction: OperationalAction | null =
+    data?.docType === "SALES_ORDER"
+      ? {
+          key: "invoice",
+          label: invoiceId ? "View Invoice" : "Create Invoice",
+          onClick: createInvoiceFromSalesOrder,
+          disabled: !isInvoiceCreateEligible,
+          title: !isInvoiceCreateEligible ? "Confirm the sales order to create an invoice." : undefined,
+        }
+      : null;
+  const fulfillmentAction: OperationalAction | null =
+    data?.docType === "SALES_ORDER"
+      ? {
+          key: "fulfillment",
+          label: activeFulfillment ? "View Fulfillment" : "Start Fulfillment",
+          onClick: () => {
+            if (activeFulfillment?.id) {
+              router.push(`/fulfillment/${activeFulfillment.id}`);
+              return;
+            }
+            setOpenStartFulfillmentDialog(true);
+          },
+          disabled: !activeFulfillment && !canStartFulfillment,
+          title: !activeFulfillment && !canStartFulfillment ? "Confirm the sales order before starting fulfillment." : undefined,
+        }
+      : null;
+  const returnAction: OperationalAction | null =
+    data?.docType === "SALES_ORDER"
+      ? {
+          key: "return",
+          label: creatingReturn ? "Creating..." : "Create Return",
+          onClick: createReturnFromSalesOrder,
+          disabled: creatingReturn,
+        }
+      : null;
+  const printAction: OperationalAction | null = data
+    ? { key: "print", label: "Print", href: `/orders/${data.id}/print` }
+    : null;
+  const pdfAction: OperationalAction | null = data
+    ? { key: "pdf", label: "PDF", onClick: openDetailPdf }
+    : null;
+  const backAction: OperationalAction | null = data
+    ? { key: "back", label: "Back to Orders", href: "/orders" }
+    : null;
+  const operationalStatus = String(data?.status ?? "").toUpperCase();
+  const viewOnlyInvoiceAction = invoiceId ? invoiceAction : null;
+  const viewOnlyFulfillmentAction = activeFulfillment ? fulfillmentAction : null;
+  const primaryOperationalAction: OperationalAction | null = data
+    ? (() => {
+        if (data.docType === "QUOTE" && operationalStatus === "QUOTED") {
+          return { key: "convert", label: "Convert to Sales Order", onClick: convertQuote };
+        }
+        if (operationalStatus === "DRAFT") return editAction;
+        if (operationalStatus === "CANCELLED") return printAction;
+        if (
+          ["READY", "PARTIALLY_FULFILLED"].includes(operationalStatus) &&
+          viewOnlyFulfillmentAction
+        ) {
+          return viewOnlyFulfillmentAction;
+        }
+        if (operationalStatus === "FULFILLED") {
+          return viewOnlyInvoiceAction ?? printAction;
+        }
+        if (data.docType === "SALES_ORDER" && invoiceAction && !invoiceAction.disabled) {
+          return invoiceAction;
+        }
+        if (operationalStatus === "CONFIRMED" && fulfillmentAction && !fulfillmentAction.disabled) {
+          return fulfillmentAction;
+        }
+        return editAction;
+      })()
+    : null;
+  const secondaryOperationalActions = (() => {
+    if (!data) return [] as OperationalAction[];
+    if (data.docType === "QUOTE") {
+      return [editAction, printAction, pdfAction, backAction];
+    }
+    if (operationalStatus === "DRAFT") {
+      return [editAction, printAction, pdfAction, backAction];
+    }
+    if (operationalStatus === "CANCELLED") {
+      return [printAction, pdfAction, backAction];
+    }
+    if (operationalStatus === "FULFILLED") {
+      return [viewOnlyInvoiceAction, viewOnlyFulfillmentAction, printAction, pdfAction, backAction];
+    }
+    if (["READY", "PARTIALLY_FULFILLED"].includes(operationalStatus)) {
+      return [editAction, invoiceAction, viewOnlyFulfillmentAction, returnAction, printAction, pdfAction, backAction];
+    }
+    return [editAction, invoiceAction, fulfillmentAction, returnAction, printAction, pdfAction, backAction];
+  })().filter(
+    (action): action is OperationalAction =>
+      action !== null && action.key !== primaryOperationalAction?.key,
+  );
+
   return (
     <section className="so-glass-page mx-auto max-w-[1400px] space-y-6 px-4 py-6 text-white">
       {successMessage ? (
@@ -1678,145 +2688,171 @@ export default function SalesOrderDetailPage() {
       ) : (
         <>
           {/* 1) Header Summary */}
-          <header className="glass-card px-6 py-4">
-            <div className="glass-card-content flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-xl font-semibold tracking-tight text-white">{data.orderNumber}</h1>
-                <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${mode === "edit" ? "border-amber-500/40 bg-amber-500/10 text-amber-200" : "border-white/20 bg-white/5 text-slate-300"}`}>
-                  {mode === "edit" ? "EDIT" : "VIEW"}
-                </span>
-                <span className="rounded-full border border-white/20 bg-white/5 px-2.5 py-0.5 text-xs font-medium text-slate-300">
-                  {getSalesOrderStatusLabel(data.status)}
-                </span>
-                <span className={`rounded-full border px-2.5 py-0.5 text-xs font-medium ${paymentStatus === "Paid" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-200" : paymentStatus === "Partial" ? "border-sky-500/40 bg-sky-500/10 text-sky-200" : "border-white/20 bg-white/5 text-slate-300"}`}>
-                  {paymentStatus}
-                </span>
-                <span className="text-slate-500">·</span>
-                <span className="text-sm text-slate-300">{data.customer.name || "-"}</span>
-                <span className="text-slate-500">·</span>
-                <span className="text-sm text-slate-400">{data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"}</span>
-                <span className="text-slate-500">·</span>
-                <span className="text-sm text-slate-500">{new Date(data.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</span>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => router.push(`/sales-orders/edit/${data.id}`)} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10">
-                  Edit Order
-                </button>
-                {data.docType === "SALES_ORDER" ? (
-                  <button type="button" onClick={createInvoiceFromSalesOrder} disabled={!isInvoiceCreateEligible} title={!isInvoiceCreateEligible ? "Confirm the sales order to create an invoice." : undefined} className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:opacity-50">
-                    {invoiceId ? "View Invoice" : "Create Invoice"}
-                  </button>
-                ) : null}
-                {data.docType === "SALES_ORDER" ? (
-                  <button type="button" onClick={() => { if (activeFulfillment?.id) { router.push(`/fulfillment/${activeFulfillment.id}`); return; } setOpenStartFulfillmentDialog(true); }} disabled={!activeFulfillment && !canStartFulfillment} title={!activeFulfillment && !canStartFulfillment ? "Confirm the sales order before starting fulfillment." : undefined} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10 disabled:opacity-50">
-                    {activeFulfillment ? "View Fulfillment" : "Start Fulfillment"}
-                  </button>
-                ) : null}
-                {data.docType === "SALES_ORDER" ? (
-                  <button type="button" onClick={createReturnFromSalesOrder} disabled={creatingReturn} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10 disabled:opacity-50">
-                    {creatingReturn ? "Creating..." : "Create Return"}
-                  </button>
-                ) : null}
-                <Link href={`/orders/${data.id}/print`} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10">
-                  Print
-                </Link>
-                <button type="button" onClick={() => setPdfPreview({ title: `${data.docType === "QUOTE" ? "Quote" : "Sales Order"} ${data.orderNumber}`, src: `/api/pdf/sales-order/${data.id}` })} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10">
-                  PDF
-                </button>
-              </div>
-            </div>
-          </header>
+          <OperationalHeader
+            data={data}
+            mode={mode}
+            paymentStatus={paymentStatus}
+            financialMetrics={operationalFinancialMetrics}
+            warehouseMetrics={operationalWarehouseSummary.metrics}
+            warehouseHint={operationalWarehouseSummary.hint}
+            specialOrderSummary={operationalSpecialOrderSummary}
+            primaryAction={primaryOperationalAction}
+            secondaryActions={secondaryOperationalActions}
+          />
 
-          {/* 2) Main 2-column workspace: 70% left, 30% right */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,3fr)]">
-            {/* Left: Order Info, Fulfillment Summary, then Items table below */}
-            <div className="space-y-6">
-              {/* A. Order Info */}
-              <div className="glass-card p-4">
-                <div className="glass-card-content">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Order Info</h2>
-                  <div className="mt-4 grid grid-cols-[100px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm">
-                    <span className="text-slate-500">Customer</span>
-                    <span className="text-white/90">{data.customer.name || "-"}{data.customer.phone ? ` · ${data.customer.phone}` : ""}</span>
-                    <span className="text-slate-500">Project</span>
-                    <span className="text-white/90">{data.projectName || "-"}</span>
-                    <span className="text-slate-500">Salesperson</span>
-                    <span className="text-white/90">{data.salespersonName || "-"}</span>
-                    <span className="text-slate-500">Tax Rate</span>
-                    <span className="text-white/90">{data.customer.taxExempt ? "Tax Exempt (0%)" : `${Number(data.taxRate ?? 0).toFixed(2)}%`}</span>
-                    <span className="text-slate-500">Warehouse</span>
-                    <span className="text-white/90">—</span>
-                    <span className="text-slate-500">Order Date</span>
-                    <span className="text-white/90">{new Date(data.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</span>
-                    <span className="text-slate-500">Pickup / Delivery</span>
-                    <span className="text-white/90">{data.fulfillmentMethod === "PICKUP" ? (String(data.pickupNotes ?? "").trim() || "Pickup") : [data.deliveryAddress1, data.deliveryAddress2, data.deliveryCity, data.deliveryState, data.deliveryZip].filter(Boolean).join(", ") || "Delivery"}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* B. Fulfillment Summary */}
-              <div className="glass-card p-4">
-                <div className="glass-card-content">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fulfillment Summary</h2>
-                  <div className="mt-4 grid grid-cols-[120px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm">
-                    <span className="text-slate-500">Fulfillment Type</span>
-                    <span className="text-white/90">{data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"}</span>
-                    <span className="text-slate-500">Fulfillment Status</span>
-                    <span className="text-white/90">{activeFulfillmentDetail ? (<span className="inline-flex items-center gap-2"><span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-xs text-slate-300">{activeFulfillmentDetail.status}</span>{activeFulfillmentProgress.partial ? <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200">Partial</span> : null}</span>) : activeFulfillment ? activeFulfillment.status : "-"}</span>
-                    <span className="text-slate-500">Progress</span>
-                    <span className="text-white/90">{activeFulfillmentDetail ? (<span className="inline-flex items-center gap-2"><span>{activeFulfillmentProgress.completed}/{activeFulfillmentProgress.total} items · {activeFulfillmentProgress.percent}%</span><span className="h-1.5 w-24 overflow-hidden rounded-full bg-white/10"><span className="block h-1.5 rounded-full bg-white/30" style={{ width: `${Math.min(Math.max(activeFulfillmentProgress.percent, 0), 100)}%` }} /></span></span>) : "-"}</span>
-                    <span className="text-slate-500">Pickup / Delivery</span>
-                    <span className="text-white/90">{data.fulfillmentMethod === "PICKUP" ? (String(data.pickupNotes ?? "").trim() || "Pickup") : [data.deliveryAddress1, data.deliveryCity, data.deliveryState, data.deliveryZip].filter(Boolean).join(", ") || "-"}</span>
-                    <span className="text-slate-500">Documents</span>
-                    <span className="flex flex-wrap gap-2">{activeFulfillment ? (<><button type="button" onClick={() => setPdfPreview({ title: `Pick List ${activeFulfillment.id.slice(0, 8)}`, src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=pick` })} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/90 transition hover:bg-white/10">Pick List</button><button type="button" onClick={() => setPdfPreview({ title: `${data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"} Slip ${activeFulfillment.id.slice(0, 8)}`, src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=slip` })} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/90 transition hover:bg-white/10">{data.fulfillmentMethod === "DELIVERY" ? "Delivery Slip" : "Pickup Slip"}</button></>) : "-"}</span>
-                  </div>
+          {/* 2) Supporting details: no duplicate header summaries or action rail */}
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+            <div className="glass-card p-4" data-testid="order-detail-unique-info">
+              <div className="glass-card-content">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Order Details</h2>
+                <div className="mt-4 grid grid-cols-[110px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm">
+                  <span className="text-slate-500">Project</span>
+                  <span className="break-words text-white/90">{data.projectName || "-"}</span>
+                  <span className="text-slate-500">Salesperson</span>
+                  <span className="break-words text-white/90">{data.salespersonName || "-"}</span>
+                  <span className="text-slate-500">Tax Rate</span>
+                  <span className="break-words text-white/90">
+                    {data.customer.taxExempt ? "Tax Exempt (0%)" : `${Number(data.taxRate ?? 0).toFixed(2)}%`}
+                  </span>
+                  {data.fulfillmentMethod === "DELIVERY" ? (
+                    <>
+                      <span className="text-slate-500">Delivery Address</span>
+                      <span className="break-words text-white/90">
+                        {[data.deliveryAddress1, data.deliveryAddress2, data.deliveryCity, data.deliveryState, data.deliveryZip]
+                          .filter(Boolean)
+                          .join(", ") || "-"}
+                      </span>
+                      <span className="text-slate-500">Delivery Contact</span>
+                      <span className="break-words text-white/90">
+                        {[data.deliveryName, data.deliveryPhone].filter(Boolean).join(" · ") || "-"}
+                      </span>
+                      <span className="text-slate-500">Delivery Notes</span>
+                      <span className="break-words text-white/90">{data.deliveryNotes || "-"}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-slate-500">Pickup Notes</span>
+                      <span className="break-words text-white/90">{String(data.pickupNotes ?? "").trim() || "-"}</span>
+                    </>
+                  )}
+                  <span className="text-slate-500">Requested For</span>
+                  <span className="break-words text-white/90">
+                    {data.requestedDeliveryAt
+                      ? new Date(data.requestedDeliveryAt).toLocaleDateString("en-US", { timeZone: "UTC" })
+                      : "-"}
+                  </span>
+                  <span className="text-slate-500">Order Notes</span>
+                  <span className="break-words text-white/90">{data.notes || "-"}</span>
                 </div>
               </div>
             </div>
 
-            {/* Right: Summary rail */}
-            <div className="space-y-6">
-              {/* A. Financial Summary */}
-              <div className="glass-card p-5">
-                <div className="glass-card-content">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Financial Summary</h2>
-                  <div className="mt-4 space-y-2 text-sm">
-                    <div className="flex justify-between"><span className="text-slate-500">Total</span><span className="font-semibold text-white">${Number(liveTotal).toFixed(2)}</span></div>
-                    <div className="flex justify-between"><span className="text-slate-500">Paid</span><span className="text-white/90">${Number(data.paidAmount).toFixed(2)}</span></div>
-                    <div className="flex justify-between border-t border-white/10 pt-2"><span className="text-slate-400">Balance</span><span className="font-semibold text-white">${Number(liveBalanceDue).toFixed(2)}</span></div>
-                  </div>
-                </div>
-              </div>
-              {/* B. Quick Actions */}
-              <div className="glass-card p-5">
-                <div className="glass-card-content">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Quick Actions</h2>
-                  <div className="mt-3 flex flex-col gap-2">
-                    <Link href="/orders" className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-left text-xs font-medium text-white/90 transition hover:bg-white/10">
-                      Back to Orders
-                    </Link>
-                    <button type="button" onClick={() => router.push(`/sales-orders/edit/${data.id}`)} className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-left text-xs font-medium text-white/90 transition hover:bg-white/10">Edit Order</button>
-                    {data.docType === "SALES_ORDER" ? <button type="button" onClick={createInvoiceFromSalesOrder} disabled={!isInvoiceCreateEligible} className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-left text-xs font-medium text-white/90 transition hover:bg-white/10 disabled:opacity-50">{invoiceId ? "View Invoice" : "Create Invoice"}</button> : null}
-                    {data.docType === "SALES_ORDER" ? <button type="button" onClick={() => { if (activeFulfillment?.id) router.push(`/fulfillment/${activeFulfillment.id}`); else setOpenStartFulfillmentDialog(true); }} disabled={!activeFulfillment && !canStartFulfillment} className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-left text-xs font-medium text-white/90 transition hover:bg-white/10 disabled:opacity-50">{activeFulfillment ? "View Fulfillment" : "Start Fulfillment"}</button> : null}
-                    {data.docType === "SALES_ORDER" ? <button type="button" onClick={createReturnFromSalesOrder} disabled={creatingReturn} className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-left text-xs font-medium text-white/90 transition hover:bg-white/10 disabled:opacity-50">Create Return</button> : null}
-                    <Link href={`/orders/${data.id}/print`} className="w-full rounded-lg border border-white/10 bg-white/5 py-2 text-center text-xs font-medium text-white/90 transition hover:bg-white/10">Print PDF</Link>
-                  </div>
-                </div>
-              </div>
-              {/* C. Fulfillment Snapshot */}
-              <div className="glass-card p-5">
-                <div className="glass-card-content">
-                  <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fulfillment Snapshot</h2>
-                  <div className="mt-3 space-y-2 text-xs text-slate-400">
-                    <p><span className="text-slate-500">Type:</span> {data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"}</p>
-                    <p><span className="text-slate-500">Status:</span> {activeFulfillment ? activeFulfillment.status : "—"}</p>
-                    {activeFulfillmentDetail ? <p><span className="text-slate-500">Progress:</span> {activeFulfillmentProgress.completed}/{activeFulfillmentProgress.total} · {activeFulfillmentProgress.percent}%</p> : null}
-                    {activeFulfillment ? <div className="pt-1 flex gap-2"><button type="button" onClick={() => setPdfPreview({ title: "Pick List", src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=pick` })} className="text-white/70 hover:text-white">Pick List</button><button type="button" onClick={() => setPdfPreview({ title: "Slip", src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=slip` })} className="text-white/70 hover:text-white">Slip</button></div> : null}
-                  </div>
+            <div className="glass-card p-4" data-testid="order-detail-fulfillment-details">
+              <div className="glass-card-content">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Fulfillment Details</h2>
+                <div className="mt-4 grid grid-cols-[110px_minmax(0,1fr)] gap-x-4 gap-y-2.5 text-sm">
+                  <span className="text-slate-500">Status</span>
+                  <span className="text-white/90">
+                    {activeFulfillmentDetail ? (
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-white/20 bg-white/5 px-2 py-0.5 text-xs text-slate-300">
+                          {activeFulfillmentDetail.status}
+                        </span>
+                        {activeFulfillmentProgress.partial ? (
+                          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs text-amber-200">
+                            Partial
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : activeFulfillment ? (
+                      activeFulfillment.status
+                    ) : (
+                      "-"
+                    )}
+                  </span>
+                  <span className="text-slate-500">Progress</span>
+                  <span className="text-white/90">
+                    {activeFulfillmentDetail ? (
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <span>
+                          {activeFulfillmentProgress.completed}/{activeFulfillmentProgress.total} items ·{" "}
+                          {activeFulfillmentProgress.percent}%
+                        </span>
+                        <span className="h-1.5 w-24 overflow-hidden rounded-full bg-white/10">
+                          <span
+                            className="block h-1.5 rounded-full bg-white/30"
+                            style={{
+                              width: `${Math.min(Math.max(activeFulfillmentProgress.percent, 0), 100)}%`,
+                            }}
+                          />
+                        </span>
+                      </span>
+                    ) : (
+                      "-"
+                    )}
+                  </span>
+                  <span className="text-slate-500">Scheduled</span>
+                  <span className="break-words text-white/90">
+                    {activeFulfillment
+                      ? new Date(activeFulfillment.scheduledDate).toLocaleDateString("en-US", { timeZone: "UTC" })
+                      : "-"}
+                  </span>
+                  <span className="text-slate-500">Documents</span>
+                  <span className="flex flex-wrap gap-2">
+                    {activeFulfillment ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPdfPreview({
+                              title: `Pick List ${activeFulfillment.id.slice(0, 8)}`,
+                              src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=pick`,
+                            })
+                          }
+                          className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/90 transition hover:bg-white/10"
+                        >
+                          Pick List
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setPdfPreview({
+                              title: `${data.fulfillmentMethod === "DELIVERY" ? "Delivery" : "Pickup"} Slip ${activeFulfillment.id.slice(0, 8)}`,
+                              src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=slip`,
+                            })
+                          }
+                          className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/90 transition hover:bg-white/10"
+                        >
+                          {data.fulfillmentMethod === "DELIVERY" ? "Delivery Slip" : "Pickup Slip"}
+                        </button>
+                      </>
+                    ) : (
+                      "-"
+                    )}
+                  </span>
                 </div>
               </div>
             </div>
           </div>
+
+          {hasSpecialOrderContext ? (
+            <SpecialOrderPanel
+              data={data}
+              suppliers={suppliers}
+              purchaseOrders={purchaseOrders}
+              specialOrderItems={specialOrderItems}
+              normalItemCount={normalItemCount}
+              headerDraft={specialOrderHeaderDraft}
+              itemDrafts={specialOrderItemDrafts}
+              headerDirty={specialOrderHeaderDirty}
+              savingHeader={savingSpecialHeader}
+              savingItemId={savingSpecialItemId}
+              onHeaderDraftChange={updateSpecialOrderHeaderDraft}
+              onItemDraftChange={updateSpecialOrderItemDraft}
+              onSaveHeader={saveSpecialOrderHeader}
+              onSaveItem={saveSpecialOrderItem}
+            />
+          ) : null}
 
           {openDetailsDrawer ? (
             <div className="fixed inset-0 z-40 flex">
@@ -2904,14 +3940,11 @@ export default function SalesOrderDetailPage() {
                 { id: "PAYMENTS", label: "Payments" },
                 { id: "FULFILLMENT", label: "Fulfillment" },
                 { id: "TICKETS", label: "Tickets" },
-                { id: "ACTIVITY", label: "Activity" },
               ].map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
-                  onClick={() =>
-                    setActiveBottomTab(tab.id as "PAYMENTS" | "FULFILLMENT" | "TICKETS" | "ACTIVITY")
-                  }
+                  onClick={() => setActiveBottomTab(tab.id as "PAYMENTS" | "FULFILLMENT" | "TICKETS")}
                   className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
                     activeBottomTab === tab.id
                       ? "border-white/20 bg-white/10 text-white"
@@ -3182,15 +4215,6 @@ export default function SalesOrderDetailPage() {
                     ))}
                   </div>
                 )}
-                </div>
-              </article>
-            ) : null}
-
-            {activeBottomTab === "ACTIVITY" ? (
-              <article className="glass-card p-4">
-                <div className="glass-card-content">
-                  <h2 className="text-sm font-semibold text-white">Activity</h2>
-                  <p className="mt-3 text-sm text-slate-500">Activity log for this order will appear here.</p>
                 </div>
               </article>
             ) : null}

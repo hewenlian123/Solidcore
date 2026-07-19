@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { recalculateSalesOrder } from "@/lib/sales-orders";
+import { recalculateSalesOrder, syncInventoryReservationForSalesOrder } from "@/lib/sales-orders";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = {
@@ -413,9 +413,21 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Missing sales order ID." }, { status: 400 });
     }
 
-    await prisma.salesOrder.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      const existing = await tx.salesOrder.findUnique({
+        where: { id },
+        select: { items: { select: { variantId: true } } },
+      });
+      if (!existing) throw new Error("SALES_ORDER_NOT_FOUND");
+      const affectedVariantIds = existing.items.map((item) => item.variantId);
+      await tx.salesOrder.delete({ where: { id } });
+      await syncInventoryReservationForSalesOrder(tx, id, { affectedVariantIds });
+    });
     return NextResponse.json({ data: { id } }, { status: 200 });
   } catch (error) {
+    if (error instanceof Error && error.message === "SALES_ORDER_NOT_FOUND") {
+      return NextResponse.json({ error: "Sales order not found." }, { status: 404 });
+    }
     if (error instanceof Prisma.PrismaClientKnownRequestError) {
       if (error.code === "P2025") {
         return NextResponse.json({ error: "Sales order not found." }, { status: 404 });
