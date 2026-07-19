@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   applyReservedForSalesOrder,
-  applyFlooringFulfillmentDeduction,
   canTransitionSalesOrderStatus,
   FlooringAllocationError,
   ReserveApplyError,
@@ -40,6 +39,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (!SALES_ORDER_STATUS_VALUES.includes(nextStatus as (typeof SALES_ORDER_STATUS_VALUES)[number])) {
       return NextResponse.json({ error: "Invalid status." }, { status: 400 });
     }
+    if (nextStatus === "FULFILLED") {
+      return NextResponse.json(
+        { error: "Complete fulfillment from the fulfillment workflow." },
+        { status: 409 },
+      );
+    }
     const current = await prisma.salesOrder.findUnique({
       where: { id },
       select: { id: true, status: true },
@@ -55,9 +60,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
 
     const data = await prisma.$transaction(async (tx) => {
-      if (nextStatus === "FULFILLED" && current.status !== "FULFILLED") {
-        await applyFlooringFulfillmentDeduction(tx, id);
-      }
       await tx.salesOrder.update({
         where: { id },
         data: { status: nextStatus as any },

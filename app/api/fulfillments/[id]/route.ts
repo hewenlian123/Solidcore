@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { deductInventoryForFulfillment, InventoryDeductionError, isFinalFulfillmentStatus } from "@/lib/fulfillment-inventory";
-import { syncSalesOutboundQueue, syncSalesOrderFulfillmentFromFulfillment } from "@/lib/sales-orders";
+import { isInventoryDeductionError, setFulfillmentStatus } from "@/lib/fulfillment-inventory";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = { params: Promise<{ id: string }> };
@@ -84,7 +83,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const shiptoNotesInput = payload.shipto_notes ?? payload.shiptoNotes;
 
     const data: Record<string, unknown> = {
-      status: mappedStatus,
       scheduledAt: scheduledAtInput !== undefined ? (scheduledAtInput ? new Date(scheduledAtInput) : null) : undefined,
       scheduledDate: scheduledAtInput !== undefined ? (scheduledAtInput ? new Date(scheduledAtInput) : null) : undefined,
       timeWindow: timeWindowInput !== undefined ? (String(timeWindowInput || "").trim() || null) : undefined,
@@ -129,36 +127,26 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       );
     }
 
-    if (mappedStatus === "COMPLETED") {
-      const rows = await prisma.salesOrderFulfillmentItem.findMany({
-        where: { fulfillmentId: id },
-        select: { orderedQty: true, fulfilledQty: true },
-      });
-      const allDone = rows.length > 0 && rows.every((row) => Number(row.fulfilledQty) >= Number(row.orderedQty));
-      if (!allDone) {
-        return NextResponse.json(
-          { error: "Cannot set completed until all items are fully fulfilled." },
-          { status: 409 },
-        );
-      }
-    }
-
     const updated = await prisma.$transaction(async (tx) => {
-      const next = await tx.salesOrderFulfillment.update({
+      await tx.salesOrderFulfillment.update({
         where: { id },
         data,
+      });
+      if (mappedStatus) {
+        await setFulfillmentStatus(tx, {
+          fulfillmentId: id,
+          status: mappedStatus as any,
+          operator: role,
+        });
+      }
+      return tx.salesOrderFulfillment.findUnique({
+        where: { id },
         include: { items: { orderBy: { createdAt: "asc" } } },
       });
-      if (isFinalFulfillmentStatus(next.status)) {
-        await deductInventoryForFulfillment(tx, { fulfillmentId: id, operator: role });
-      }
-      await syncSalesOrderFulfillmentFromFulfillment(tx, id);
-      await syncSalesOutboundQueue(tx, current.salesOrderId);
-      return next;
     });
     return NextResponse.json({ data: updated }, { status: 200 });
   } catch (error) {
-    if (error instanceof InventoryDeductionError) {
+    if (isInventoryDeductionError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error("PATCH /api/fulfillments/[id] error:", error);

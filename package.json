@@ -9,10 +9,10 @@
     "postinstall": "prisma generate --schema=prisma/schema.prisma",
     "start": "next start",
     "lint": "next lint",
-    "test:fulfillment-rules": "node scripts/test-fulfillment-rules.mjs",
-    "test:fulfillment-inventory": "node scripts/test-fulfillment-inventory.mjs",
+    "test:fulfillment-rules": "npx playwright test tests/sales-order-fulfillment-integrity.spec.ts --reporter=list",
+    "test:fulfillment-inventory": "npm run test:fulfillment-rules",
     "test:fulfillment-pdf": "node scripts/test-fulfillment-pdf.mjs",
-    "test:fulfillment-e2e": "npm run test:fulfillment-rules && npm run test:fulfillment-inventory && npm run test:fulfillment-pdf",
+    "test:fulfillment-e2e": "npm run test:fulfillment-rules && npm run test:fulfillment-pdf",
     "prisma:generate": "prisma generate --schema=prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema=prisma/schema.prisma",
     "seed:variants": "node scripts/seed-default-variants.mjs"

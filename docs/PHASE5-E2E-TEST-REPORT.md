@@ -1,8 +1,15 @@
-# Phase 5 — End-to-End Workflow Test Report
+# Phase 5 — End-to-End Workflow Test Report (Historical)
+
+> Historical report. Superseded for current fulfillment and inventory behavior by
+> [Phase 3A-0 Fulfillment Integrity](./PHASE3A-FULFILLMENT-INTEGRITY.md).
+> The details below describe March 2025 Phase 5 behavior and must not be used as
+> the current fulfillment architecture.
 
 **Goal:** Verify the full ERP workflow across all modules.
 
 **Method:** Code-path analysis and API/logic verification. One critical fix was applied to the Convert Quote → Sales Order flow so that fulfillment and inventory reservation are created on convert.
+
+**Current use:** Historical reference only. The active current source of truth is the Phase 3A-0 fulfillment integrity document and deterministic suite.
 
 **Date:** 2025-03-05
 
@@ -77,15 +84,18 @@
 
 ---
 
-## Build Status
+## Historical Build Status
 
-- `npm run build` should succeed with the convert and fulfillment-item changes (no new dependencies). Recommended to run `npm run build` after pull to confirm.
+- At the time of this report, `npm run build` was expected to succeed with the convert and fulfillment-item changes.
+- Current build and fulfillment verification are recorded in [Phase 3A-0 Fulfillment Integrity](./PHASE3A-FULFILLMENT-INTEGRITY.md).
 
 ---
 
-## Recommendation for Full E2E Automation
+## Historical Recommendation for Full E2E Automation
 
-To automate this flow against a running app and test DB:
+The following flow is preserved as a historical March 2025 note. Do not use it as the current fulfillment/inventory automation source of truth. To verify current fulfillment behavior, use the deterministic Phase 3A-0 commands documented in [Phase 3A-0 Fulfillment Integrity](./PHASE3A-FULFILLMENT-INTEGRITY.md).
+
+Historical flow against a running app and test DB:
 
 1. Create customer, product, variant, and stock (onHand) via API or seed.
 2. Create quote (POST /api/sales-orders, docType QUOTE), add items.
@@ -95,4 +105,4 @@ To automate this flow against a running app and test DB:
 6. Create return (POST /api/returns, salesOrderId), set return item qty, PATCH return status to COMPLETED with issueStoreCredit and creditAmount; assert onHand increase and store credit created.
 7. Apply store credit to invoice (POST /api/invoices/[id]/apply-store-credit); assert balance due decrease and store credit balance decrease.
 
-Existing scripts such as `scripts/test-fulfillment-inventory.mjs` and `scripts/test-fulfillment-rules.mjs` can be extended or composed for this flow.
+The old standalone fulfillment rule and inventory scripts have been retired. Use the deterministic canonical fulfillment integrity suite through `npm run test:fulfillment-rules` / `npm run test:fulfillment-inventory`, and keep PDF coverage in `npm run test:fulfillment-pdf`.

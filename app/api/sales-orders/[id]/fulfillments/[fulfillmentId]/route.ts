@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isInventoryDeductionError, setFulfillmentStatus } from "@/lib/fulfillment-inventory";
 import { syncSalesOutboundQueue } from "@/lib/sales-orders";
-import {
-  assertSufficientVariantInventory,
-  InsufficientInventoryError,
-} from "@/lib/inventory-safety";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = {
@@ -53,35 +50,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       await tx.salesOrderFulfillment.update({
         where: { id: fulfillmentId },
         data: {
-          status: mappedStatus ? (mappedStatus as any) : undefined,
           scheduledDate: payload.scheduledDate ? new Date(payload.scheduledDate) : undefined,
           address: payload.address !== undefined ? String(payload.address || "") || null : undefined,
           notes: payload.notes !== undefined ? String(payload.notes || "") || null : undefined,
         },
       });
-      if (mappedStatus === "COMPLETED") {
-        const orderItems = await tx.salesOrderItem.findMany({
-          where: { salesOrderId: id },
-          select: { variantId: true, quantity: true, fulfillQty: true },
-        });
-        const deductionByVariant = new Map<string, number>();
-        for (const item of orderItems) {
-          if (!item.variantId) continue;
-          const remaining = Math.max(Number(item.quantity) - Number(item.fulfillQty), 0);
-          if (remaining <= 0) continue;
-          deductionByVariant.set(
-            item.variantId,
-            (deductionByVariant.get(item.variantId) ?? 0) + remaining,
-          );
-        }
-        for (const [variantId, deductionQty] of deductionByVariant.entries()) {
-          await assertSufficientVariantInventory(tx, { variantId, deductionQty });
-        }
-      }
-      if (mappedStatus === "IN_PROGRESS") {
-        await tx.salesOrder.update({
-          where: { id },
-          data: { status: "READY" },
+      if (mappedStatus) {
+        await setFulfillmentStatus(tx, {
+          fulfillmentId,
+          status: mappedStatus as any,
+          operator: role,
         });
       }
       await syncSalesOutboundQueue(tx, id);
@@ -102,18 +80,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (error instanceof Error && error.message === "FULFILLMENT_NOT_FOUND") {
       return NextResponse.json({ error: "Fulfillment not found." }, { status: 404 });
     }
-    if (error instanceof InsufficientInventoryError) {
-      return NextResponse.json(
-        {
-          error: "Insufficient inventory",
-          detail: {
-            variantId: error.variantId,
-            available: error.available,
-            requested: error.requested,
-          },
-        },
-        { status: 400 },
-      );
+    if (isInventoryDeductionError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error(
       "PATCH /api/sales-orders/[id]/fulfillments/[fulfillmentId] error:",

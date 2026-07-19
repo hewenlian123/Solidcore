@@ -33,9 +33,9 @@ Quote → Sales Order → Fulfillment → Invoice → Payment → Return → Sto
 | Area | Status | Implementation |
 |------|--------|----------------|
 | **Fulfillment queue / dashboard** | ✅ Exists | `/fulfillment` (dashboard: today’s deliveries/pickups, overdue). `/fulfillment/[id]` (fulfillment detail: items, fulfilled qty, status, link to SO). `/outbound` (outbound queue). APIs: `/api/fulfillment`, `/api/fulfillment/[id]`, `/api/fulfillment/dashboard`, `/api/fulfillment/from-sales-order`, `/api/fulfillments`, `/api/fulfillments/[id]`, `/api/fulfillments/[id]/status`, `/api/fulfillments/outbound`. |
-| **Fulfillment as middle layer** | ✅ Exists | SO CONFIRMED → `ensureFulfillmentFromSalesOrder` creates/updates `SalesOrderFulfillment` and `SalesOrderFulfillmentItem` from SO items. Fulfillment has type PICKUP/DELIVERY, status (DRAFT, SCHEDULED, PACKING, READY, IN_PROGRESS, COMPLETED, etc.). Fulfillment detail page shows SO and items; can set `fulfilledQty` per line. |
-| **Picking** | ⚠️ Placeholder | `/warehouse/picking` — `PlaceholderPage` only. |
-| **Packing** | ⚠️ Placeholder | `/warehouse/packing` — `PlaceholderPage` only. |
+| **Fulfillment as middle layer** | ✅ Exists | SO CONFIRMED → `ensureFulfillmentFromSalesOrder` creates/updates `SalesOrderFulfillment` and `SalesOrderFulfillmentItem` from SO items. Fulfillment has type PICKUP/DELIVERY and its own status lifecycle. Fulfilled quantities must be changed through the fulfillment workflow, which delegates to `setFulfillmentItemFulfilledQuantity` in `lib/fulfillment-inventory.ts`. |
+| **Picking** | ⚠️ Early workflow | `/warehouse/picking` exists and reads `/api/fulfillments/outbound`; item changes go through `/api/fulfillment-items/[id]` and status changes go through `/api/fulfillments/[id]`. Full Warehouse redesign, picked-event history, barcode scanning, and transfer/receiving integration are not implemented. |
+| **Packing** | ⚠️ Early workflow | `/warehouse/packing` exists and reads `/api/fulfillments/outbound`; item changes go through `/api/fulfillment-items/[id]` and status changes go through `/api/fulfillments/[id]`. Full Warehouse redesign, packed-event history, barcode scanning, and transfer/receiving integration are not implemented. |
 | **Pickup / Delivery** | ✅ Exists | Delivery: `/delivery` (schedule by date, uses fulfillment dashboard API). Fulfillment detail supports type PICKUP/DELIVERY; status flow to DELIVERED/PICKED_UP/COMPLETED. Inventory deduction on fulfillment final status (see below). |
 
 ---
@@ -45,7 +45,7 @@ Quote → Sales Order → Fulfillment → Invoice → Payment → Return → Sto
 | Rule | Status | Implementation |
 |------|--------|----------------|
 | **Confirm SO → reserved increase** | ✅ Exists | `PATCH /api/sales-orders/[id]/status` with `status: "CONFIRMED"` → `applyReservedForSalesOrder(tx, id)`: sets `reservedAppliedAt`, increments `inventoryStock.reserved` per variant (and creates RESERVE movement). `syncInventoryReservationForSalesOrder` keeps reserved in sync with SO items (quantity − fulfillQty) for CONFIRMED/READY/PARTIALLY_FULFILLED. |
-| **Fulfillment complete → onHand decrease, reserved decrease** | ✅ Exists | Two paths: (1) **Fulfillment-level:** When fulfillment reaches a final status (DELIVERED, PICKED_UP, COMPLETED), `deductInventoryForFulfillment` (in `lib/fulfillment-inventory.ts`) is called from `/api/fulfillments/[id]` or `/api/fulfillments/[id]/status`: sets `inventoryDeductedAt`, decrements `onHand`, reduces `reserved` per fulfillment item’s `fulfilledQty`, creates FULFILLMENT_DEDUCT movement. (2) **SO-level (flooring only):** When SO status → FULFILLED, `applyFlooringFulfillmentDeduction` decrements onHand and reserved for flooring boxes only. |
+| **Fulfillment complete → onHand decrease, reserved decrease** | ✅ Exists | Phase 3A-0 canonical path: fulfillment item quantity changes and final fulfillment status changes delegate to `setFulfillmentItemFulfilledQuantity` / `setFulfillmentStatus` in `lib/fulfillment-inventory.ts`. Inventory deduction is movement-delta based, creates linked FULFILLMENT_DEDUCT evidence, updates SO item `fulfillQty`, syncs SO/fulfillment status, and recalculates reservation. Direct Sales Order status mutation to FULFILLED is rejected; `deductInventoryForFulfillment` remains only as a compatibility wrapper. |
 | **Return complete → onHand increase** | ✅ Exists | When return status → COMPLETED, `applyCompletedReturnInventory` in `lib/returns.ts` runs (from `PATCH /api/returns/[id]`): sets `completedAt`, increments `inventoryStock.onHand` per return item qty, creates RETURN_ADD movement. Return items are tied to fulfillment items (see below). |
 
 ---
@@ -115,7 +115,7 @@ Quote → Sales Order → Fulfillment → Invoice → Payment → Return → Sto
 **Gaps vs target:**
 
 - Sales: “Orders” mixes orders and sales-orders; no explicit “Quotes” entry (quotes are same doc type).
-- Fulfillment: No “Fulfillment Queue” or “Picking”/“Packing” as first-class; Picking/Packing live under warehouse and are placeholders.
+- Fulfillment: Fulfillment dashboard, outbound queue, and early Picking/Packing pages exist, but a full Warehouse operational redesign is still outstanding.
 - Purchasing: Not in sidebar (Suppliers is under Inventory). Purchasing (PO, Receiving, Bills) exists as pages but not as a nav group.
 - Analytics: Only one real sub-page (inventory); sales/customers are placeholders.
 
@@ -127,7 +127,7 @@ Quote → Sales Order → Fulfillment → Invoice → Payment → Return → Sto
    Fulfillment dashboard exists but nav could better emphasize “Fulfillment Queue” and make it the main entry between SO and Pickup/Delivery.
 
 2. **Picking & packing**  
-   Placeholder pages only. No integration with fulfillment items (e.g. pick list from fulfillment, pack by fulfillment, then mark fulfillment complete).
+   Early pages exist and use fulfillment items, but they are not a complete Warehouse redesign. They still need event-level picked/packed history, scanner-friendly flows, and explicit integration boundaries for future receiving/transfers work.
 
 3. **Unified Quote entry**  
    Quotes are SOs with docType QUOTE; no dedicated “Quotes” list or filter in nav. Optional: a “Quotes” view/filter under Sales.
@@ -142,7 +142,7 @@ Quote → Sales Order → Fulfillment → Invoice → Payment → Return → Sto
    Both `AfterSalesReturn` and `SalesReturn` exist; after-sales returns API proxies to returns. Clarify single source of truth and whether to migrate fully to SalesReturn.
 
 7. **SO → Fulfillment status alignment**  
-   SO has READY, PARTIALLY_FULFILLED, FULFILLED; fulfillment has its own statuses. When fulfillment is COMPLETED/DELIVERED/PICKED_UP, inventory is deducted via `deductInventoryForFulfillment`. SO status can also be set to FULFILLED (triggering flooring-only deduction). Ensure one clear path (e.g. fulfillment completion drives both inventory and SO state) to avoid double deduction or confusion.
+   Phase 3A-0 made fulfillment completion the canonical path for inventory deduction and SO fulfillment status sync. Direct Sales Order status mutation to FULFILLED and direct Sales Order item `fulfillQty` mutation are rejected by API routes. Remaining work is UI/workflow alignment: future Warehouse UI should call the canonical fulfillment routes instead of editing Sales Order fields directly.
 
 ---
 
@@ -153,7 +153,7 @@ Quote → Sales Order → Fulfillment → Invoice → Payment → Return → Sto
 | Quote → Sales Order | ✅ | Convert API; docType QUOTE → SALES_ORDER, status CONFIRMED. |
 | Sales Order → Fulfillment | ✅ | CONFIRMED → ensureFulfillmentFromSalesOrder; fulfillments and fulfillment items created from SO. |
 | Fulfillment → Pickup/Delivery | ✅ | Fulfillment type PICKUP/DELIVERY; delivery schedule and fulfillment detail drive execution. |
-| Fulfillment complete → Inventory | ✅ | deductInventoryForFulfillment on final status; onHand decrement, reserved decrement. |
+| Fulfillment complete → Inventory | ✅ | `setFulfillmentItemFulfilledQuantity` / `setFulfillmentStatus` on canonical fulfillment routes; movement-delta onHand deduction, reserved recalculation, and SO/fulfillment status sync. |
 | Sales Order → Invoice | ✅ | Create invoice from SO; invoice.salesOrderId. |
 | Invoice → Payment | ✅ | Payments on invoice; recalc SO. |
 | Return → Fulfillment items | ✅ | Return items reference fulfillmentItemId; picker limits to fulfilled qty. |
@@ -171,14 +171,14 @@ Quote → Sales Order → Fulfillment → Invoice → Payment → Return → Sto
 
 2. **Picking (fulfillment-centric)**  
    - Implement picking UI that consumes **fulfillment items** (from SalesOrderFulfillmentItem): list by fulfillment or by outbound queue, allow “picked” state or notes.  
-   - Keep inventory deduction where it is (on fulfillment completion); picking can be a pre-step that updates fulfillment item state or notes only, unless you explicitly want “picked” to reserve in a different way.
+   - Keep inventory deduction in the Phase 3A-0 canonical fulfillment helpers; picking can be a pre-step that updates notes or non-final workflow state only, unless a later approved design adds event-level picked quantities.
 
 3. **Packing (fulfillment-centric)**  
-   - Packing UI per fulfillment: confirm items packed, set fulfilled qty if not already set, then transition fulfillment to READY or final status so that existing `deductInventoryForFulfillment` runs when status becomes DELIVERED/PICKED_UP/COMPLETED.  
-   - Ensures fulfillment remains the single place where inventory is decremented.
+   - Packing UI per fulfillment: confirm items packed, then use the canonical fulfillment item/status routes for fulfilled quantities and final status transitions.
+   - Ensures fulfillment remains the single place where inventory is decremented and Sales Order fulfillment state is synchronized.
 
 4. **SO ↔ Fulfillment status consistency**  
-   - When a fulfillment is marked COMPLETED/DELIVERED/PICKED_UP and inventory is deducted, consider updating SO status (e.g. PARTIALLY_FULFILLED / FULFILLED) from the same flow so that flooring deduction and SO state stay in sync and no double deduction occurs.
+   - Keep future workflow changes on the canonical fulfillment path. Do not reintroduce direct Sales Order `FULFILLED` status changes or direct Sales Order item `fulfillQty` edits.
 
 5. **Analytics**  
    - Replace placeholders for Sales Analytics and Customer Analytics with real dashboards (using existing APIs: orders, invoices, payments, customers).

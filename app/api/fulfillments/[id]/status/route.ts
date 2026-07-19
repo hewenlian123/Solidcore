@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { deductInventoryForFulfillment, InventoryDeductionError, isFinalFulfillmentStatus } from "@/lib/fulfillment-inventory";
-import { syncSalesOutboundQueue, syncSalesOrderFulfillmentFromFulfillment } from "@/lib/sales-orders";
+import { isInventoryDeductionError, setFulfillmentStatus } from "@/lib/fulfillment-inventory";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = { params: Promise<{ id: string }> };
@@ -26,26 +25,21 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
     const now = new Date();
     const updated = await prisma.$transaction(async (tx) => {
-      const next = await tx.salesOrderFulfillment.update({
-        where: { id },
-        data: {
-          status: mapped,
-          markedOutAt: mapped === "OUT_FOR_DELIVERY" ? now : undefined,
-          markedDoneAt: mapped === "DELIVERED" || mapped === "PICKED_UP" || mapped === "COMPLETED" ? now : undefined,
-        },
-        select: { id: true, salesOrderId: true, status: true, markedOutAt: true, markedDoneAt: true },
+      return setFulfillmentStatus(tx, {
+        fulfillmentId: id,
+        status: mapped,
+        markedOutAt: mapped === "OUT_FOR_DELIVERY" ? now : undefined,
+        markedDoneAt:
+          mapped === "DELIVERED" || mapped === "PICKED_UP" || mapped === "COMPLETED"
+            ? now
+            : undefined,
+        operator: role,
       });
-      if (isFinalFulfillmentStatus(next.status)) {
-        await deductInventoryForFulfillment(tx, { fulfillmentId: next.id, operator: role });
-      }
-      await syncSalesOrderFulfillmentFromFulfillment(tx, next.id);
-      await syncSalesOutboundQueue(tx, next.salesOrderId);
-      return next;
     });
 
     return NextResponse.json({ data: updated }, { status: 200 });
   } catch (error) {
-    if (error instanceof InventoryDeductionError) {
+    if (isInventoryDeductionError(error)) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     console.error("PATCH /api/fulfillments/[id]/status error:", error);

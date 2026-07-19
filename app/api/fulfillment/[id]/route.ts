@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { syncSalesOutboundQueue } from "@/lib/sales-orders";
+import { isInventoryDeductionError, setFulfillmentStatus } from "@/lib/fulfillment-inventory";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = {
@@ -68,17 +68,6 @@ const STATUS_MAP: Record<string, string> = {
   in_progress: "IN_PROGRESS",
 };
 
-async function getFulfillmentProgress(fulfillmentId: string) {
-  const rows = await prisma.salesOrderFulfillmentItem.findMany({
-    where: { fulfillmentId },
-    select: { orderedQty: true, fulfilledQty: true },
-  });
-  if (rows.length === 0) return { hasItems: false, allCompleted: false, anyShort: false };
-  const allCompleted = rows.every((row) => Number(row.fulfilledQty) >= Number(row.orderedQty));
-  const anyShort = rows.some((row) => Number(row.fulfilledQty) < Number(row.orderedQty));
-  return { hasItems: true, allCompleted, anyShort };
-}
-
 export async function PATCH(request: NextRequest, { params }: Params) {
   try {
     const role = getRequestRole(request);
@@ -92,15 +81,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (payload.status !== undefined) {
       const mapped = STATUS_MAP[String(payload.status).toLowerCase()];
       if (!mapped) return NextResponse.json({ error: "Invalid status." }, { status: 400 });
-      if (mapped === "COMPLETED") {
-        const progress = await getFulfillmentProgress(id);
-        if (progress.hasItems && !progress.allCompleted) {
-          return NextResponse.json(
-            { error: "Cannot mark completed while some items are not fully fulfilled." },
-            { status: 409 },
-          );
-        }
-      }
       data.status = mapped;
     }
     if (payload.scheduledAt !== undefined) {
@@ -161,19 +141,34 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         .join(", ") || null;
     }
 
-    const updated = await prisma.salesOrderFulfillment.update({
-      where: { id },
-      data,
-      include: {
-        items: { orderBy: { createdAt: "asc" } },
-      },
-    });
-    await prisma.$transaction(async (tx) => {
-      await syncSalesOutboundQueue(tx, updated.salesOrderId);
+    const mappedStatus = data.status as string | undefined;
+    delete data.status;
+
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.salesOrderFulfillment.update({
+        where: { id },
+        data,
+      });
+      if (mappedStatus) {
+        await setFulfillmentStatus(tx, {
+          fulfillmentId: id,
+          status: mappedStatus as any,
+          operator: role,
+        });
+      }
+      return tx.salesOrderFulfillment.findUnique({
+        where: { id },
+        include: {
+          items: { orderBy: { createdAt: "asc" } },
+        },
+      });
     });
 
     return NextResponse.json({ data: updated }, { status: 200 });
   } catch (error) {
+    if (isInventoryDeductionError(error)) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("PATCH /api/fulfillment/[id] error:", error);
     return NextResponse.json({ error: "Failed to update fulfillment." }, { status: 500 });
   }

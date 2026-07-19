@@ -9,10 +9,6 @@ import {
   syncInventoryReservationForSalesOrder,
   syncSalesOutboundQueue,
 } from "@/lib/sales-orders";
-import {
-  assertSufficientVariantInventory,
-  InsufficientInventoryError,
-} from "@/lib/inventory-safety";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { formatLineItemTitle } from "@/lib/display";
 import { getEffectiveSpecs, getInternalSpecLine } from "@/lib/specs/glass";
@@ -50,6 +46,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     if (!hasOneOf(role, ["ADMIN", "SALES"])) return deny();
     const { id, itemId } = await params;
     const payload = await request.json();
+    if (payload.fulfillQty !== undefined) {
+      return NextResponse.json(
+        { error: "Fulfilled quantity must be updated from the fulfillment workflow." },
+        { status: 409 },
+      );
+    }
     if (payload.quantity !== undefined) {
       if (parsePositiveQuantity(payload.quantity) === null) {
         return NextResponse.json({ error: "Quantity must be greater than 0." }, { status: 400 });
@@ -240,13 +242,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           }
         }
       }
-      const fulfillIncrease = Math.max(fulfillQty - Number(existing.fulfillQty), 0);
-      if (fulfillIncrease > 0 && nextVariantId) {
-        await assertSufficientVariantInventory(tx, {
-          variantId: nextVariantId,
-          deductionQty: fulfillIncrease,
-        });
-      }
       const nextLineDescription =
         payload.lineDescription !== undefined
           ? String(payload.lineDescription ?? "")
@@ -382,9 +377,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
               : undefined,
         },
       });
-      if (payload.fulfillQty !== undefined && fulfillQty > Number(existing.fulfillQty)) {
-        // TODO: decrement inventory when fulfill_qty increases (if mapped product inventory exists).
-      }
       const allItems = await tx.salesOrderItem.findMany({
         where: { salesOrderId: id },
         select: { quantity: true, fulfillQty: true },
@@ -466,19 +458,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       return NextResponse.json(
         {
           error: `Insufficient stock for ${error.variantName}: need ${error.requiredBoxes} boxes, available ${error.availableBoxes} boxes.`,
-        },
-        { status: 400 },
-      );
-    }
-    if (error instanceof InsufficientInventoryError) {
-      return NextResponse.json(
-        {
-          error: "Insufficient inventory",
-          detail: {
-            variantId: error.variantId,
-            available: error.available,
-            requested: error.requested,
-          },
         },
         { status: 400 },
       );
