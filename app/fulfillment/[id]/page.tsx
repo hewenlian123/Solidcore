@@ -99,9 +99,14 @@ export default function FulfillmentDetailPage() {
   const mutationInFlightRef = useRef(false);
 
   const isPickup = data?.type === "PICKUP";
+  const isDelivery = data?.type === "DELIVERY";
   const fulfillmentStatus = String(data?.status ?? "").toUpperCase();
   const pickupCanComplete = isPickup && ["READY", "PARTIAL"].includes(fulfillmentStatus);
   const pickupClosed = isPickup && ["PICKED_UP", "COMPLETED"].includes(fulfillmentStatus);
+  const deliveryCanStart = isDelivery && fulfillmentStatus === "READY";
+  const deliveryCanComplete =
+    isDelivery && ["READY", "OUT_FOR_DELIVERY", "IN_PROGRESS", "PARTIAL"].includes(fulfillmentStatus);
+  const deliveryClosed = isDelivery && ["DELIVERED", "COMPLETED"].includes(fulfillmentStatus);
 
   const load = async () => {
     try {
@@ -117,17 +122,22 @@ export default function FulfillmentDetailPage() {
       setData(next);
       setItemDrafts(
         Object.fromEntries(
-          next.items.map((item) => [
-            item.id,
-            {
-              fulfilledQty:
-                next.type === "PICKUP" &&
-                ["READY", "PARTIAL"].includes(String(next.status ?? "").toUpperCase())
+          next.items.map((item) => {
+            const status = String(next.status ?? "").toUpperCase();
+            const prefillFull =
+              (next.type === "PICKUP" && ["READY", "PARTIAL"].includes(status)) ||
+              (next.type === "DELIVERY" &&
+                ["READY", "OUT_FOR_DELIVERY", "IN_PROGRESS", "PARTIAL"].includes(status));
+            return [
+              item.id,
+              {
+                fulfilledQty: prefillFull
                   ? String(item.orderedQty ?? "0")
                   : String(item.fulfilledQty ?? "0"),
-              notes: String(item.notes ?? ""),
-            },
-          ]),
+                notes: String(item.notes ?? ""),
+              },
+            ];
+          }),
         ),
       );
       setMetaForm({
@@ -227,6 +237,18 @@ export default function FulfillmentDetailPage() {
     };
   }, [data?.items, data?.salesOrder]);
 
+  const deliveryAddressText = useMemo(() => {
+    if (!data || data.type !== "DELIVERY") return "";
+    return [
+      data.shiptoAddress1,
+      data.shiptoAddress2,
+      [data.shiptoCity, data.shiptoState, data.shiptoZip].filter(Boolean).join(" "),
+    ]
+      .map((part) => String(part ?? "").trim())
+      .filter(Boolean)
+      .join(", ");
+  }, [data]);
+
   const timeline = useMemo(() => {
     const status = String(data?.status ?? "").toUpperCase();
     const isReadyOrBeyond = ["READY", "OUT_FOR_DELIVERY", "DELIVERED", "PICKED_UP", "COMPLETED"].includes(status);
@@ -272,23 +294,30 @@ export default function FulfillmentDetailPage() {
     }
   };
 
-  const quickStatus = async (status: "out_for_delivery" | "delivered" | "picked_up" | "completed") => {
-    if (!data) return;
+  const startDelivery = async () => {
+    if (!data || data.type !== "DELIVERY" || mutationInFlightRef.current) return;
     try {
+      mutationInFlightRef.current = true;
       setSaving(true);
       setError(null);
+      setSuccess(null);
       const res = await fetch(`/api/fulfillments/${data.id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", "x-user-role": role },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ status: "out_for_delivery" }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to update status");
-      setSuccess("Status updated.");
+      if (!res.ok) throw new Error(payload.error ?? "Failed to start delivery");
+      const updatedStatus = String(payload.data?.status ?? "").toUpperCase();
+      if (updatedStatus !== "OUT_FOR_DELIVERY") {
+        throw new Error("Delivery start did not return an in-delivery status.");
+      }
+      setSuccess("Delivery started.");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update status");
+      setError(err instanceof Error ? err.message : "Failed to start delivery");
     } finally {
+      mutationInFlightRef.current = false;
       setSaving(false);
     }
   };
@@ -343,6 +372,60 @@ export default function FulfillmentDetailPage() {
     }
   };
 
+  const completeDelivery = async () => {
+    if (!data || data.type !== "DELIVERY" || mutationInFlightRef.current) return;
+    try {
+      mutationInFlightRef.current = true;
+      setSaving(true);
+      setError(null);
+      setSuccess(null);
+
+      const items = data.items.map((item) => {
+        const draft = itemDrafts[item.id] ?? { fulfilledQty: String(item.fulfilledQty ?? "0"), notes: item.notes ?? "" };
+        const fulfilledQty = Number(draft.fulfilledQty);
+        const orderedQty = Number(item.orderedQty ?? 0);
+        const currentFulfilledQty = Number(item.fulfilledQty ?? 0);
+        if (!Number.isFinite(fulfilledQty) || fulfilledQty < 0) {
+          throw new Error(`Delivery quantity for "${item.title}" must be greater than or equal to 0.`);
+        }
+        if (fulfilledQty > orderedQty) {
+          throw new Error(`Delivery quantity for "${item.title}" cannot exceed ordered quantity.`);
+        }
+        if (fulfilledQty < currentFulfilledQty) {
+          throw new Error(`Delivery quantity for "${item.title}" cannot be less than already fulfilled quantity.`);
+        }
+        return { id: item.id, fulfilledQty: draft.fulfilledQty, notes: draft.notes };
+      });
+
+      const hasNewDeliveryQuantity = items.some((item) => {
+        const current = data.items.find((existing) => existing.id === item.id);
+        return Number(item.fulfilledQty) > Number(current?.fulfilledQty ?? 0);
+      });
+      if (!hasNewDeliveryQuantity) {
+        throw new Error("Enter at least one delivery quantity above the current fulfilled quantity before completing delivery.");
+      }
+
+      const res = await fetch(`/api/fulfillments/${data.id}/delivery`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-user-role": role },
+        body: JSON.stringify({ items }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to complete delivery");
+      const updatedStatus = String(payload.data?.status ?? "").toUpperCase();
+      if (!["DELIVERED", "COMPLETED", "PARTIAL"].includes(updatedStatus)) {
+        throw new Error("Delivery update did not return a delivered or partial status.");
+      }
+      setSuccess(updatedStatus === "PARTIAL" ? "Partial delivery recorded." : "Delivery completed.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to complete delivery");
+    } finally {
+      mutationInFlightRef.current = false;
+      setSaving(false);
+    }
+  };
+
   const saveMeta = async () => {
     if (!data) return;
     try {
@@ -383,6 +466,10 @@ export default function FulfillmentDetailPage() {
     if (!data) return;
     if (data.type === "PICKUP") {
       await completePickup();
+      return;
+    }
+    if (data.type === "DELIVERY") {
+      await completeDelivery();
       return;
     }
     try {
@@ -463,7 +550,7 @@ export default function FulfillmentDetailPage() {
         <div className="glass-card-content flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-white">
-              {data.type === "PICKUP" ? "Pickup" : "Fulfillment"} · {data.salesOrder.orderNumber}
+              {data.type === "PICKUP" ? "Pickup" : "Delivery"} · {data.salesOrder.orderNumber}
             </h1>
             <p className="mt-2 text-sm text-slate-400">
               {data.salesOrder.customer?.name ?? data.customer?.name ?? "-"}
@@ -490,12 +577,22 @@ export default function FulfillmentDetailPage() {
                 Complete Pickup records the customer handoff through the canonical fulfillment path. It deducts inventory for the fulfilled quantities only.
               </p>
             ) : null}
+            {data.type === "DELIVERY" ? (
+              <p className="mt-3 max-w-2xl text-sm text-slate-400" data-testid="delivery-workflow-guidance">
+                Complete Delivery records the customer handoff through the canonical fulfillment path. Partial Delivery uses cumulative fulfilled quantity on this fulfillment record.
+              </p>
+            ) : null}
             {specialOrderSummary ? (
-              <div data-testid="pickup-special-order-warning" className="mt-3 inline-flex max-w-full flex-wrap items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100">
+              <div data-testid={data.type === "DELIVERY" ? "delivery-special-order-warning" : "pickup-special-order-warning"} className="mt-3 inline-flex max-w-full flex-wrap items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100">
                 <span>Special Order</span>
                 <span className="text-amber-200/80">{specialOrderSummary.status}</span>
                 {specialOrderSummary.supplier ? <span>{specialOrderSummary.supplier}</span> : null}
                 {specialOrderSummary.eta ? <span>ETA {fmtDateTime(specialOrderSummary.eta)}</span> : null}
+              </div>
+            ) : null}
+            {data.type === "DELIVERY" && !deliveryAddressText ? (
+              <div data-testid="delivery-address-warning" className="mt-3 max-w-2xl rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100">
+                Delivery address is missing on this fulfillment record. Confirm jobsite details before dispatch.
               </div>
             ) : null}
             <div className="mt-2 h-2 w-full max-w-[360px] overflow-hidden rounded-full bg-white/10">
@@ -520,6 +617,21 @@ export default function FulfillmentDetailPage() {
                   {data.pickupContact || "—"} {data.shiptoPhone ? `(${data.shiptoPhone})` : ""}
                 </p>
               )}
+              {data.type === "DELIVERY" ? (
+                <p className="sm:col-span-2" data-testid="delivery-address">
+                  <span className="font-semibold text-white/80">Jobsite:</span>{" "}
+                  {deliveryAddressText || "Missing delivery address"}
+                </p>
+              ) : null}
+              {data.type === "DELIVERY" ? (
+                <p className="sm:col-span-2" data-testid="delivery-contact">
+                  <span className="font-semibold text-white/80">Delivery contact:</span>{" "}
+                  {data.shiptoName || data.salesOrder.customer?.name || data.customer?.name || "—"}
+                  {data.shiptoPhone || data.customer?.phone || data.salesOrder.customer?.phone
+                    ? ` · ${data.shiptoPhone ?? data.customer?.phone ?? data.salesOrder.customer?.phone}`
+                    : ""}
+                </p>
+              ) : null}
               {data.type === "DELIVERY" ? (
                 <p className="sm:col-span-2">
                   <span className="font-semibold text-white/80">Delivery notes:</span>{" "}
@@ -749,7 +861,7 @@ export default function FulfillmentDetailPage() {
           <button type="button" onClick={saveMeta} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
             Save Info
           </button>
-          {!pickupClosed ? (
+          {!pickupClosed && !deliveryClosed ? (
             <button type="button" onClick={() => updateStatus("ready")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
               Mark Ready
             </button>
@@ -765,25 +877,30 @@ export default function FulfillmentDetailPage() {
             >
               {saving ? "Completing Pickup..." : "Complete Pickup"}
             </button>
-          ) : (
-            <button type="button" onClick={() => quickStatus("out_for_delivery")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
-              Mark Out
-            </button>
-          )}
-          {data.type === "DELIVERY" ? (
-            <button type="button" onClick={() => quickStatus("delivered")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
-              Mark Delivered
-            </button>
           ) : null}
           {data.type === "DELIVERY" ? (
-            <button
-              type="button"
-              onClick={() => updateStatus("completed")}
-              disabled={saving || !completionInfo.allCompleted}
-              className="ios-primary-btn h-9 px-3 text-xs disabled:opacity-60"
-            >
-              Mark Completed
-            </button>
+            <>
+              <button
+                type="button"
+                data-testid="delivery-start-action"
+                onClick={startDelivery}
+                disabled={saving || !deliveryCanStart}
+                aria-busy={saving}
+                className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60"
+              >
+                {saving ? "Starting Delivery..." : "Start Delivery"}
+              </button>
+              <button
+                type="button"
+                data-testid="delivery-complete-action"
+                onClick={completeDelivery}
+                disabled={saving || !deliveryCanComplete}
+                aria-busy={saving}
+                className="ios-primary-btn h-9 px-3 text-xs disabled:opacity-60"
+              >
+                {saving ? "Completing Delivery..." : "Complete Delivery"}
+              </button>
+            </>
           ) : null}
           <button type="button" onClick={() => updateStatus("cancelled")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
             Cancel Fulfillment
@@ -804,7 +921,7 @@ export default function FulfillmentDetailPage() {
               <TableHead className="text-slate-400">SKU</TableHead>
               <TableHead className="text-right text-slate-400">Ordered</TableHead>
               <TableHead className="text-right text-slate-400">
-                {data.type === "PICKUP" ? "Fulfilled After Pickup" : "Fulfilled"}
+                {data.type === "PICKUP" ? "Fulfilled After Pickup" : "Delivered After Delivery"}
               </TableHead>
               <TableHead className="text-right text-slate-400">Remaining</TableHead>
               <TableHead className="text-slate-400">Notes</TableHead>
@@ -835,7 +952,9 @@ export default function FulfillmentDetailPage() {
                       min="0"
                       step="0.01"
                       data-testid={`fulfillment-item-qty-${item.id}`}
-                      aria-label={`${item.title} fulfilled quantity after pickup`}
+                      aria-label={`${item.title} ${
+                        data.type === "PICKUP" ? "fulfilled quantity after pickup" : "delivered quantity after delivery"
+                      }`}
                       value={draft.fulfilledQty}
                       onChange={(e) =>
                         setItemDrafts((prev) => ({
@@ -845,7 +964,7 @@ export default function FulfillmentDetailPage() {
                       }
                       className="ios-input ml-auto h-9 w-24 px-2 text-right text-xs"
                     />
-                    {data.type === "PICKUP" && Number(item.fulfilledQty ?? 0) > 0 ? (
+                    {(data.type === "PICKUP" || data.type === "DELIVERY") && Number(item.fulfilledQty ?? 0) > 0 ? (
                       <p className="mt-1 text-[11px] text-slate-500">Current {fmtQty(item.fulfilledQty)}</p>
                     ) : null}
                   </TableCell>
@@ -872,6 +991,12 @@ export default function FulfillmentDetailPage() {
             <p className="text-xs text-slate-400">
               Adjust quantities for partial pickup, then use <span className="font-semibold">Complete Pickup</span>{" "}
               above. Full quantities are prefilled for the common counter handoff.
+            </p>
+          ) : data.type === "DELIVERY" ? (
+            <p className="text-xs text-slate-400">
+              Adjust cumulative delivered quantities for partial delivery, then use{" "}
+              <span className="font-semibold">Complete Delivery</span> above. Partial Delivery is cumulative within
+              one fulfillment record, not a separate delivery-event ledger.
             </p>
           ) : (
             <>
