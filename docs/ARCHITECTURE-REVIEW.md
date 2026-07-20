@@ -34,8 +34,7 @@ Quote → Sales Order → Fulfillment → Invoice → Payment → Return → Sto
 |------|--------|----------------|
 | **Fulfillment queue / dashboard** | ✅ Exists | `/fulfillment` (dashboard: today’s deliveries/pickups, overdue). `/fulfillment/[id]` (fulfillment detail: items, fulfilled qty, status, link to SO). `/outbound` (outbound queue). APIs: `/api/fulfillment`, `/api/fulfillment/[id]`, `/api/fulfillment/dashboard`, `/api/fulfillment/from-sales-order`, `/api/fulfillments`, `/api/fulfillments/[id]`, `/api/fulfillments/[id]/status`, `/api/fulfillments/outbound`. |
 | **Fulfillment as middle layer** | ✅ Exists | SO CONFIRMED → `ensureFulfillmentFromSalesOrder` creates/updates `SalesOrderFulfillment` and `SalesOrderFulfillmentItem` from SO items. Fulfillment has type PICKUP/DELIVERY and its own status lifecycle. Fulfilled quantities must be changed through the fulfillment workflow, which delegates to `setFulfillmentItemFulfilledQuantity` in `lib/fulfillment-inventory.ts`. |
-| **Picking** | ⚠️ Early workflow | `/warehouse/picking` exists and reads `/api/fulfillments/outbound`; item changes go through `/api/fulfillment-items/[id]` and status changes go through `/api/fulfillments/[id]`. Full Warehouse redesign, picked-event history, barcode scanning, and transfer/receiving integration are not implemented. |
-| **Packing** | ⚠️ Early workflow | `/warehouse/packing` exists and reads `/api/fulfillments/outbound`; item changes go through `/api/fulfillment-items/[id]` and status changes go through `/api/fulfillments/[id]`. Full Warehouse redesign, packed-event history, barcode scanning, and transfer/receiving integration are not implemented. |
+| **Warehouse Operations** | ✅ Simplified | `/warehouse` groups Pickup and Delivery work into Needs Ready, Ready, and Delivery In Delivery sections. The Ready transition uses the canonical fulfillment status endpoint and does not change fulfilled quantities or inventory. Legacy pre-handoff URLs redirect back to `/warehouse`. |
 | **Pickup / Delivery** | ✅ Exists | Delivery: `/delivery` (schedule by date, uses fulfillment dashboard API). Fulfillment detail supports type PICKUP/DELIVERY; status flow to DELIVERED/PICKED_UP/COMPLETED. Inventory deduction on fulfillment final status (see below). |
 
 ---
@@ -115,7 +114,7 @@ Quote → Sales Order → Fulfillment → Invoice → Payment → Return → Sto
 **Gaps vs target:**
 
 - Sales: “Orders” mixes orders and sales-orders; no explicit “Quotes” entry (quotes are same doc type).
-- Fulfillment: Fulfillment dashboard, outbound queue, and early Picking/Packing pages exist, but a full Warehouse operational redesign is still outstanding.
+- Fulfillment: Fulfillment dashboard, outbound queue, and the simplified Warehouse Operations workspace exist. Pickup and Delivery completion remain future scoped workflows.
 - Purchasing: Not in sidebar (Suppliers is under Inventory). Purchasing (PO, Receiving, Bills) exists as pages but not as a nav group.
 - Analytics: Only one real sub-page (inventory); sales/customers are placeholders.
 
@@ -126,8 +125,8 @@ Quote → Sales Order → Fulfillment → Invoice → Payment → Return → Sto
 1. **Fulfillment queue as primary entry**  
    Fulfillment dashboard exists but nav could better emphasize “Fulfillment Queue” and make it the main entry between SO and Pickup/Delivery.
 
-2. **Picking & packing**  
-   Early pages exist and use fulfillment items, but they are not a complete Warehouse redesign. They still need event-level picked/packed history, scanner-friendly flows, and explicit integration boundaries for future receiving/transfers work.
+2. **Pickup and Delivery completion**
+   The Warehouse workspace now supports the Ready transition. Actual customer pickup and delivery completion still need focused flows that use the canonical fulfillment/inventory helpers.
 
 3. **Unified Quote entry**  
    Quotes are SOs with docType QUOTE; no dedicated “Quotes” list or filter in nav. Optional: a “Quotes” view/filter under Sales.
@@ -169,13 +168,13 @@ Quote → Sales Order → Fulfillment → Invoice → Payment → Return → Sto
    - Optionally add **Quotes** under Sales (e.g. filter or view on existing sales-orders list).  
    - Rename or add “Fulfillment Queue” as the main Fulfillment entry if desired.
 
-2. **Picking (fulfillment-centric)**  
-   - Implement picking UI that consumes **fulfillment items** (from SalesOrderFulfillmentItem): list by fulfillment or by outbound queue, allow “picked” state or notes.  
-   - Keep inventory deduction in the Phase 3A-0 canonical fulfillment helpers; picking can be a pre-step that updates notes or non-final workflow state only, unless a later approved design adds event-level picked quantities.
+2. **Pickup completion (fulfillment-centric)**
+   - Implement customer pickup handoff inside the existing fulfillment model.
+   - Keep inventory deduction in the Phase 3A-0 canonical fulfillment helpers.
 
-3. **Packing (fulfillment-centric)**  
-   - Packing UI per fulfillment: confirm items packed, then use the canonical fulfillment item/status routes for fulfilled quantities and final status transitions.
-   - Ensures fulfillment remains the single place where inventory is decremented and Sales Order fulfillment state is synchronized.
+3. **Delivery completion (fulfillment-centric)**
+   - Implement delivery handoff inside the existing fulfillment model.
+   - Preserve fulfillment as the single place where inventory is decremented and Sales Order fulfillment state is synchronized.
 
 4. **SO ↔ Fulfillment status consistency**  
    - Keep future workflow changes on the canonical fulfillment path. Do not reintroduce direct Sales Order `FULFILLED` status changes or direct Sales Order item `fulfillQty` edits.

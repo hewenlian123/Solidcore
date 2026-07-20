@@ -90,8 +90,6 @@ const navGroups: NavGroup[] = [
       { label: "Warehouse", href: "/warehouse", icon: ClipboardList, roles: ["ADMIN", "WAREHOUSE"], matchStartsWith: ["/warehouse"] },
       { label: "Pickup", href: "/fulfillment", icon: Package, roles: ["ADMIN", "WAREHOUSE"], matchStartsWith: ["/fulfillment"] },
       { label: "Delivery", href: "/delivery", icon: Truck, roles: ["ADMIN", "WAREHOUSE"] },
-      { label: "Picking", href: "/warehouse/picking", icon: PackageCheck, roles: ["ADMIN", "WAREHOUSE"] },
-      { label: "Packing", href: "/warehouse/packing", icon: Package, roles: ["ADMIN", "WAREHOUSE"] },
     ],
   },
   {

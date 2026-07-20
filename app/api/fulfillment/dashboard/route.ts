@@ -78,7 +78,7 @@ export async function GET(request: NextRequest) {
         },
       }),
       prisma.salesOrderFulfillment.count({
-        where: { status: { in: ["DRAFT", "SCHEDULED", "PACKING", "READY"] } },
+        where: { status: { in: ["DRAFT", "SCHEDULED", "READY"] } },
       }),
       prisma.salesOrderFulfillment.findMany({
         where: {
@@ -164,4 +164,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Failed to load fulfillment dashboard." }, { status: 500 });
   }
 }
-

@@ -256,7 +256,7 @@ export async function syncSalesOrderFulfillmentFromFulfillment(
   const hasFulfillment = !!(await tx.salesOrderFulfillment.findFirst({
     where: {
       salesOrderId,
-      status: { in: ["DRAFT", "SCHEDULED", "PACKING", "READY", "OUT_FOR_DELIVERY", "PARTIAL"] },
+      status: { in: ["DRAFT", "SCHEDULED", "READY", "OUT_FOR_DELIVERY", "PARTIAL"] },
     },
     select: { id: true },
   }));

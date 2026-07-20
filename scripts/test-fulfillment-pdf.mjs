@@ -403,15 +403,15 @@ async function main() {
   console.log(`Created delivery fixture ${delivery.order.orderNumber} (${delivery.fulfillment.items.length} items)`);
   console.log(`Created pickup fixture ${pickup.order.orderNumber} (${pickup.fulfillment.items.length} items)`);
 
-  const pickPdf = await api(`/api/fulfillments/${delivery.fulfillment.id}/pdf?type=pick`);
-  assertPdfResponse("delivery pick list", pickPdf);
-  if (!String(pickPdf.disposition || "").includes("inline")) {
-    fail(`delivery pick list: expected inline disposition, got ${pickPdf.disposition || "empty"}`);
+  const prepPdf = await api(`/api/fulfillments/${delivery.fulfillment.id}/pdf?type=pick`);
+  assertPdfResponse("delivery preparation list", prepPdf);
+  if (!String(prepPdf.disposition || "").includes("inline")) {
+    fail(`delivery preparation list: expected inline disposition, got ${prepPdf.disposition || "empty"}`);
   }
-  if (!String(pickPdf.disposition || "").includes(delivery.order.orderNumber)) {
-    fail("delivery pick list: filename does not include the order number");
+  if (!String(prepPdf.disposition || "").includes(delivery.order.orderNumber)) {
+    fail("delivery preparation list: filename does not include the order number");
   }
-  console.log("PASS: Delivery pick list returns a valid inline PDF with order-number filename");
+  console.log("PASS: Delivery preparation list returns a valid inline PDF with order-number filename");
 
   const deliverySlip = await api(`/api/fulfillments/${delivery.fulfillment.id}/pdf?type=slip`);
   assertPdfResponse("delivery slip", deliverySlip);
@@ -427,10 +427,10 @@ async function main() {
   }
   console.log("PASS: Pickup slip returns a valid PDF");
 
-  const downloadPick = await api(`/api/fulfillments/${delivery.fulfillment.id}/pdf?type=pick&download=true`);
-  assertPdfResponse("download pick list", downloadPick);
-  if (!String(downloadPick.disposition || "").includes("attachment")) {
-    fail(`download pick list: expected attachment disposition, got ${downloadPick.disposition || "empty"}`);
+  const downloadPrep = await api(`/api/fulfillments/${delivery.fulfillment.id}/pdf?type=pick&download=true`);
+  assertPdfResponse("download preparation list", downloadPrep);
+  if (!String(downloadPrep.disposition || "").includes("attachment")) {
+    fail(`download preparation list: expected attachment disposition, got ${downloadPrep.disposition || "empty"}`);
   }
   console.log("PASS: Download mode returns attachment disposition");
 

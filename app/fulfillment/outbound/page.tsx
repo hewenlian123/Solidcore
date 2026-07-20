@@ -36,7 +36,6 @@ const statusBadge = (status: string) => {
   if (key === "COMPLETED" || key === "DELIVERED" || key === "PICKED_UP") return "bg-emerald-100 text-emerald-700";
   if (key === "OUT_FOR_DELIVERY" || key === "OUT" || key === "IN_PROGRESS") return "bg-sky-100 text-sky-700";
   if (key === "READY") return "bg-cyan-100 text-cyan-700";
-  if (key === "PACKING") return "bg-violet-100 text-violet-700";
   if (key === "PARTIAL") return "bg-amber-100 text-amber-700";
   if (key === "CANCELLED") return "bg-slate-200 text-slate-600";
   return "bg-slate-100 text-slate-700";
@@ -202,7 +201,7 @@ export default function FulfillmentOutboundPage() {
                         rel="noopener noreferrer"
                         className="ios-secondary-btn h-8 px-2 text-xs"
                       >
-                        Pick List
+                        Preparation List
                       </a>
                       <a
                         href={`/api/fulfillments/${row.id}/pdf?type=slip`}

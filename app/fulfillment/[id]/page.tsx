@@ -181,16 +181,12 @@ export default function FulfillmentDetailPage() {
 
   const timeline = useMemo(() => {
     const status = String(data?.status ?? "").toUpperCase();
-    const hasAnyPicked = completionInfo.anyFulfilled;
-    const isPackingOrBeyond = ["PACKING", "READY", "OUT_FOR_DELIVERY", "DELIVERED", "PICKED_UP", "COMPLETED", "PARTIAL"].includes(status);
     const isReadyOrBeyond = ["READY", "OUT_FOR_DELIVERY", "DELIVERED", "PICKED_UP", "COMPLETED"].includes(status);
     const isOutOrPicked = ["OUT_FOR_DELIVERY", "OUT", "IN_PROGRESS"].includes(status) || Boolean(data?.markedOutAt);
     const isDone = ["DELIVERED", "PICKED_UP", "COMPLETED"].includes(status) || Boolean(data?.markedDoneAt);
 
     return [
       { key: "created", label: "Created", done: true, when: fmtDateTime(data?.createdAt) },
-      { key: "picking", label: "Picking started", done: hasAnyPicked, when: "— (not tracked)" },
-      { key: "packing", label: "Packing started", done: isPackingOrBeyond, when: status === "PACKING" ? "— (not tracked)" : isPackingOrBeyond ? "—" : "—" },
       { key: "ready", label: "Ready", done: isReadyOrBeyond, when: isReadyOrBeyond ? "— (not tracked)" : "—" },
       {
         key: "out",
@@ -200,7 +196,7 @@ export default function FulfillmentDetailPage() {
       },
       { key: "done", label: "Completed", done: isDone, when: data?.markedDoneAt ? fmtDateTime(data.markedDoneAt) : "—" },
     ];
-  }, [completionInfo.anyFulfilled, data?.createdAt, data?.markedDoneAt, data?.markedOutAt, data?.status, data?.type]);
+  }, [data?.createdAt, data?.markedDoneAt, data?.markedOutAt, data?.status, data?.type]);
 
   const canEditShipto = useMemo(() => {
     const key = String(data?.status ?? "").toUpperCase();
@@ -345,7 +341,6 @@ export default function FulfillmentDetailPage() {
     if (key === "OUT" || key === "IN_PROGRESS" || key === "OUT_FOR_DELIVERY") return "bg-sky-100 text-sky-700";
     if (key === "DELIVERED" || key === "PICKED_UP") return "bg-emerald-100 text-emerald-700";
     if (key === "READY") return "bg-cyan-100 text-cyan-700";
-    if (key === "PACKING") return "bg-violet-100 text-violet-700";
     if (key === "PARTIAL") return "bg-amber-100 text-amber-700";
     if (key === "CANCELLED") return "bg-slate-200 text-slate-600";
     return "bg-slate-100 text-slate-700";
@@ -422,13 +417,13 @@ export default function FulfillmentDetailPage() {
               type="button"
               onClick={() =>
                 setPdfPreview({
-                  title: "Pick List",
+                  title: "Preparation List",
                   src: `/api/fulfillments/${data.id}/pdf?type=pick`,
                 })
               }
               className="ios-secondary-btn h-9 px-3 text-xs"
             >
-              Pick List (PDF)
+              Preparation List (PDF)
             </button>
             <a
               href={`/api/fulfillments/${data.id}/pdf?type=pick&download=true`}
@@ -436,7 +431,7 @@ export default function FulfillmentDetailPage() {
               rel="noopener noreferrer"
               className="ios-secondary-btn h-9 px-3 text-xs"
             >
-              Download Pick List
+              Download Preparation List
             </a>
             <button
               type="button"
@@ -632,9 +627,6 @@ export default function FulfillmentDetailPage() {
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button type="button" onClick={saveMeta} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
             Save Info
-          </button>
-          <button type="button" onClick={() => updateStatus("packing")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
-            Mark Packing
           </button>
           <button type="button" onClick={() => updateStatus("ready")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
             Mark Ready

@@ -398,7 +398,7 @@ export async function setFulfillmentStatus(
     },
   });
 
-  if (nextStatus === "IN_PROGRESS" || nextStatus === "READY" || nextStatus === "PACKING") {
+  if (nextStatus === "IN_PROGRESS" || nextStatus === "READY") {
     await tx.salesOrder.update({
       where: { id: fulfillment.salesOrderId },
       data: { status: "READY" },

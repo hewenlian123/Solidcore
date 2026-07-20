@@ -497,7 +497,7 @@ test.describe("Order Detail operational header", () => {
     await expect(fulfillment).toContainText("0/1 items");
     await expect(fulfillment).toContainText("Scheduled");
     await expect(fulfillment).toContainText("7/19/2026");
-    await expect(fulfillment).toContainText("Pick List");
+    await expect(fulfillment).toContainText("Preparation List");
     await expect(fulfillment).toContainText("Delivery Slip");
     await expect(header).toContainText(order.customer.name);
     await expect(header).toContainText(order.customer.phone ?? "");

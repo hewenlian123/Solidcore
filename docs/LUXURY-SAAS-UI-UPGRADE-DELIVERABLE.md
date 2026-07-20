@@ -54,7 +54,7 @@
 ## 4. Pages updated
 
 - **All pages** — New background (gradient + indigo/cyan/violet glows) and global typography/button tokens apply via **app/layout.tsx** and **app/globals.css**. No per-page edits were required for the background or for existing uses of `glass-card`, `ios-primary-btn`, `txt-primary`, etc.
-- **Phase 1 / Phase 2 pages** (Dashboard, Sales Orders list/detail/editor, Fulfillment Queue, Pickup, Delivery, Picking, Packing, Products, Inventory, Reorder, Finance, Price List, Customers, Returns, Store Credit, Analytics, Purchasing, Reports, Settings) — Already using the shared classes where implemented; they now render with the updated luxury tokens. No layout or workflow changes.
+- **Phase 1 / Phase 2 pages** (Dashboard, Sales Orders list/detail/editor, Fulfillment Queue, Warehouse Operations, Pickup, Delivery, Products, Inventory, Reorder, Finance, Price List, Customers, Returns, Store Credit, Analytics, Purchasing, Reports, Settings) — Already using the shared classes where implemented; they now render with the updated luxury tokens. No layout or workflow changes.
 
 ---
 

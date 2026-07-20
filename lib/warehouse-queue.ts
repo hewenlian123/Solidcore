@@ -3,7 +3,6 @@ export type WarehouseFulfillmentType = "PICKUP" | "DELIVERY";
 export type WarehouseFulfillmentStatus =
   | "DRAFT"
   | "SCHEDULED"
-  | "PACKING"
   | "READY"
   | "OUT_FOR_DELIVERY"
   | "DELIVERED"
@@ -14,36 +13,14 @@ export type WarehouseFulfillmentStatus =
   | "COMPLETED"
   | "CANCELLED";
 
-export type WarehouseStageId = "toPick" | "picking" | "ready";
+export type WarehouseSectionId = "needsReady" | "ready" | "inDelivery";
 
-export type WarehouseMethodFilter = "all" | "pickup" | "delivery";
+export type WarehouseMethodFilter = "pickup" | "delivery";
 
 export type WarehouseQueueRowBase = {
   type: WarehouseFulfillmentType;
   status: string | null | undefined;
 };
-
-export const WAREHOUSE_STAGE_DEFINITIONS: Array<{
-  id: WarehouseStageId;
-  label: string;
-  description: string;
-}> = [
-  {
-    id: "toPick",
-    label: "To Pick",
-    description: "Draft or scheduled fulfillments waiting for picking.",
-  },
-  {
-    id: "picking",
-    label: "Picking",
-    description: "Material being picked, packed, or partially fulfilled.",
-  },
-  {
-    id: "ready",
-    label: "Ready",
-    description: "Fulfillments staged and ready for pickup or delivery handoff.",
-  },
-];
 
 export const WAREHOUSE_METHOD_FILTERS: Array<{
   id: WarehouseMethodFilter;
@@ -51,19 +28,44 @@ export const WAREHOUSE_METHOD_FILTERS: Array<{
   description: string;
 }> = [
   {
-    id: "all",
-    label: "All",
-    description: "Pickup and delivery tasks in the selected stage.",
-  },
-  {
     id: "pickup",
     label: "Pickup",
-    description: "Only pickup tasks in the selected stage.",
+    description: "Counter pickup tasks waiting to be readied or handed off.",
   },
   {
     id: "delivery",
     label: "Delivery",
-    description: "Only delivery tasks in the selected stage.",
+    description: "Delivery tasks waiting to be readied or sent out.",
+  },
+];
+
+export const WAREHOUSE_SECTION_DEFINITIONS: Array<{
+  id: WarehouseSectionId;
+  label: string;
+  pickupLabel: string;
+  deliveryLabel: string;
+  description: string;
+}> = [
+  {
+    id: "needsReady",
+    label: "Needs Ready",
+    pickupLabel: "Needs Ready",
+    deliveryLabel: "Needs Ready",
+    description: "Confirmed work that still needs an explicit Ready check.",
+  },
+  {
+    id: "ready",
+    label: "Ready",
+    pickupLabel: "Ready for Pickup",
+    deliveryLabel: "Ready for Delivery",
+    description: "Material staged for customer pickup or delivery handoff.",
+  },
+  {
+    id: "inDelivery",
+    label: "In Delivery",
+    pickupLabel: "In Delivery",
+    deliveryLabel: "In Delivery",
+    description: "Delivery work already out or actively in progress.",
   },
 ];
 
@@ -81,7 +83,6 @@ export function normalizeWarehouseStatus(
   if (
     normalized === "DRAFT" ||
     normalized === "SCHEDULED" ||
-    normalized === "PACKING" ||
     normalized === "READY" ||
     normalized === "OUT_FOR_DELIVERY" ||
     normalized === "DELIVERED" ||
@@ -106,45 +107,64 @@ export function isDeliveryHandoffStatus(status: string | null | undefined) {
   return normalized === "OUT_FOR_DELIVERY" || normalized === "OUT" || normalized === "IN_PROGRESS";
 }
 
-export function getWarehouseStatusStage(
+export function getWarehouseStatusSection(
   status: string | null | undefined,
-): WarehouseStageId | null {
+  type: WarehouseFulfillmentType = "PICKUP",
+): WarehouseSectionId | null {
   const normalized = normalizeWarehouseStatus(status);
-  if (normalized === "DRAFT" || normalized === "SCHEDULED") return "toPick";
-  if (normalized === "PACKING" || normalized === "PARTIAL") return "picking";
+  if (normalized === "DRAFT" || normalized === "SCHEDULED" || normalized === "PARTIAL") {
+    return "needsReady";
+  }
   if (normalized === "READY") return "ready";
+  if (type === "DELIVERY" && isDeliveryHandoffStatus(normalized)) return "inDelivery";
   return null;
 }
 
-export function isRowInWarehouseStage<T extends WarehouseQueueRowBase>(
+export function isRowInWarehouseSection<T extends WarehouseQueueRowBase>(
   row: T,
-  stageId: WarehouseStageId,
+  sectionId: WarehouseSectionId,
 ) {
   if (isClosedWarehouseStatus(row.status)) return false;
-  return getWarehouseStatusStage(row.status) === stageId;
+  return getWarehouseStatusSection(row.status, row.type) === sectionId;
 }
 
 export function rowMatchesWarehouseMethod<T extends WarehouseQueueRowBase>(
   row: T,
   method: WarehouseMethodFilter,
 ) {
-  if (method === "all") return true;
   if (method === "pickup") return row.type === "PICKUP";
   return row.type === "DELIVERY";
 }
 
-export function countWarehouseStages<T extends WarehouseQueueRowBase & { id?: string }>(rows: T[]) {
+export function countWarehouseSections<T extends WarehouseQueueRowBase & { id?: string }>(
+  rows: T[],
+  method: WarehouseMethodFilter,
+) {
   return Object.fromEntries(
-    WAREHOUSE_STAGE_DEFINITIONS.map((stage) => [
-      stage.id,
-      new Set(rows.filter((row) => isRowInWarehouseStage(row, stage.id)).map((row, index) => row.id ?? index)).size,
+    WAREHOUSE_SECTION_DEFINITIONS.map((section) => [
+      section.id,
+      new Set(
+        rows
+          .filter((row) => rowMatchesWarehouseMethod(row, method))
+          .filter((row) => isRowInWarehouseSection(row, section.id))
+          .map((row, index) => row.id ?? index),
+      ).size,
     ]),
-  ) as Record<WarehouseStageId, number>;
+  ) as Record<WarehouseSectionId, number>;
 }
 
 export function countWarehouseMethodSnapshot<T extends WarehouseQueueRowBase>(rows: T[]) {
   return {
-    pickupReady: rows.filter((row) => row.type === "PICKUP" && normalizeWarehouseStatus(row.status) === "READY").length,
+    pickupNeedsReady: rows.filter(
+      (row) => row.type === "PICKUP" && getWarehouseStatusSection(row.status, row.type) === "needsReady",
+    ).length,
+    pickupReady: rows.filter((row) => row.type === "PICKUP" && normalizeWarehouseStatus(row.status) === "READY")
+      .length,
+    deliveryNeedsReady: rows.filter(
+      (row) => row.type === "DELIVERY" && getWarehouseStatusSection(row.status, row.type) === "needsReady",
+    ).length,
+    deliveryReady: rows.filter((row) => row.type === "DELIVERY" && normalizeWarehouseStatus(row.status) === "READY")
+      .length,
     deliveryActive: rows.filter((row) => row.type === "DELIVERY" && isDeliveryHandoffStatus(row.status)).length,
   };
 }
@@ -165,17 +185,20 @@ export function getWarehousePrimaryAction(args: {
   id: string;
   type: WarehouseFulfillmentType;
   status: string | null | undefined;
-  stageId: WarehouseStageId;
 }) {
-  const status = normalizeWarehouseStatus(args.status);
-
-  if (args.stageId === "toPick") {
-    return { label: "Open Picking", href: "/warehouse/picking" };
+  const sectionId = getWarehouseStatusSection(args.status, args.type);
+  if (sectionId === "needsReady") {
+    return { kind: "markReady" as const, label: "Mark Ready" };
   }
-  if (args.stageId === "picking") {
-    return status === "PACKING" || status === "PARTIAL"
-      ? { label: "Continue Packing", href: "/warehouse/packing" }
-      : { label: "Continue Picking", href: "/warehouse/picking" };
+  if (sectionId === "ready") {
+    return {
+      kind: "link" as const,
+      label: args.type === "DELIVERY" ? "Open Delivery" : "Open Pickup",
+      href: `/fulfillment/${args.id}`,
+    };
   }
-  return { label: "Open Fulfillment", href: `/fulfillment/${args.id}` };
+  if (sectionId === "inDelivery") {
+    return { kind: "link" as const, label: "Open Delivery", href: `/fulfillment/${args.id}` };
+  }
+  return { kind: "link" as const, label: "Open Fulfillment", href: `/fulfillment/${args.id}` };
 }

@@ -114,7 +114,6 @@ enum SalesFulfillmentType {
 enum SalesFulfillmentStatus {
   DRAFT
   SCHEDULED
-  PACKING
   READY
   OUT_FOR_DELIVERY
   DELIVERED

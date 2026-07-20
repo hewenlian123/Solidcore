@@ -58,7 +58,6 @@ export async function GET(request: NextRequest, { params }: Params) {
 const STATUS_MAP: Record<string, string> = {
   draft: "DRAFT",
   scheduled: "SCHEDULED",
-  packing: "PACKING",
   ready: "READY",
   out: "OUT",
   partial: "PARTIAL",

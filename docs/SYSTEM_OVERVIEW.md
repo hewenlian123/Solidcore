@@ -268,7 +268,7 @@
 | | `/after-sales/returns`, `/after-sales/returns/[id]` | After-sales returns. |
 | | `/customers`, `/customers/[id]`, `/customers/[id]/statement` | Sales customers. |
 | **Fulfillment / Warehouse** | `/fulfillment/outbound`, `/fulfillment`, `/fulfillment/[id]` | Outbound queue, pickup, fulfillment detail. |
-| | `/warehouse/picking`, `/warehouse/packing`, `/warehouse/transfers` | Picking, packing, transfers. |
+| | `/warehouse`, `/warehouse/transfers` | Warehouse Ready workspace and transfers. |
 | | `/delivery`, `/outbound` | Delivery / outbound views. |
 | **Inventory & products** | `/inventory`, `/inventory/stock`, `/inventory/reorder`, `/inventory/movements` | Overview, stock, reorder, movements. |
 | | `/products`, `/products/[id]` | Product catalog. |

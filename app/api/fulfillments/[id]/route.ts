@@ -8,7 +8,6 @@ type Params = { params: Promise<{ id: string }> };
 const STATUS_MAP: Record<string, string> = {
   draft: "DRAFT",
   scheduled: "SCHEDULED",
-  packing: "PACKING",
   ready: "READY",
   out_for_delivery: "OUT_FOR_DELIVERY",
   delivered: "DELIVERED",

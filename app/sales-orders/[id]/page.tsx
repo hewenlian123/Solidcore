@@ -2805,13 +2805,13 @@ export default function SalesOrderDetailPage() {
                           type="button"
                           onClick={() =>
                             setPdfPreview({
-                              title: `Pick List ${activeFulfillment.id.slice(0, 8)}`,
+                              title: `Preparation List ${activeFulfillment.id.slice(0, 8)}`,
                               src: `/api/fulfillments/${activeFulfillment.id}/pdf?type=pick`,
                             })
                           }
                           className="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/90 transition hover:bg-white/10"
                         >
-                          Pick List
+                          Preparation List
                         </button>
                         <button
                           type="button"

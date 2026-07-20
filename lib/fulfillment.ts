@@ -59,7 +59,7 @@ export async function ensureFulfillmentFromSalesOrder(
   const existing = await tx.salesOrderFulfillment.findUnique({
     where: { salesOrderId: args.salesOrderId },
   });
-  const mutableStatuses = new Set(["DRAFT", "SCHEDULED", "PACKING", "READY"]);
+  const mutableStatuses = new Set(["DRAFT", "SCHEDULED", "READY"]);
   const progressedStatuses = new Set([
     "OUT_FOR_DELIVERY",
     "DELIVERED",

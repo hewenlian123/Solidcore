@@ -102,8 +102,6 @@ const shellItems: ShellNavItem[] = [
     children: [
       { label: "Operations", href: "/warehouse", roles: ["ADMIN", "WAREHOUSE"], exact: true },
       { label: "Fulfillment Queue", href: "/fulfillment/outbound", roles: ["ADMIN", "WAREHOUSE"], matchStartsWith: ["/fulfillment/outbound", "/outbound"] },
-      { label: "Picking", href: "/warehouse/picking", roles: ["ADMIN", "WAREHOUSE"] },
-      { label: "Packing", href: "/warehouse/packing", roles: ["ADMIN", "WAREHOUSE"] },
       { label: "Pickup", href: "/fulfillment", roles: ["ADMIN", "WAREHOUSE"], matchStartsWith: ["/fulfillment"] },
       { label: "Delivery", href: "/delivery", roles: ["ADMIN", "WAREHOUSE"], matchStartsWith: ["/delivery"] },
     ],

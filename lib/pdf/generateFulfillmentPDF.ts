@@ -128,14 +128,14 @@ export async function generateFulfillmentPDF(data: FulfillmentPdfData): Promise<
 
   const title =
     data.type === "pick"
-      ? "PICK LIST"
+      ? "PREPARATION LIST"
       : data.fulfillmentType === "DELIVERY"
         ? "DELIVERY SLIP"
         : "PICKUP SLIP";
 
   const docLabel =
     data.type === "pick"
-      ? "Pick List #"
+      ? "Preparation List #"
       : data.fulfillmentType === "DELIVERY"
         ? "Delivery #"
         : "Pickup #";

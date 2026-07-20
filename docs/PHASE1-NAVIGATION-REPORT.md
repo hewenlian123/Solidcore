@@ -18,10 +18,9 @@ All sidebar and AppShell nav entries now point to the canonical routes below. Ex
 | | Returns | `/after-sales/returns` | Unchanged. |
 | | Customers | `/customers` | Unchanged. |
 | **Fulfillment** | Fulfillment Queue | `/fulfillment/outbound` | Unchanged. |
+| | Warehouse Operations | `/warehouse` | Simplified Ready workspace. |
 | | Pickup | `/fulfillment` | Unchanged. |
 | | Delivery | `/delivery` | Unchanged. |
-| | Picking | `/warehouse/picking` | Unchanged. |
-| | Packing | `/warehouse/packing` | Unchanged. |
 | **Inventory** | Overview | `/inventory` | Unchanged. |
 | | Products | `/products` | Unchanged. |
 | | Stock Levels | `/inventory/stock` | Unchanged. |
@@ -78,8 +77,8 @@ Sidebar and AppShell no longer link to these as primary entries (canonical route
   - Returns → `/after-sales/returns`.  
   - Invoices, Payments, Customers unchanged.
 - **Fulfillment:**  
-  - Order set to: Fulfillment Queue → Pickup → Delivery → Picking → Packing.  
-  - All links canonical (`/fulfillment/outbound`, `/fulfillment`, `/delivery`, `/warehouse/picking`, `/warehouse/packing`).  
+  - Order set to: Fulfillment Queue → Warehouse Operations → Pickup → Delivery.
+  - All links canonical (`/fulfillment/outbound`, `/warehouse`, `/fulfillment`, `/delivery`).
   - Removed any nav to `/outbound`.
 - **Inventory:** Unchanged (Overview, Products, Stock Levels, Reorder List, Movements, Warehouses).
 - **Purchasing:** Unchanged.

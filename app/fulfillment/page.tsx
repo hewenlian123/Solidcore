@@ -8,7 +8,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 type FulfillmentStatus =
   | "DRAFT"
   | "SCHEDULED"
-  | "PACKING"
   | "READY"
   | "OUT_FOR_DELIVERY"
   | "DELIVERED"
@@ -78,7 +77,6 @@ function statusBadge(status: FulfillmentStatus) {
   if (status === "OUT_FOR_DELIVERY" || status === "OUT" || status === "IN_PROGRESS") return "bg-blue-100 text-blue-700";
   if (status === "DELIVERED" || status === "PICKED_UP") return "bg-emerald-100 text-emerald-700";
   if (status === "READY") return "bg-cyan-100 text-cyan-700";
-  if (status === "PACKING") return "bg-violet-100 text-violet-700";
   if (status === "PARTIAL") return "bg-amber-100 text-amber-700";
   if (status === "CANCELLED") return "bg-slate-200 text-slate-600";
   return "bg-amber-100 text-amber-700";
@@ -87,7 +85,6 @@ function statusBadge(status: FulfillmentStatus) {
 function statusLabel(status: FulfillmentStatus) {
   if (status === "SCHEDULED") return "Scheduled";
   if (status === "DRAFT") return "Draft";
-  if (status === "PACKING") return "Packing";
   if (status === "READY") return "Ready";
   if (status === "OUT_FOR_DELIVERY" || status === "OUT" || status === "IN_PROGRESS") return "Out for Delivery";
   if (status === "DELIVERED") return "Delivered";
@@ -603,4 +600,3 @@ export default function FulfillmentDashboardPage() {
     </section>
   );
 }
-

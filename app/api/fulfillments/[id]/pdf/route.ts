@@ -68,7 +68,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 
   const asDownload = request.nextUrl.searchParams.get("download") === "true";
   const disposition = asDownload ? "attachment" : "inline";
-  const suffix = typeRaw === "pick" ? "pick-list" : fulfillment.type === "DELIVERY" ? "delivery-slip" : "pickup-slip";
+  const suffix = typeRaw === "pick" ? "preparation-list" : fulfillment.type === "DELIVERY" ? "delivery-slip" : "pickup-slip";
   return new Response(new Uint8Array(pdfBytes).buffer, {
     headers: {
       "Content-Type": "application/pdf",

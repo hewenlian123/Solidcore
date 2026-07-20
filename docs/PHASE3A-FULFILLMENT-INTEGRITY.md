@@ -37,7 +37,6 @@ Fulfillment statuses are:
 
 - `DRAFT`
 - `SCHEDULED`
-- `PACKING`
 - `READY`
 - `OUT_FOR_DELIVERY`
 - `DELIVERED`
