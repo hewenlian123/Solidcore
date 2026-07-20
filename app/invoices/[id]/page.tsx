@@ -19,6 +19,7 @@ type InvoiceDetail = {
   dueDate: string | null;
   status: string;
   subtotal: string;
+  discountAmount: string;
   taxRate: number | null;
   taxAmount: string;
   total: string;
@@ -382,6 +383,7 @@ export default function InvoiceDetailPage() {
 
   if (loading) return <div className="glass-card p-8 text-sm text-slate-400">Loading invoice...</div>;
   if (!data) return <div className="glass-card p-8 text-sm text-slate-400">Invoice not found.</div>;
+  const discountAmount = Math.max(0, Number(data.discountAmount ?? 0));
 
   return (
     <section className="space-y-8">
@@ -550,6 +552,10 @@ export default function InvoiceDetailPage() {
         <aside className="linear-card space-y-3 p-8 text-sm">
           <h2 className="text-base font-semibold text-slate-900">Totals</h2>
           <div className="flex justify-between"><span className="text-slate-500">Subtotal</span><span>${Number(data.subtotal).toFixed(2)}</span></div>
+          <div className="flex justify-between">
+            <span className="text-slate-500">Discount</span>
+            <span>{discountAmount > 0 ? "-" : ""}${discountAmount.toFixed(2)}</span>
+          </div>
           <div className="flex justify-between">
             <span className="text-slate-500">Tax ({Number(data.taxRate ?? 0).toFixed(3)}%)</span>
             <span>${Number(data.taxAmount).toFixed(2)}</span>

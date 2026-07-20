@@ -55,6 +55,7 @@ type InvoicePDFData = {
     lineTotal: number;
   }>;
   subtotal: number;
+  discountAmount?: number;
   taxRate?: number | null;
   taxAmount: number;
   total: number;
@@ -434,12 +435,16 @@ export async function generateInvoicePDF(data: InvoicePDFData): Promise<Uint8Arr
 
   // Totals + payment methods + bank block
   y -= 10;
-  ensurePlainSpace(150);
+  ensurePlainSpace(164);
   const summaryTopY = y;
   const totalsLeft = pageWidth - margin - 200;
   const totalsRight = pageWidth - margin;
+  const discountAmount = Math.max(0, Number(data.discountAmount ?? 0));
   drawText("Subtotal", totalsLeft, 10);
   drawRight(formatMoney(data.subtotal), totalsRight, 10);
+  y -= 14;
+  drawText("Discount", totalsLeft, 10);
+  drawRight(discountAmount > 0 ? `-${formatMoney(discountAmount)}` : formatMoney(0), totalsRight, 10);
   y -= 14;
   drawText(`Tax (${Number(data.taxRate ?? 0).toFixed(3)}%)`, totalsLeft, 10);
   drawRight(formatMoney(data.taxAmount), totalsRight, 10);

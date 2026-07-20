@@ -239,6 +239,7 @@ export async function POST(request: NextRequest) {
           dueDate,
           status: "draft",
           subtotal,
+          discountAmount: 0,
           taxRate: resolvedTaxRate,
           taxAmount,
           total,

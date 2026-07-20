@@ -835,6 +835,7 @@ model Invoice {
   dueDate        DateTime? @map("due_date")
   status         String    @default("draft")
   subtotal       Decimal   @default(0)
+  discountAmount Decimal   @default(0) @map("discount_amount")
   taxRate        Decimal?  @map("tax_rate")
   taxAmount      Decimal   @default(0) @map("tax_amount")
   total          Decimal   @default(0)
@@ -851,7 +852,7 @@ model Invoice {
   sourceReturns  SalesReturn[]        @relation("return_source_invoice")
   afterSalesReturns AfterSalesReturn[]
 
-  @@index([salesOrderId])
+  @@unique([salesOrderId])
   @@index([customerId])
   @@index([issueDate])
   @@index([status])

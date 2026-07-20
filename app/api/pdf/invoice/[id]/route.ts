@@ -145,6 +145,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       lineTotal: Number(item.lineTotal),
     })),
     subtotal: Number(invoice.subtotal),
+    discountAmount: Number(invoice.discountAmount ?? 0),
     taxRate: invoice.taxRate != null ? Number(invoice.taxRate) : null,
     taxAmount: Number(invoice.taxAmount),
     total,
