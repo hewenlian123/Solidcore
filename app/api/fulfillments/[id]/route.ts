@@ -33,11 +33,34 @@ export async function GET(request: NextRequest, { params }: Params) {
             id: true,
             orderNumber: true,
             status: true,
-            customer: { select: { id: true, name: true } },
+            customer: { select: { id: true, name: true, phone: true } },
+            specialOrder: true,
+            specialOrderStatus: true,
+            etaDate: true,
+            supplier: { select: { name: true } },
             invoices: { select: { id: true, invoiceNumber: true }, orderBy: { createdAt: "desc" }, take: 1 },
           },
         },
-        items: { orderBy: { createdAt: "asc" } },
+        items: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            salesOrderItem: {
+              select: {
+                isSpecialOrder: true,
+                specialOrderStatus: true,
+                specialFollowupDate: true,
+                linkedPo: {
+                  select: {
+                    poNumber: true,
+                    status: true,
+                    expectedArrival: true,
+                    supplier: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
       },
     });
     if (!data) return NextResponse.json({ error: "Fulfillment not found." }, { status: 404 });

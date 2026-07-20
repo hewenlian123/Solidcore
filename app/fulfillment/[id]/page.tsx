@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRole } from "@/components/layout/role-provider";
 import { PDFPreviewModal } from "@/components/pdf/PDFPreviewModal";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -40,12 +40,27 @@ type FulfillmentDetail = {
     orderedQty: string;
     fulfilledQty: string;
     notes: string | null;
+    salesOrderItem?: {
+      isSpecialOrder: boolean;
+      specialOrderStatus: string | null;
+      specialFollowupDate: string | null;
+      linkedPo: {
+        poNumber: string;
+        status: string;
+        expectedArrival: string | null;
+        supplier: { name: string } | null;
+      } | null;
+    } | null;
   }>;
   salesOrder: {
     id: string;
     orderNumber: string;
     status: string;
-    customer: { id: string; name: string } | null;
+    specialOrder?: boolean;
+    specialOrderStatus?: string | null;
+    etaDate?: string | null;
+    supplier?: { name: string } | null;
+    customer: { id: string; name: string; phone?: string | null } | null;
     invoices?: Array<{ id: string; invoiceNumber: string }>;
   };
 };
@@ -81,6 +96,12 @@ export default function FulfillmentDetailPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [pdfPreview, setPdfPreview] = useState<{ title: string; src: string } | null>(null);
+  const mutationInFlightRef = useRef(false);
+
+  const isPickup = data?.type === "PICKUP";
+  const fulfillmentStatus = String(data?.status ?? "").toUpperCase();
+  const pickupCanComplete = isPickup && ["READY", "PARTIAL"].includes(fulfillmentStatus);
+  const pickupClosed = isPickup && ["PICKED_UP", "COMPLETED"].includes(fulfillmentStatus);
 
   const load = async () => {
     try {
@@ -99,7 +120,11 @@ export default function FulfillmentDetailPage() {
           next.items.map((item) => [
             item.id,
             {
-              fulfilledQty: String(item.fulfilledQty ?? "0"),
+              fulfilledQty:
+                next.type === "PICKUP" &&
+                ["READY", "PARTIAL"].includes(String(next.status ?? "").toUpperCase())
+                  ? String(item.orderedQty ?? "0")
+                  : String(item.fulfilledQty ?? "0"),
               notes: String(item.notes ?? ""),
             },
           ]),
@@ -156,14 +181,13 @@ export default function FulfillmentDetailPage() {
     if (total === 0) return { total: 0, completed: 0, percent: 0 };
     let completed = 0;
     for (const row of rows) {
-      const draft = itemDrafts[row.id];
-      const fulfilled = Number(draft?.fulfilledQty ?? row.fulfilledQty ?? 0);
+      const fulfilled = Number(row.fulfilledQty ?? 0);
       const ordered = Number(row.orderedQty ?? 0);
       if (Number.isFinite(fulfilled) && Number.isFinite(ordered) && fulfilled >= ordered) completed += 1;
     }
     const percent = Math.round((completed / total) * 100);
     return { total, completed, percent };
-  }, [data?.items, itemDrafts]);
+  }, [data?.items]);
 
   const fmtDateTime = (value: string | Date | null | undefined) => {
     if (!value) return "—";
@@ -178,6 +202,30 @@ export default function FulfillmentDetailPage() {
       minute: "2-digit",
     });
   };
+
+  const fmtQty = (value: string | number | null | undefined) => {
+    const numeric = Number(value ?? 0);
+    if (!Number.isFinite(numeric)) return "0";
+    return numeric.toLocaleString("en-US", {
+      maximumFractionDigits: 2,
+      minimumFractionDigits: numeric % 1 === 0 ? 0 : 2,
+    });
+  };
+
+  const specialOrderSummary = useMemo(() => {
+    const specialItems = (data?.items ?? []).filter((item) => item.salesOrderItem?.isSpecialOrder);
+    if (!data?.salesOrder.specialOrder && specialItems.length === 0) return null;
+    const linkedPo = specialItems.find((item) => item.salesOrderItem?.linkedPo)?.salesOrderItem?.linkedPo;
+    return {
+      lineCount: specialItems.length,
+      status:
+        specialItems.find((item) => item.salesOrderItem?.specialOrderStatus)?.salesOrderItem?.specialOrderStatus ??
+        data?.salesOrder.specialOrderStatus ??
+        "Special Order",
+      supplier: linkedPo?.supplier?.name ?? data?.salesOrder.supplier?.name ?? null,
+      eta: linkedPo?.expectedArrival ?? data?.salesOrder.etaDate ?? null,
+    };
+  }, [data?.items, data?.salesOrder]);
 
   const timeline = useMemo(() => {
     const status = String(data?.status ?? "").toUpperCase();
@@ -245,6 +293,56 @@ export default function FulfillmentDetailPage() {
     }
   };
 
+  const completePickup = async () => {
+    if (!data || data.type !== "PICKUP" || mutationInFlightRef.current) return;
+    try {
+      mutationInFlightRef.current = true;
+      setSaving(true);
+      setError(null);
+      setSuccess(null);
+
+      const items = data.items.map((item) => {
+        const draft = itemDrafts[item.id] ?? { fulfilledQty: String(item.fulfilledQty ?? "0"), notes: item.notes ?? "" };
+        const fulfilledQty = Number(draft.fulfilledQty);
+        const orderedQty = Number(item.orderedQty ?? 0);
+        const currentFulfilledQty = Number(item.fulfilledQty ?? 0);
+        if (!Number.isFinite(fulfilledQty) || fulfilledQty < 0) {
+          throw new Error(`Pickup quantity for "${item.title}" must be greater than or equal to 0.`);
+        }
+        if (fulfilledQty > orderedQty) {
+          throw new Error(`Pickup quantity for "${item.title}" cannot exceed ordered quantity.`);
+        }
+        if (fulfilledQty < currentFulfilledQty) {
+          throw new Error(`Pickup quantity for "${item.title}" cannot be less than already fulfilled quantity.`);
+        }
+        return { id: item.id, fulfilledQty: draft.fulfilledQty, notes: draft.notes };
+      });
+
+      if (!items.some((item) => Number(item.fulfilledQty) > 0)) {
+        throw new Error("Enter at least one pickup quantity before completing pickup.");
+      }
+
+      const res = await fetch(`/api/fulfillments/${data.id}/pickup`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", "x-user-role": role },
+        body: JSON.stringify({ items }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to complete pickup");
+      const updatedStatus = String(payload.data?.status ?? "").toUpperCase();
+      if (!["PICKED_UP", "COMPLETED", "PARTIAL"].includes(updatedStatus)) {
+        throw new Error("Pickup update did not return a completed or partial pickup status.");
+      }
+      setSuccess(updatedStatus === "PARTIAL" ? "Partial pickup recorded." : "Pickup completed.");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to complete pickup");
+    } finally {
+      mutationInFlightRef.current = false;
+      setSaving(false);
+    }
+  };
+
   const saveMeta = async () => {
     if (!data) return;
     try {
@@ -283,6 +381,10 @@ export default function FulfillmentDetailPage() {
 
   const saveItems = async () => {
     if (!data) return;
+    if (data.type === "PICKUP") {
+      await completePickup();
+      return;
+    }
     try {
       setSaving(true);
       setError(null);
@@ -350,19 +452,25 @@ export default function FulfillmentDetailPage() {
   if (!data) return <div className="glass-card p-8 text-sm text-slate-400">Fulfillment not found.</div>;
 
   return (
-    <section className="space-y-6">
+    <section className="space-y-6" data-testid="fulfillment-detail">
       {error ? (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
+        <div data-testid="fulfillment-error" role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
       ) : null}
       {success ? (
-        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div>
+        <div data-testid="fulfillment-success" role="status" className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{success}</div>
       ) : null}
       <div className="glass-card p-8">
         <div className="glass-card-content flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white">Fulfillment · {data.id}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
+              {data.type === "PICKUP" ? "Pickup" : "Fulfillment"} · {data.salesOrder.orderNumber}
+            </h1>
             <p className="mt-2 text-sm text-slate-400">
-              SO: {data.salesOrder.orderNumber} · Customer: {data.salesOrder.customer?.name ?? "-"} · {data.type}
+              {data.salesOrder.customer?.name ?? data.customer?.name ?? "-"}
+              {data.customer?.phone || data.salesOrder.customer?.phone
+                ? ` · ${data.customer?.phone ?? data.salesOrder.customer?.phone}`
+                : ""}{" "}
+              · {data.type === "PICKUP" ? "Counter pickup" : "Delivery"}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className={`inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${statusBadge(data.status)}`}>
@@ -377,6 +485,19 @@ export default function FulfillmentDetailPage() {
                 {itemProgress.completed}/{itemProgress.total} items complete · {itemProgress.percent}%
               </span>
             </div>
+            {data.type === "PICKUP" ? (
+              <p className="mt-3 max-w-2xl text-sm text-slate-400" data-testid="pickup-workflow-guidance">
+                Complete Pickup records the customer handoff through the canonical fulfillment path. It deducts inventory for the fulfilled quantities only.
+              </p>
+            ) : null}
+            {specialOrderSummary ? (
+              <div data-testid="pickup-special-order-warning" className="mt-3 inline-flex max-w-full flex-wrap items-center gap-2 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100">
+                <span>Special Order</span>
+                <span className="text-amber-200/80">{specialOrderSummary.status}</span>
+                {specialOrderSummary.supplier ? <span>{specialOrderSummary.supplier}</span> : null}
+                {specialOrderSummary.eta ? <span>ETA {fmtDateTime(specialOrderSummary.eta)}</span> : null}
+              </div>
+            ) : null}
             <div className="mt-2 h-2 w-full max-w-[360px] overflow-hidden rounded-full bg-white/10">
               <div
                 className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500"
@@ -628,16 +749,25 @@ export default function FulfillmentDetailPage() {
           <button type="button" onClick={saveMeta} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
             Save Info
           </button>
-          <button type="button" onClick={() => updateStatus("ready")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
-            Mark Ready
-          </button>
-          {data.type === "DELIVERY" ? (
-            <button type="button" onClick={() => quickStatus("out_for_delivery")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
-              Mark Out
+          {!pickupClosed ? (
+            <button type="button" onClick={() => updateStatus("ready")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
+              Mark Ready
+            </button>
+          ) : null}
+          {data.type === "PICKUP" ? (
+            <button
+              type="button"
+              data-testid="pickup-complete-action"
+              onClick={completePickup}
+              disabled={saving || !pickupCanComplete}
+              aria-busy={saving}
+              className="ios-primary-btn h-9 px-3 text-xs disabled:opacity-60"
+            >
+              {saving ? "Completing Pickup..." : "Complete Pickup"}
             </button>
           ) : (
-            <button type="button" onClick={() => quickStatus("picked_up")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
-              Mark Picked Up
+            <button type="button" onClick={() => quickStatus("out_for_delivery")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
+              Mark Out
             </button>
           )}
           {data.type === "DELIVERY" ? (
@@ -645,14 +775,16 @@ export default function FulfillmentDetailPage() {
               Mark Delivered
             </button>
           ) : null}
-          <button
-            type="button"
-            onClick={() => updateStatus("completed")}
-            disabled={saving || !completionInfo.allCompleted}
-            className="ios-primary-btn h-9 px-3 text-xs disabled:opacity-60"
-          >
-            Mark Completed
-          </button>
+          {data.type === "DELIVERY" ? (
+            <button
+              type="button"
+              onClick={() => updateStatus("completed")}
+              disabled={saving || !completionInfo.allCompleted}
+              className="ios-primary-btn h-9 px-3 text-xs disabled:opacity-60"
+            >
+              Mark Completed
+            </button>
+          ) : null}
           <button type="button" onClick={() => updateStatus("cancelled")} disabled={saving} className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60">
             Cancel Fulfillment
           </button>
@@ -671,7 +803,9 @@ export default function FulfillmentDetailPage() {
               <TableHead className="text-slate-400">Title</TableHead>
               <TableHead className="text-slate-400">SKU</TableHead>
               <TableHead className="text-right text-slate-400">Ordered</TableHead>
-              <TableHead className="text-right text-slate-400">Fulfilled</TableHead>
+              <TableHead className="text-right text-slate-400">
+                {data.type === "PICKUP" ? "Fulfilled After Pickup" : "Fulfilled"}
+              </TableHead>
               <TableHead className="text-right text-slate-400">Remaining</TableHead>
               <TableHead className="text-slate-400">Notes</TableHead>
             </TableRow>
@@ -687,14 +821,21 @@ export default function FulfillmentDetailPage() {
                   <TableCell className="font-medium text-white">
                     {item.title}
                     <span className="ml-1 text-xs text-slate-400">({item.unit})</span>
+                    {item.salesOrderItem?.isSpecialOrder ? (
+                      <span className="ml-2 inline-flex rounded-lg border border-amber-400/20 bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold text-amber-100">
+                        Special Order
+                      </span>
+                    ) : null}
                   </TableCell>
                   <TableCell className="text-xs text-slate-400">{item.sku || "-"}</TableCell>
-                  <TableCell className="text-right">{ordered.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">{fmtQty(item.orderedQty)}</TableCell>
                   <TableCell className="text-right">
                     <input
                       type="number"
                       min="0"
                       step="0.01"
+                      data-testid={`fulfillment-item-qty-${item.id}`}
+                      aria-label={`${item.title} fulfilled quantity after pickup`}
                       value={draft.fulfilledQty}
                       onChange={(e) =>
                         setItemDrafts((prev) => ({
@@ -704,8 +845,11 @@ export default function FulfillmentDetailPage() {
                       }
                       className="ios-input ml-auto h-9 w-24 px-2 text-right text-xs"
                     />
+                    {data.type === "PICKUP" && Number(item.fulfilledQty ?? 0) > 0 ? (
+                      <p className="mt-1 text-[11px] text-slate-500">Current {fmtQty(item.fulfilledQty)}</p>
+                    ) : null}
                   </TableCell>
-                  <TableCell className="text-right">{remaining.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">{fmtQty(remaining)}</TableCell>
                   <TableCell>
                     <input
                       value={draft.notes}
@@ -724,13 +868,22 @@ export default function FulfillmentDetailPage() {
           </TableBody>
         </Table>
         <div className="border-t border-white/10 px-6 py-4">
-          <button type="button" onClick={saveItems} disabled={saving} className="ios-primary-btn h-9 px-3 text-xs disabled:opacity-60">
-            Save Items
-          </button>
-          <p className="mt-2 text-xs text-slate-400">
-            Saving items auto-updates status to <span className="font-semibold">partial</span> or{" "}
-            <span className="font-semibold">completed</span> based on fulfilled quantity.
-          </p>
+          {data.type === "PICKUP" ? (
+            <p className="text-xs text-slate-400">
+              Adjust quantities for partial pickup, then use <span className="font-semibold">Complete Pickup</span>{" "}
+              above. Full quantities are prefilled for the common counter handoff.
+            </p>
+          ) : (
+            <>
+              <button type="button" onClick={saveItems} disabled={saving} className="ios-primary-btn h-9 px-3 text-xs disabled:opacity-60">
+                Save Items
+              </button>
+              <p className="mt-2 text-xs text-slate-400">
+                Saving items auto-updates status to <span className="font-semibold">partial</span> or{" "}
+                <span className="font-semibold">completed</span> based on fulfilled quantity.
+              </p>
+            </>
+          )}
         </div>
       </div>
       </div>
