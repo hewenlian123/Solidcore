@@ -25,28 +25,6 @@ export async function computeInvoicePaidAndBalance(tx: Prisma.TransactionClient,
   return { paidTotal, balanceDue };
 }
 
-export async function computeInvoicePaidAndBalanceWithFallback(
-  tx: Prisma.TransactionClient,
-  args: { invoiceId: string; salesOrderId: string; total: number },
-) {
-  const postedByInvoice = await tx.salesOrderPayment.findMany({
-    where: { invoiceId: args.invoiceId, status: "POSTED" },
-    select: { amount: true },
-  });
-
-  let paidTotal = roundCurrency(postedByInvoice.reduce((sum, p) => sum + Number(p.amount), 0));
-  if (paidTotal <= 0) {
-    const postedBySalesOrder = await tx.salesOrderPayment.findMany({
-      where: { salesOrderId: args.salesOrderId, status: "POSTED" },
-      select: { amount: true },
-    });
-    paidTotal = roundCurrency(postedBySalesOrder.reduce((sum, p) => sum + Number(p.amount), 0));
-  }
-
-  const balanceDue = roundCurrency(args.total - paidTotal);
-  return { paidTotal, balanceDue };
-}
-
 export function deriveInvoiceStatus(currentStatus: string, paidTotal: number, total: number) {
   if (currentStatus === "void") return "void";
   if (paidTotal <= 0) return currentStatus === "sent" ? "sent" : "draft";

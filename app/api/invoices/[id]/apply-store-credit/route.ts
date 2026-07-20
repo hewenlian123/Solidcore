@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { computeInvoicePaidAndBalanceWithFallback, deriveInvoiceStatus } from "@/lib/invoices";
+import { computeInvoicePaidAndBalance, deriveInvoiceStatus } from "@/lib/invoices";
 import { recalculateSalesOrder } from "@/lib/sales-orders";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
@@ -91,11 +91,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       if (!invoice.salesOrderId) throw new Error("NO_SALES_ORDER");
       if (!invoice.customerId) throw new Error("NO_CUSTOMER");
 
-      const currentTotals = await computeInvoicePaidAndBalanceWithFallback(tx, {
-        invoiceId: invoice.id,
-        salesOrderId: invoice.salesOrderId,
-        total: Number(invoice.total),
-      });
+      const currentTotals = await computeInvoicePaidAndBalance(tx, invoice.id, Number(invoice.total));
       const currentBalance = round2(Math.max(Number(currentTotals.balanceDue), 0));
       if (currentBalance <= 0) throw new Error("NO_BALANCE");
 
@@ -206,11 +202,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       }
       if (appliedRows === 0 || totalApplied <= 0) throw new Error("NO_OPEN_CREDIT");
 
-      const totals = await computeInvoicePaidAndBalanceWithFallback(tx, {
-        invoiceId: invoice.id,
-        salesOrderId: invoice.salesOrderId,
-        total: Number(invoice.total),
-      });
+      const totals = await computeInvoicePaidAndBalance(tx, invoice.id, Number(invoice.total));
       const nextStatus = deriveInvoiceStatus(invoice.status, totals.paidTotal, Number(invoice.total));
       await tx.invoice.update({
         where: { id: invoice.id },

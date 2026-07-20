@@ -91,7 +91,7 @@ export async function buildCustomerOrderMetrics(customerId: string) {
   const orderIds = orders.map((item) => item.id);
   const invoiceIds = orders.flatMap((item) => item.invoices.map((invoice) => invoice.id));
 
-  const [invoicePaymentGroup, legacyPaymentGroup] = await Promise.all([
+  const [invoicePaymentGroup, unallocatedOrderPaymentGroup] = await Promise.all([
     invoiceIds.length
       ? prisma.salesOrderPayment.groupBy({
           by: ["invoiceId"],
@@ -113,9 +113,9 @@ export async function buildCustomerOrderMetrics(customerId: string) {
     if (!row.invoiceId) continue;
     paidByInvoiceId.set(row.invoiceId, Number(row._sum.amount ?? 0));
   }
-  const legacyByOrderId = new Map<string, number>();
-  for (const row of legacyPaymentGroup) {
-    legacyByOrderId.set(row.salesOrderId, Number(row._sum.amount ?? 0));
+  const unallocatedByOrderId = new Map<string, number>();
+  for (const row of unallocatedOrderPaymentGroup) {
+    unallocatedByOrderId.set(row.salesOrderId, Number(row._sum.amount ?? 0));
   }
 
   const rows: CustomerOrderRow[] = orders.map((order) => {
@@ -123,8 +123,8 @@ export async function buildCustomerOrderMetrics(customerId: string) {
       (sum, invoice) => sum + (paidByInvoiceId.get(invoice.id) ?? 0),
       0,
     );
-    const legacyPaid = legacyByOrderId.get(order.id) ?? 0;
-    const paidTotal = round2(paidByInvoice + legacyPaid);
+    const unallocatedOrderPaid = unallocatedByOrderId.get(order.id) ?? 0;
+    const paidTotal = round2(paidByInvoice + unallocatedOrderPaid);
     const total = round2(Number(order.total));
     const balance = round2(Math.max(total - paidTotal, 0));
     const delivery = computeDeliveryMeta(order.fulfillments);

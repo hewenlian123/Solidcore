@@ -41,7 +41,6 @@ export async function GET(request: NextRequest, { params }: Params) {
     });
 
     const invoiceIds = invoices.map((row) => row.id);
-    const salesOrderIds = Array.from(new Set(invoices.map((row) => row.salesOrderId).filter(Boolean))) as string[];
 
     const postedPayments = invoiceIds.length
       ? await prisma.salesOrderPayment.findMany({
@@ -53,16 +52,6 @@ export async function GET(request: NextRequest, { params }: Params) {
         })
       : [];
 
-    const postedPaymentsBySalesOrder = salesOrderIds.length
-      ? await prisma.salesOrderPayment.findMany({
-          where: {
-            salesOrderId: { in: salesOrderIds },
-            status: "POSTED",
-          },
-          select: { salesOrderId: true, amount: true },
-        })
-      : [];
-
     const paidByInvoice = new Map<string, number>();
     for (const payment of postedPayments) {
       const key = payment.invoiceId ?? "";
@@ -70,18 +59,8 @@ export async function GET(request: NextRequest, { params }: Params) {
       paidByInvoice.set(key, roundCurrency(prev + Number(payment.amount)));
     }
 
-    const paidBySalesOrder = new Map<string, number>();
-    for (const payment of postedPaymentsBySalesOrder) {
-      const prev = paidBySalesOrder.get(payment.salesOrderId) ?? 0;
-      paidBySalesOrder.set(payment.salesOrderId, roundCurrency(prev + Number(payment.amount)));
-    }
-
     const data = invoices.map((invoice) => {
-      const directPaid = roundCurrency(paidByInvoice.get(invoice.id) ?? 0);
-      const paidTotal =
-        directPaid > 0
-          ? directPaid
-          : roundCurrency(invoice.salesOrderId ? (paidBySalesOrder.get(invoice.salesOrderId) ?? 0) : 0);
+      const paidTotal = roundCurrency(paidByInvoice.get(invoice.id) ?? 0);
       const total = Number(invoice.total);
       const balance = roundCurrency(total - paidTotal);
       return {

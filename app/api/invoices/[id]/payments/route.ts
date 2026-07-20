@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SalesPaymentMethod, SalesPaymentType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { computeInvoicePaidAndBalanceWithFallback, deriveInvoiceStatus } from "@/lib/invoices";
+import { computeInvoicePaidAndBalance, deriveInvoiceStatus } from "@/lib/invoices";
 import { recalculateSalesOrder } from "@/lib/sales-orders";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
@@ -48,11 +48,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       if (invoice.status === "void") throw new Error("VOIDED");
       if (!invoice.salesOrderId) throw new Error("NO_SALES_ORDER");
 
-      const current = await computeInvoicePaidAndBalanceWithFallback(tx, {
-        invoiceId: invoice.id,
-        salesOrderId: invoice.salesOrderId,
-        total: Number(invoice.total),
-      });
+      const current = await computeInvoicePaidAndBalance(tx, invoice.id, Number(invoice.total));
       const currentBalance = Number(current.balanceDue);
       if (paymentType !== "REFUND" && amount > currentBalance + 0.0001) {
         throw new Error("OVERPAYMENT");
@@ -72,11 +68,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         },
       });
 
-      const totals = await computeInvoicePaidAndBalanceWithFallback(tx, {
-        invoiceId: invoice.id,
-        salesOrderId: invoice.salesOrderId,
-        total: Number(invoice.total),
-      });
+      const totals = await computeInvoicePaidAndBalance(tx, invoice.id, Number(invoice.total));
       const nextStatus = deriveInvoiceStatus(invoice.status, totals.paidTotal, Number(invoice.total));
       await tx.invoice.update({
         where: { id: invoice.id },

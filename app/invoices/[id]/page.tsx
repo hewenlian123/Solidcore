@@ -83,6 +83,17 @@ type InvoiceDetail = {
     receivedAt: string;
     notes: string | null;
   }>;
+  unallocatedPayments: Array<{
+    id: string;
+    amount: string;
+    method: string;
+    paymentType: string;
+    status: "POSTED" | "VOIDED";
+    referenceNumber: string | null;
+    receivedAt: string;
+    notes: string | null;
+  }>;
+  unallocatedPaymentTotal: string;
   storeCreditApplications: Array<{
     id: string;
     amount: string;
@@ -117,6 +128,7 @@ export default function InvoiceDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [allocatingPaymentId, setAllocatingPaymentId] = useState<string | null>(null);
   const [openPayment, setOpenPayment] = useState(false);
   const [openStoreCredit, setOpenStoreCredit] = useState(false);
   const [pdfPreview, setPdfPreview] = useState<{ title: string; src: string } | null>(null);
@@ -283,6 +295,27 @@ export default function InvoiceDetailPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add payment");
     } finally {
+      setSaving(false);
+    }
+  };
+
+  const allocatePaymentToInvoice = async (paymentId: string) => {
+    if (!data) return;
+    try {
+      setSaving(true);
+      setAllocatingPaymentId(paymentId);
+      setError(null);
+      const res = await fetch(`/api/invoices/${data.id}/payments/${paymentId}/allocate`, {
+        method: "PATCH",
+        headers: { "x-user-role": role },
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to apply order payment to invoice");
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to apply order payment to invoice");
+    } finally {
+      setAllocatingPaymentId(null);
       setSaving(false);
     }
   };
@@ -561,8 +594,9 @@ export default function InvoiceDetailPage() {
             <span>${Number(data.taxAmount).toFixed(2)}</span>
           </div>
           <div className="flex justify-between font-semibold"><span>Total</span><span>${Number(data.total).toFixed(2)}</span></div>
-          <div className="flex justify-between"><span className="text-slate-500">Paid</span><span>${Number(data.paidTotal).toFixed(2)}</span></div>
-          <div className="flex justify-between font-semibold"><span>Balance</span><span>${Number(data.balanceDue).toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Allocated Paid</span><span>${Number(data.paidTotal).toFixed(2)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Unallocated Order Payments</span><span>${Number(data.unallocatedPaymentTotal ?? 0).toFixed(2)}</span></div>
+          <div className="flex justify-between font-semibold"><span>Invoice Balance</span><span>${Number(data.balanceDue).toFixed(2)}</span></div>
           <div className="pt-2 text-xs text-slate-500">
             Billing Address: {data.billingAddress || "-"}
           </div>
@@ -570,9 +604,9 @@ export default function InvoiceDetailPage() {
       </div>
 
       <article className="linear-card p-8">
-        <h2 className="mb-3 text-base font-semibold text-slate-900">Payments</h2>
+        <h2 className="mb-3 text-base font-semibold text-slate-900">Allocated Invoice Payments</h2>
         {data.payments.length === 0 ? (
-          <p className="text-sm text-slate-500">No payments yet.</p>
+          <p className="text-sm text-slate-500">No payments are allocated to this invoice yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
@@ -617,6 +651,71 @@ export default function InvoiceDetailPage() {
                     </td>
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </article>
+
+      <article className="linear-card p-8">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Unallocated Order Payments</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              These payments count on the Sales Order until they are explicitly applied to this invoice.
+            </p>
+          </div>
+          <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+            Available: ${Number(data.unallocatedPaymentTotal ?? 0).toFixed(2)}
+          </span>
+        </div>
+        {data.unallocatedPayments.length === 0 ? (
+          <p className="text-sm text-slate-500">No unallocated order payments are available for this invoice.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-slate-400">
+                  <th className="py-2 pr-4">Date</th>
+                  <th className="py-2 pr-4">Method</th>
+                  <th className="py-2 pr-4">Type</th>
+                  <th className="py-2 pr-4">Ref</th>
+                  <th className="py-2 pr-4">Amount</th>
+                  <th className="py-2">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.unallocatedPayments.map((payment) => {
+                  const paymentAmountValue = Number(payment.amount);
+                  const exceedsInvoiceBalance = paymentAmountValue > Number(data.balanceDue) + 0.0001;
+                  return (
+                    <tr key={payment.id} className="border-b border-white/10">
+                      <td className="py-2 pr-4">{new Date(payment.receivedAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</td>
+                      <td className="py-2 pr-4">{payment.method}</td>
+                      <td className="py-2 pr-4">{payment.paymentType}</td>
+                      <td className="py-2 pr-4">{payment.referenceNumber || "-"}</td>
+                      <td className="py-2 pr-4">${paymentAmountValue.toFixed(2)}</td>
+                      <td className="py-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link href={`/api/pdf/payment/${payment.id}`} className="ios-secondary-btn h-8 px-2 text-xs" target="_blank" rel="noopener noreferrer">
+                            Receipt PDF
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => void allocatePaymentToInvoice(payment.id)}
+                            disabled={saving || data.status === "void" || exceedsInvoiceBalance}
+                            className="ios-primary-btn h-8 px-2 text-xs disabled:opacity-60"
+                          >
+                            {allocatingPaymentId === payment.id ? "Applying..." : "Apply to Invoice"}
+                          </button>
+                          {exceedsInvoiceBalance ? (
+                            <span className="text-xs text-amber-700">Exceeds invoice balance</span>
+                          ) : null}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

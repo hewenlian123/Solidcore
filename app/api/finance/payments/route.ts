@@ -27,7 +27,6 @@ export async function GET(request: NextRequest) {
       monthAgg,
       invoices,
       invoicePaymentGroup,
-      legacySalesOrderPaymentGroup,
       trendPayments,
       recentPayments,
     ] =
@@ -59,11 +58,6 @@ export async function GET(request: NextRequest) {
         prisma.salesOrderPayment.groupBy({
           by: ["invoiceId"],
           where: { status: "POSTED", invoiceId: { not: null } },
-          _sum: { amount: true },
-        }),
-        prisma.salesOrderPayment.groupBy({
-          by: ["salesOrderId"],
-          where: { status: "POSTED", invoiceId: null },
           _sum: { amount: true },
         }),
         prisma.salesOrderPayment.findMany({
@@ -102,21 +96,13 @@ export async function GET(request: NextRequest) {
       if (!row.invoiceId) continue;
       paidByInvoiceId.set(row.invoiceId, Number(row._sum.amount ?? 0));
     }
-    const legacyPaidBySalesOrderId = new Map<string, number>();
-    for (const row of legacySalesOrderPaymentGroup) {
-      legacyPaidBySalesOrderId.set(row.salesOrderId, Number(row._sum.amount ?? 0));
-    }
 
     let unpaidInvoicesCount = 0;
     let outstandingTotal = 0;
     const outstandingByCustomer = new Map<string, { customerId: string; customerName: string; balance: number }>();
     for (const invoice of invoices) {
-      // S3-safe paid total:
-      // 1) posted by invoice_id
-      // 2) plus legacy posted by sales_order_id where invoice_id is null
       const paidByInvoice = paidByInvoiceId.get(invoice.id) ?? 0;
-      const legacyPaidBySalesOrder = legacyPaidBySalesOrderId.get(invoice.salesOrderId) ?? 0;
-      const paidTotal = round2(paidByInvoice + legacyPaidBySalesOrder);
+      const paidTotal = round2(paidByInvoice);
       const balanceDue = round2(Math.max(Number(invoice.total) - paidTotal, 0));
       if (balanceDue <= 0) continue;
       unpaidInvoicesCount += 1;

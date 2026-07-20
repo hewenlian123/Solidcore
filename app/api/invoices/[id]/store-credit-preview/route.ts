@@ -45,14 +45,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       where: { invoiceId: invoice.id, status: "POSTED" },
       select: { amount: true },
     });
-    let paidTotal = round2(postedByInvoice.reduce((sum, row) => sum + Number(row.amount), 0));
-    if (paidTotal <= 0) {
-      const postedBySalesOrder = await prisma.salesOrderPayment.findMany({
-        where: { salesOrderId: invoice.salesOrderId, status: "POSTED" },
-        select: { amount: true },
-      });
-      paidTotal = round2(postedBySalesOrder.reduce((sum, row) => sum + Number(row.amount), 0));
-    }
+    const paidTotal = round2(postedByInvoice.reduce((sum, row) => sum + Number(row.amount), 0));
     const invoiceBalance = round2(Math.max(Number(invoice.total) - paidTotal, 0));
 
     const credits = await prisma.storeCredit.findMany({

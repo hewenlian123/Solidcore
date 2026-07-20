@@ -78,38 +78,34 @@ export async function GET(request: NextRequest, { params }: Params) {
     });
     if (!invoice) return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
 
-    const invoicePayments = await prisma.salesOrderPayment.findMany({
-      where: { invoiceId: invoice.id },
-      orderBy: { receivedAt: "desc" },
-    });
-    const storeCreditApplications = await prisma.storeCreditApplication.findMany({
-      where: { invoiceId: invoice.id },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-      include: {
-        storeCredit: {
-          select: { id: true, returnId: true },
+    const [invoicePayments, unallocatedPayments, storeCreditApplications] = await Promise.all([
+      prisma.salesOrderPayment.findMany({
+        where: { invoiceId: invoice.id },
+        orderBy: { receivedAt: "desc" },
+      }),
+      prisma.salesOrderPayment.findMany({
+        where: { salesOrderId: invoice.salesOrderId, invoiceId: null, status: "POSTED" },
+        orderBy: { receivedAt: "desc" },
+      }),
+      prisma.storeCreditApplication.findMany({
+        where: { invoiceId: invoice.id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        include: {
+          storeCredit: {
+            select: { id: true, returnId: true },
+          },
         },
-      },
-    });
-    let paidTotal = roundCurrency(
+      }),
+    ]);
+    const paidTotal = roundCurrency(
       invoicePayments
         .filter((p) => p.status === "POSTED")
         .reduce((sum, p) => sum + Number(p.amount), 0),
     );
-    let payments = invoicePayments;
-    if (paidTotal <= 0) {
-      const fallbackPayments = await prisma.salesOrderPayment.findMany({
-        where: { salesOrderId: invoice.salesOrderId },
-        orderBy: { receivedAt: "desc" },
-      });
-      paidTotal = roundCurrency(
-        fallbackPayments
-          .filter((p) => p.status === "POSTED")
-          .reduce((sum, p) => sum + Number(p.amount), 0),
-      );
-      payments = fallbackPayments;
-    }
+    const unallocatedPaymentTotal = roundCurrency(
+      unallocatedPayments.reduce((sum, p) => sum + Number(p.amount), 0),
+    );
     const total = Number(invoice.total);
     const balanceDue = roundCurrency(total - paidTotal);
     const effectiveStatus = deriveInvoiceStatus(invoice.status, paidTotal, total);
@@ -127,7 +123,9 @@ export async function GET(request: NextRequest, { params }: Params) {
                 : null,
           })),
           status: effectiveStatus,
-          payments,
+          payments: invoicePayments,
+          unallocatedPayments,
+          unallocatedPaymentTotal: String(unallocatedPaymentTotal),
           storeCreditApplications,
           paidTotal: String(paidTotal),
           balanceDue: String(balanceDue),
