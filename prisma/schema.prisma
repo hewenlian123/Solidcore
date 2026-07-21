@@ -781,7 +781,9 @@ model PurchaseOrder {
   status          String
   orderDate       DateTime  @map("order_date")
   expectedArrival DateTime?  @map("expected_arrival")
+  dueDate         DateTime? @map("due_date")
   totalCost       Decimal   @default(0) @map("total_cost")
+  paidAmount      Decimal   @default(0) @map("paid_amount")
   notes           String?
   createdAt       DateTime  @default(now()) @map("created_at")
 
@@ -804,6 +806,8 @@ model SalesOrderPayment {
   referenceNumber String?            @map("reference_number")
   receivedAt      DateTime           @default(now()) @map("received_at")
   notes           String?
+  idempotencyKey  String?            @unique @map("idempotency_key")
+  idempotencyFingerprint String?     @map("idempotency_fingerprint")
   createdAt       DateTime           @default(now()) @map("created_at")
 
   salesOrder      SalesOrder         @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)

@@ -119,6 +119,13 @@ type StoreCreditPreview = {
   }>;
 };
 
+function createPaymentIntentKey() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export default function InvoiceDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -140,6 +147,7 @@ export default function InvoiceDetailPage() {
     receivedAt: "",
     notes: "",
   });
+  const [paymentIntentKey, setPaymentIntentKey] = useState(createPaymentIntentKey);
   const [applyingCredit, setApplyingCredit] = useState(false);
   const [storeCreditBalance, setStoreCreditBalance] = useState(0);
   const [storeCreditForm, setStoreCreditForm] = useState({
@@ -272,12 +280,17 @@ export default function InvoiceDetailPage() {
 
   const addPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!data) return;
+    if (!data || saving) return;
     try {
       setSaving(true);
+      setError(null);
       const res = await fetch(`/api/invoices/${data.id}/payments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-role": role },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": paymentIntentKey,
+          "x-user-role": role,
+        },
         body: JSON.stringify(paymentForm),
       });
       const payload = await res.json();
@@ -291,6 +304,7 @@ export default function InvoiceDetailPage() {
         receivedAt: "",
         notes: "",
       });
+      setPaymentIntentKey(createPaymentIntentKey());
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add payment");
@@ -808,7 +822,14 @@ export default function InvoiceDetailPage() {
               </label>
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setOpenPayment(false)} className="ios-secondary-btn h-10 px-3 text-sm">
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenPayment(false);
+                  setPaymentIntentKey(createPaymentIntentKey());
+                }}
+                className="ios-secondary-btn h-10 px-3 text-sm"
+              >
                 Cancel
               </button>
               <button type="submit" className="ios-primary-btn h-10 px-3 text-sm" disabled={saving || isOverPayment}>

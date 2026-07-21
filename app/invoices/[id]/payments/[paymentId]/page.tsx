@@ -94,27 +94,6 @@ export default function InvoicePaymentDetailPage() {
     }
   };
 
-  const hardDeletePayment = async () => {
-    if (!data) return;
-    const ok = window.confirm("Hard delete this payment permanently? This cannot be undone.");
-    if (!ok) return;
-    try {
-      setSaving(true);
-      setError(null);
-      const res = await fetch(`/api/invoices/${invoiceId}/payments/${paymentId}?hard=true`, {
-        method: "DELETE",
-        headers: { "x-user-role": role },
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to hard delete payment");
-      router.push(`/invoices/${invoiceId}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to hard delete payment");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) return <div className="glass-card p-8 text-sm text-slate-400">Loading payment...</div>;
   if (!data) return <div className="glass-card p-8 text-sm text-slate-400">Payment not found.</div>;
 
@@ -149,16 +128,6 @@ export default function InvoicePaymentDetailPage() {
             >
               {data.payment.status === "VOIDED" ? "Deleted" : "Delete Payment"}
             </button>
-            {role === "ADMIN" ? (
-              <button
-                type="button"
-                onClick={hardDeletePayment}
-                disabled={saving}
-                className="ios-secondary-btn h-9 px-3 text-xs text-rose-300 disabled:opacity-60"
-              >
-                Hard Delete
-              </button>
-            ) : null}
           </div>
         </div>
       </div>

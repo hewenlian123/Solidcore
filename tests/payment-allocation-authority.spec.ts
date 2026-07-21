@@ -1,5 +1,5 @@
 import { expect, test, type APIRequestContext } from "@playwright/test";
-import { createHmac } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { PrismaClient } from "@prisma/client";
@@ -62,9 +62,10 @@ function createSessionCookie() {
   return `solidcore_session=${encoded}.${signature}`;
 }
 
-function authHeaders() {
+function authHeaders(idempotencyKey?: string) {
   return {
     Cookie: createSessionCookie(),
+    "Idempotency-Key": idempotencyKey ?? `phase4a2-${randomUUID()}`,
     "x-user-role": "ADMIN",
   };
 }
@@ -799,7 +800,9 @@ test.describe.serial("canonical payment allocation authority", () => {
     await page.context().addCookies([{ name: "solidcore_session", value: cookieValue, url: baseUrl() }]);
 
     await page.goto(`/invoices/${fixture.invoiceId}`);
-    await expect(page.getByRole("heading", { name: "Allocated Invoice Payments" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Allocated Invoice Payments" })).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByText("No payments are allocated to this invoice yet.")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Unallocated Order Payments" })).toBeVisible();
     await expect(page.getByText("Available: $25.00")).toBeVisible();

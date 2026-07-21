@@ -540,6 +540,13 @@ function formatMoney(value: string | number | null | undefined) {
   return `$${(Number.isFinite(amount) ? amount : 0).toFixed(2)}`;
 }
 
+function createPaymentIntentKey() {
+  if (typeof globalThis.crypto?.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function toDateInputValue(value: string | null | undefined) {
   if (!value) return "";
   const date = new Date(value);
@@ -1245,6 +1252,7 @@ export default function SalesOrderDetailPage() {
   const [savingHeader, setSavingHeader] = useState(false);
   const [savingDeposit, setSavingDeposit] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [savingPayment, setSavingPayment] = useState(false);
   const [savingSpecialHeader, setSavingSpecialHeader] = useState(false);
   const [savingSpecialItemId, setSavingSpecialItemId] = useState<string | null>(null);
   const [openPayment, setOpenPayment] = useState(false);
@@ -1268,6 +1276,7 @@ export default function SalesOrderDetailPage() {
     receivedAt: "",
     notes: "",
   });
+  const [paymentIntentKey, setPaymentIntentKey] = useState(createPaymentIntentKey);
   const [fulfillmentForm, setFulfillmentForm] = useState({
     type: "DELIVERY",
     scheduledDate: "",
@@ -2118,19 +2127,25 @@ export default function SalesOrderDetailPage() {
 
   const submitPayment = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!data) return;
+    if (!data || savingPayment) return;
     if (!Number.isFinite(Number(data.total))) {
       setError("Order total is missing.");
       return;
     }
     try {
+      setSavingPayment(true);
+      setError(null);
       const amount = Number(paymentForm.amount || 0);
       if (amount <= 0) {
         throw new Error("Payment amount must be greater than 0.");
       }
       const res = await fetch(`/api/sales-orders/${id}/payments`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-role": role },
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": paymentIntentKey,
+          "x-user-role": role,
+        },
         body: JSON.stringify({
           amount,
           method: paymentForm.method,
@@ -2145,8 +2160,11 @@ export default function SalesOrderDetailPage() {
       setOpenPayment(false);
       setPaymentQuickHint(null);
       setPaymentForm({ amount: "", method: "CASH", referenceNumber: "", receivedAt: "", notes: "" });
+      setPaymentIntentKey(createPaymentIntentKey());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add payment");
+    } finally {
+      setSavingPayment(false);
     }
   };
 
@@ -4301,13 +4319,18 @@ export default function SalesOrderDetailPage() {
                   onClick={() => {
                     setOpenPayment(false);
                     setPaymentQuickHint(null);
+                    setPaymentIntentKey(createPaymentIntentKey());
                   }}
                   className="ios-secondary-btn h-11 flex-1 text-sm"
                 >
                   Cancel
                 </button>
-                <button type="submit" className="ios-primary-btn h-11 flex-1 text-sm">
-                  Save Payment
+                <button
+                  type="submit"
+                  disabled={savingPayment || !hasValidTotal}
+                  className="ios-primary-btn h-11 flex-1 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingPayment ? "Saving..." : "Save Payment"}
                 </button>
               </div>
             </form>

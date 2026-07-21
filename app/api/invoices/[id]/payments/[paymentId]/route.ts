@@ -81,8 +81,11 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     const role = getRequestRole(request);
     if (!hasOneOf(role, ["ADMIN", "SALES"])) return deny();
     const hardDelete = request.nextUrl.searchParams.get("hard") === "true";
-    if (hardDelete && role !== "ADMIN") {
-      return NextResponse.json({ error: "Only ADMIN can hard delete payments." }, { status: 403 });
+    if (hardDelete) {
+      return NextResponse.json(
+        { error: "Hard delete is disabled for normal payment lifecycle. Void the payment instead." },
+        { status: 403 },
+      );
     }
 
     const { id, paymentId } = await params;
