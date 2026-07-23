@@ -799,6 +799,7 @@ model SalesOrderPayment {
   id              String             @id @default(uuid())
   salesOrderId    String             @map("sales_order_id")
   invoiceId       String?            @map("invoice_id")
+  refundOfPaymentId String?          @map("refund_of_payment_id")
   amount          Decimal
   method          SalesPaymentMethod
   paymentType     SalesPaymentType   @default(FINAL) @map("type")
@@ -812,12 +813,15 @@ model SalesOrderPayment {
 
   salesOrder      SalesOrder         @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   invoice         Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  refundOfPayment SalesOrderPayment? @relation("SalesOrderPaymentRefunds", fields: [refundOfPaymentId], references: [id], onDelete: NoAction)
+  refunds         SalesOrderPayment[] @relation("SalesOrderPaymentRefunds")
   storeCreditApplications StoreCreditApplication[]
 
   @@index([salesOrderId])
   @@index([status, salesOrderId])
   @@index([invoiceId])
   @@index([status, invoiceId])
+  @@index([refundOfPaymentId])
   @@index([receivedAt])
   @@map("sales_order_payments")
 }

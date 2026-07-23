@@ -23,6 +23,7 @@ type Params = {
 
 const SALES_PAYMENT_METHOD_VALUES = ["CASH", "CHECK", "CARD", "BANK", "OTHER"] as const;
 const SALES_PAYMENT_TYPE_VALUES = ["DEPOSIT", "FINAL"] as const;
+const REFUND_WORKFLOW_REQUIRED = "Refunds require the dedicated refund workflow and an original payment reference.";
 
 export async function POST(request: NextRequest, { params }: Params) {
   let idempotencyKey: string | null = null;
@@ -68,6 +69,9 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!paymentType) {
       return NextResponse.json({ error: "Payment type is required." }, { status: 400 });
     }
+    if (paymentType === "REFUND") {
+      return NextResponse.json({ error: REFUND_WORKFLOW_REQUIRED }, { status: 400 });
+    }
     if (!SALES_PAYMENT_TYPE_VALUES.includes(paymentType as (typeof SALES_PAYMENT_TYPE_VALUES)[number])) {
       return NextResponse.json({ error: "Invalid payment type." }, { status: 400 });
     }
@@ -77,11 +81,9 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!receivedAt.ok) {
       return NextResponse.json({ error: receivedAt.error }, { status: 400 });
     }
-    if (paymentType !== "REFUND") {
-      const requiredKey = requirePaymentIdempotencyKey(parsedKey);
-      if (!requiredKey.ok) {
-        return NextResponse.json({ error: requiredKey.error }, { status: 400 });
-      }
+    const requiredKey = requirePaymentIdempotencyKey(parsedKey);
+    if (!requiredKey.ok) {
+      return NextResponse.json({ error: requiredKey.error }, { status: 400 });
     }
 
     idempotencyKey = parsedKey.key;
@@ -134,11 +136,9 @@ export async function POST(request: NextRequest, { params }: Params) {
           throw new Error("ORDER_TOTAL_MISSING");
         }
 
-        if (paymentType !== "REFUND") {
-          const remainingCents = await getSalesOrderRemainingCents(tx, id);
-          if (isPaymentOverBalance(amount.cents, remainingCents)) {
-            throw new Error("OVERPAYMENT");
-          }
+        const remainingCents = await getSalesOrderRemainingCents(tx, id);
+        if (isPaymentOverBalance(amount.cents, remainingCents)) {
+          throw new Error("OVERPAYMENT");
         }
 
         await tx.salesOrderPayment.create({

@@ -52,6 +52,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       });
       if (!payment) throw new Error("PAYMENT_NOT_FOUND");
       if (payment.status !== "POSTED") throw new Error("PAYMENT_NOT_POSTED");
+      if (payment.paymentType === "REFUND") throw new Error("REFUND_ALLOCATION_UNSUPPORTED");
       if (payment.invoiceId === invoice.id) {
         const totals = await computeInvoicePaidAndBalance(tx, invoice.id, Number(invoice.total));
         return { payment, invoice, totals, idempotent: true };
@@ -159,6 +160,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
     if (error instanceof Error && error.message === "PAYMENT_NOT_POSTED") {
       return NextResponse.json({ error: "Only posted payments can be allocated to an invoice." }, { status: 400 });
+    }
+    if (error instanceof Error && error.message === "REFUND_ALLOCATION_UNSUPPORTED") {
+      return NextResponse.json(
+        { error: "Refund payments require the dedicated refund workflow and cannot be allocated here." },
+        { status: 400 },
+      );
     }
     if (error instanceof Error && error.message === "PAYMENT_ALREADY_ALLOCATED") {
       return NextResponse.json(

@@ -901,7 +901,7 @@ test.describe.serial("deposit receipt authority and void reconciliation", () => 
       type: "REFUND",
     });
     expect(refundResult.response.status(), JSON.stringify(refundResult.body)).toBe(400);
-    expect(refundResult.body.error).toContain("Invalid payment type");
+    expect(refundResult.body.error).toContain("dedicated refund workflow");
     expect(await captureState(invalid)).toEqual(before);
 
     const abcResult = await postOrderPayment(request, invalid, {

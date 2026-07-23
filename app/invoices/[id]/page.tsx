@@ -207,7 +207,6 @@ export default function InvoiceDetailPage() {
   const paymentAmount = Number(paymentForm.amount || 0);
   const currentBalance = Number(data?.balanceDue ?? 0);
   const isOverPayment =
-    paymentForm.type !== "REFUND" &&
     Number.isFinite(paymentAmount) &&
     paymentAmount > 0 &&
     paymentAmount > currentBalance + 0.0001;
@@ -791,7 +790,7 @@ export default function InvoiceDetailPage() {
               </p>
               {isOverPayment ? (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-700">
-                  Payment exceeds current balance. Adjust amount or use Refund type if applicable.
+                  Payment exceeds current balance. Adjust amount.
                 </p>
               ) : null}
               <label className="block space-y-1">
@@ -809,7 +808,6 @@ export default function InvoiceDetailPage() {
                 <select className="ios-input h-10 w-full px-3 text-sm" value={paymentForm.type} onChange={(e) => setPaymentForm((prev) => ({ ...prev, type: e.target.value }))}>
                   <option value="DEPOSIT">Deposit</option>
                   <option value="FINAL">Final</option>
-                  <option value="REFUND">Refund</option>
                 </select>
               </label>
               <label className="block space-y-1">

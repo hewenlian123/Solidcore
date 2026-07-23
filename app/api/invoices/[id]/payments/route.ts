@@ -24,6 +24,9 @@ type Params = {
   params: Promise<{ id: string }>;
 };
 
+const SALES_PAYMENT_TYPE_VALUES = ["DEPOSIT", "FINAL"] as const;
+const REFUND_WORKFLOW_REQUIRED = "Refunds require the dedicated refund workflow and an original payment reference.";
+
 export async function POST(request: NextRequest, { params }: Params) {
   let idempotencyKey: string | null = null;
   let idempotencyFingerprint: string | null = null;
@@ -52,7 +55,10 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!Object.values(SalesPaymentMethod).includes(method)) {
       return NextResponse.json({ error: "Invalid payment method." }, { status: 400 });
     }
-    if (!Object.values(SalesPaymentType).includes(paymentType)) {
+    if (paymentType === "REFUND") {
+      return NextResponse.json({ error: REFUND_WORKFLOW_REQUIRED }, { status: 400 });
+    }
+    if (!SALES_PAYMENT_TYPE_VALUES.includes(paymentType as (typeof SALES_PAYMENT_TYPE_VALUES)[number])) {
       return NextResponse.json({ error: "Invalid payment type." }, { status: 400 });
     }
     if (!receivedAt.ok) {
@@ -61,11 +67,9 @@ export async function POST(request: NextRequest, { params }: Params) {
     if (!parsedKey.ok) {
       return NextResponse.json({ error: parsedKey.error }, { status: 400 });
     }
-    if (paymentType !== "REFUND") {
-      const requiredKey = requirePaymentIdempotencyKey(parsedKey);
-      if (!requiredKey.ok) {
-        return NextResponse.json({ error: requiredKey.error }, { status: 400 });
-      }
+    const requiredKey = requirePaymentIdempotencyKey(parsedKey);
+    if (!requiredKey.ok) {
+      return NextResponse.json({ error: requiredKey.error }, { status: 400 });
     }
 
     idempotencyKey = parsedKey.key;
@@ -121,13 +125,11 @@ export async function POST(request: NextRequest, { params }: Params) {
           }
         }
 
-        if (paymentType !== "REFUND") {
-          const invoiceBalanceCents = Math.max(await getInvoiceRemainingCents(tx, invoice.id), 0);
-          const orderRemainingCents = await getSalesOrderRemainingCents(tx, invoice.salesOrderId);
-          const maxReceivableCents = Math.min(invoiceBalanceCents, Math.max(orderRemainingCents, 0));
-          if (isPaymentOverBalance(amount.cents, maxReceivableCents)) {
-            throw new Error("OVERPAYMENT");
-          }
+        const invoiceBalanceCents = Math.max(await getInvoiceRemainingCents(tx, invoice.id), 0);
+        const orderRemainingCents = await getSalesOrderRemainingCents(tx, invoice.salesOrderId);
+        const maxReceivableCents = Math.min(invoiceBalanceCents, Math.max(orderRemainingCents, 0));
+        if (isPaymentOverBalance(amount.cents, maxReceivableCents)) {
+          throw new Error("OVERPAYMENT");
         }
 
         await tx.salesOrderPayment.create({
