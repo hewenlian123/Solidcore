@@ -1,4 +1,9 @@
 import { NextRequest } from "next/server";
+import {
+  centsToNumber,
+  remainingRefundableCents,
+  sumPostedRefundCentsForPayment,
+} from "@/lib/payment-ledger";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { generatePaymentPDF } from "@/lib/pdf/generatePaymentPDF";
@@ -16,9 +21,27 @@ export async function GET(request: NextRequest, { params }: Params) {
     where: { id },
     include: {
       invoice: { select: { invoiceNumber: true } },
+      refundOfPayment: {
+        select: {
+          id: true,
+          amount: true,
+          referenceNumber: true,
+          status: true,
+          paymentType: true,
+        },
+      },
       salesOrder: {
         include: {
           customer: true,
+          payments: {
+            select: {
+              id: true,
+              amount: true,
+              paymentType: true,
+              refundOfPaymentId: true,
+              status: true,
+            },
+          },
         },
       },
     },
@@ -28,6 +51,15 @@ export async function GET(request: NextRequest, { params }: Params) {
   }
 
   const order = payment.salesOrder;
+  const isRefund = payment.paymentType === "REFUND";
+  const originalPayment = isRefund ? payment.refundOfPayment : payment;
+  const originalPaymentId = originalPayment?.id ?? null;
+  const refundedTotal = originalPaymentId
+    ? centsToNumber(sumPostedRefundCentsForPayment(originalPaymentId, order.payments))
+    : 0;
+  const remainingRefundable = originalPayment
+    ? centsToNumber(remainingRefundableCents(originalPayment, order.payments))
+    : 0;
   const pdfBytes = await generatePaymentPDF({
     receiptNumber: payment.id.slice(0, 8).toUpperCase(),
     orderNumber: order.orderNumber,
@@ -41,6 +73,11 @@ export async function GET(request: NextRequest, { params }: Params) {
     referenceNumber: payment.referenceNumber,
     receivedAt: payment.receivedAt,
     status: payment.status,
+    originalPaymentAmount: originalPayment ? Number(originalPayment.amount) : null,
+    originalPaymentId,
+    originalPaymentReference: originalPayment?.referenceNumber ?? null,
+    refundedTotal,
+    remainingRefundable,
     subtotal: Number(order.subtotal),
     taxRate: order.taxRate != null ? Number(order.taxRate) : null,
     taxAmount: Number(order.tax),

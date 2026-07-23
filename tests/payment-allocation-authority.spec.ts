@@ -165,17 +165,6 @@ async function cleanupTaggedFixtures() {
   });
   const paymentIds = payments.map((payment) => payment.id);
 
-  await prisma.storeCreditApplication.deleteMany({
-    where: {
-      OR: [
-        ...(invoiceIds.length ? [{ invoiceId: { in: invoiceIds } }] : []),
-        ...(paymentIds.length ? [{ paymentId: { in: paymentIds } }] : []),
-      ],
-    },
-  });
-  await prisma.storeCredit.deleteMany({
-    where: customerIds.length ? { customerId: { in: customerIds } } : { customerId: "__none__" },
-  });
   await prisma.salesReturn.deleteMany({
     where: orderIds.length ? { salesOrderId: { in: orderIds } } : { salesOrderId: "__none__" },
   });
@@ -249,12 +238,6 @@ async function taggedCounts() {
             ],
           }
         : { id: "__none__" },
-    }),
-    storeCreditApplications: await prisma.storeCreditApplication.count({
-      where: invoiceIds.length ? { invoiceId: { in: invoiceIds } } : { invoiceId: "__none__" },
-    }),
-    storeCredits: await prisma.storeCredit.count({
-      where: customerIds.length ? { customerId: { in: customerIds } } : { customerId: "__none__" },
     }),
     returns: await prisma.salesReturn.count({
       where: orderIds.length ? { salesOrderId: { in: orderIds } } : { salesOrderId: "__none__" },
@@ -352,7 +335,7 @@ async function createPayment(args: {
   salesOrderId: string;
   amount: number;
   invoiceId?: string | null;
-  method?: "CASH" | "CHECK" | "CARD" | "BANK" | "OTHER" | "STORE_CREDIT";
+  method?: "CASH" | "CHECK" | "CARD" | "BANK" | "OTHER";
   status?: "POSTED" | "VOIDED";
 }) {
   return prisma.salesOrderPayment.create({
@@ -541,8 +524,6 @@ test.describe.serial("canonical payment allocation authority", () => {
       invoices: 0,
       invoiceItems: 0,
       payments: 0,
-      storeCreditApplications: 0,
-      storeCredits: 0,
       returns: 0,
       fulfillments: 0,
       movements: 0,
@@ -736,58 +717,25 @@ test.describe.serial("canonical payment allocation authority", () => {
     expect(await captureFinancialState(currentTarget)).toEqual(allocatedBefore);
   });
 
-  test("invoice payments, store credit, and voided payment semantics remain allocated-only", async ({
+  test("removed store credit endpoint cannot mutate invoice allocation state", async ({
     request,
   }) => {
-    const fixture = await createFixture("STORE-CREDIT", { total: 100 });
+    const fixture = await createFixture("STORE-CREDIT-ABSENT", { total: 100 });
     await createPayment({ salesOrderId: fixture.salesOrderId, amount: 10 });
-    const invoicePaymentId = await postInvoicePayment(request, fixture, 30);
+    await postInvoicePayment(request, fixture, 30);
+    const before = await captureFinancialState(fixture);
 
-    const salesReturn = await prisma.salesReturn.create({
-      data: {
-        salesOrderId: fixture.salesOrderId,
-        sourceInvoiceId: fixture.invoiceId,
-        status: "COMPLETED",
-        issueStoreCredit: true,
-        creditAmount: 20,
-        reason: runMarker,
-      },
-    });
-    await prisma.storeCredit.create({
-      data: {
-        customerId: fixture.customerId,
-        returnId: salesReturn.id,
-        amount: 20,
-        usedAmount: 0,
-        status: "OPEN",
-        notes: runMarker,
-      },
-    });
     const creditResponse = await request.post(`/api/invoices/${fixture.invoiceId}/apply-store-credit`, {
       headers: authHeaders(),
       data: { amount: 20 },
     });
-    const creditBody = await creditResponse.json();
-    expect(creditResponse.status(), JSON.stringify(creditBody)).toBe(201);
+    expect([404, 405].includes(creditResponse.status())).toBe(true);
+    expect(await captureFinancialState(fixture)).toEqual(before);
 
-    let detail = await invoiceApi(request, fixture.invoiceId);
-    expectMoney(detail.paidTotal, 50, "invoice paid after direct payment and store credit");
-    expectMoney(detail.balanceDue, 50, "invoice balance after direct payment and store credit");
+    const detail = await invoiceApi(request, fixture.invoiceId);
+    expectMoney(detail.paidTotal, 30, "invoice paid remains direct payment only");
+    expectMoney(detail.balanceDue, 70, "invoice balance remains unchanged");
     expectMoney(detail.unallocatedPaymentTotal, 10, "unallocated order payment remains separate");
-    expect(detail.payments).toHaveLength(2);
-    expect(detail.storeCreditApplications).toHaveLength(1);
-
-    const deleteResponse = await request.delete(
-      `/api/invoices/${fixture.invoiceId}/payments/${invoicePaymentId}`,
-      { headers: authHeaders() },
-    );
-    const deleteBody = await deleteResponse.json();
-    expect(deleteResponse.status(), JSON.stringify(deleteBody)).toBe(200);
-
-    detail = await invoiceApi(request, fixture.invoiceId);
-    expectMoney(detail.paidTotal, 20, "voided direct invoice payment removed from invoice paid");
-    expectMoney(detail.balanceDue, 80, "invoice balance ignores unallocated fallback after void");
-    expectMoney(detail.unallocatedPaymentTotal, 10, "unallocated order payment still separate after void");
     expect(detail.payments.filter((payment: { status: string }) => payment.status === "POSTED")).toHaveLength(1);
   });
 

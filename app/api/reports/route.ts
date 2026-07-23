@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SalesOrderStatus } from "@prisma/client";
+import { signedPaymentCents, sumSignedPaymentAmount } from "@/lib/payment-ledger";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
@@ -125,7 +126,7 @@ export async function GET(request: NextRequest) {
               ...(status ? { status } : {}),
             },
           },
-          select: { amount: true, receivedAt: true },
+          select: { amount: true, paymentType: true, receivedAt: true, status: true },
         }),
         prisma.salesOrderPayment.findMany({
           where: {
@@ -226,6 +227,7 @@ export async function GET(request: NextRequest) {
             id: true,
             amount: true,
             method: true,
+            paymentType: true,
             status: true,
             referenceNumber: true,
             receivedAt: true,
@@ -295,7 +297,7 @@ export async function GET(request: NextRequest) {
     const salesOrderCount = salesOrders.length;
     const avgOrderValue = salesOrderCount > 0 ? round2(totalSales / salesOrderCount) : 0;
 
-    const totalCollected = round2(postedPayments.reduce((sum, row) => sum + Number(row.amount), 0));
+    const totalCollected = round2(sumSignedPaymentAmount(postedPayments));
     const postedPaymentsCount = postedPayments.length;
     const voidedPaymentsCount = voidedPayments.length;
     const voidedPaymentsTotal = round2(voidedPayments.reduce((sum, row) => sum + Number(row.amount), 0));
@@ -332,7 +334,7 @@ export async function GET(request: NextRequest) {
     }
     for (const row of postedPayments) {
       const key = toYmd(row.receivedAt);
-      dailyCollectedMap.set(key, round2((dailyCollectedMap.get(key) ?? 0) + Number(row.amount)));
+      dailyCollectedMap.set(key, round2((dailyCollectedMap.get(key) ?? 0) + signedPaymentCents(row) / 100));
     }
     for (const row of salesOrders) {
       const key = toYmd(row.createdAt);
@@ -452,6 +454,10 @@ export async function GET(request: NextRequest) {
       totalStock: number;
       stockValue: number;
     }> = Array.from(groupSummaryMap.values()).sort((a, b) => b.stockValue - a.stockValue);
+    const recentPaymentRows = recentPayments.map((payment) => ({
+      ...payment,
+      amount: signedPaymentCents(payment) / 100,
+    }));
 
     return NextResponse.json(
       {
@@ -504,7 +510,7 @@ export async function GET(request: NextRequest) {
           },
           tables: {
             topOutstanding,
-            recentPayments,
+            recentPayments: recentPaymentRows,
             outboundSnapshot: outboundRows,
             specialOrdersWatchlist: watchSpecialOrders,
             groupSummary,

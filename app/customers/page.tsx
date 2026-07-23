@@ -28,7 +28,6 @@ type Customer = {
 
 type BlockingRelations = {
   salesOrders: Array<{ id: string; orderNumber: string; status: string }>;
-  storeCredits: Array<{ id: string; amount: number | string; status: string }>;
   afterSalesReturns: Array<{ id: string; returnNumber: string; status: string }>;
 } | null;
 
@@ -506,20 +505,6 @@ export default function CustomersPage() {
                           >
                             {order.orderNumber} · {order.status}
                           </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Store Credits</p>
-                    {blockingRelations.storeCredits.length === 0 ? (
-                      <p className="text-xs text-slate-500">None</p>
-                    ) : (
-                      <div className="space-y-1">
-                        {blockingRelations.storeCredits.map((credit) => (
-                          <div key={credit.id} className="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/80">
-                            {credit.id} · ${Number(credit.amount).toFixed(2)} · {credit.status}
-                          </div>
                         ))}
                       </div>
                     )}

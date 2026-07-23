@@ -132,7 +132,6 @@ const navGroups: NavGroup[] = [
     roles: ["ADMIN", "SALES"],
     items: [
       { label: "Tickets", href: "/after-sales", icon: Ticket, roles: ["ADMIN", "SALES"] },
-      { label: "Store Credit", href: "/after-sales/store-credit", icon: ShieldCheck, roles: ["ADMIN", "SALES"] },
     ],
   },
   {

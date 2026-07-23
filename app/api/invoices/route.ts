@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deriveInvoiceStatus, generateNextInvoiceNumber } from "@/lib/invoices";
 import { generateNextSalesOrderNumber } from "@/lib/sales-orders";
+import { sumSignedPaymentAmount } from "@/lib/payment-ledger";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { getDefaultTaxRate } from "@/lib/settings";
 
@@ -81,18 +82,20 @@ export async function GET(request: NextRequest) {
             invoiceId: { in: invoiceIds },
             status: "POSTED",
           },
-          select: { invoiceId: true, amount: true },
+          select: { invoiceId: true, amount: true, paymentType: true, status: true },
         })
       : [];
 
-    const paidByInvoice = new Map<string, number>();
+    const paymentsByInvoice = new Map<string, typeof postedPayments>();
     for (const payment of postedPayments) {
-      const prev = paidByInvoice.get(payment.invoiceId ?? "") ?? 0;
-      paidByInvoice.set(payment.invoiceId ?? "", roundCurrency(prev + Number(payment.amount)));
+      const key = payment.invoiceId ?? "";
+      const prev = paymentsByInvoice.get(key) ?? [];
+      prev.push(payment);
+      paymentsByInvoice.set(key, prev);
     }
 
     const data = invoices.map((invoice) => {
-      const paidTotal = roundCurrency(paidByInvoice.get(invoice.id) ?? 0);
+      const paidTotal = roundCurrency(sumSignedPaymentAmount(paymentsByInvoice.get(invoice.id) ?? []));
       const total = Number(invoice.total);
       const balanceDue = roundCurrency(total - paidTotal);
       const effectiveStatus = deriveInvoiceStatus(invoice.status, paidTotal, total);

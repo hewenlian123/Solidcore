@@ -11,7 +11,7 @@ type ReturnDetail = {
   returnNumber: string;
   type: "RETURN" | "EXCHANGE";
   status: "DRAFT" | "APPROVED" | "RECEIVED" | "REFUNDED" | "CLOSED" | "VOID";
-  refundMethod: "STORE_CREDIT" | "REFUND_PAYMENT" | "NO_REFUND";
+  refundMethod: "REFUND_PAYMENT" | "NO_REFUND";
   refundTotal: string;
   notes: string | null;
   pdfUrl: string | null;

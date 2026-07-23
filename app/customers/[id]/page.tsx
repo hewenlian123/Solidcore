@@ -82,18 +82,6 @@ type CustomerReturnRow = {
   id: string;
   createdAt: string;
   status: string;
-  creditAmount: number;
-  issueStoreCredit: boolean;
-  storeCreditId: string | null;
-  storeCreditStatus: string | null;
-};
-
-type CustomerStoreCreditRow = {
-  id: string;
-  createdAt: string;
-  amount: number;
-  status: string;
-  returnId: string;
 };
 
 type CustomerInvoiceRow = {
@@ -117,9 +105,7 @@ export default function CustomerDetailPage() {
   const [orders, setOrders] = useState<CustomerOrderRow[]>([]);
   const [notes, setNotes] = useState<CustomerNote[]>([]);
   const [returns, setReturns] = useState<CustomerReturnRow[]>([]);
-  const [openCredits, setOpenCredits] = useState<CustomerStoreCreditRow[]>([]);
   const [invoices, setInvoices] = useState<CustomerInvoiceRow[]>([]);
-  const [openCreditBalance, setOpenCreditBalance] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"ORDERS" | "NOTES">("ORDERS");
@@ -218,24 +204,15 @@ export default function CustomerDetailPage() {
   const loadReturnsAndCredits = async () => {
     if (!id) return;
     try {
-      const [returnsRes, creditsRes] = await Promise.all([
-        fetch(`/api/customers/${id}/returns`, {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        }),
-        fetch(`/api/customers/${id}/store-credits`, {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        }),
-      ]);
-      const [returnsPayload, creditsPayload] = await Promise.all([returnsRes.json(), creditsRes.json()]);
+      const returnsRes = await fetch(`/api/customers/${id}/returns`, {
+        cache: "no-store",
+        headers: { "x-user-role": role },
+      });
+      const returnsPayload = await returnsRes.json();
       if (!returnsRes.ok) throw new Error(returnsPayload.error ?? "Failed to load customer returns");
-      if (!creditsRes.ok) throw new Error(creditsPayload.error ?? "Failed to load customer store credits");
       setReturns(returnsPayload.data ?? []);
-      setOpenCredits(creditsPayload.data?.credits ?? []);
-      setOpenCreditBalance(Number(creditsPayload.data?.totalOpenCredit ?? 0));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load return and store credit data");
+      setError(err instanceof Error ? err.message : "Failed to load customer returns");
     }
   };
 
@@ -723,14 +700,13 @@ export default function CustomerDetailPage() {
                     <TableHead className="px-5 py-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Return #</TableHead>
                     <TableHead className="px-5 py-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Date</TableHead>
                     <TableHead className="px-5 py-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Status</TableHead>
-                    <TableHead className="px-5 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Credit Amount</TableHead>
                     <TableHead className="px-5 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Link</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {returns.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="py-14 text-center">
+                      <TableCell colSpan={4} className="py-14 text-center">
                         <p className="text-base font-medium text-white/90">No returns yet.</p>
                       </TableCell>
                     </TableRow>
@@ -742,7 +718,6 @@ export default function CustomerDetailPage() {
                           {new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
                         </TableCell>
                         <TableCell className="px-5 py-4 text-sm text-slate-300">{row.status}</TableCell>
-                        <TableCell className="px-5 py-4 text-right text-sm tabular-nums text-slate-300">${Number(row.creditAmount).toFixed(2)}</TableCell>
                         <TableCell className="px-5 py-4 text-right">
                           <Link href={`/returns/${row.id}`} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs font-medium text-white/90 hover:bg-white/10">
                             Open
@@ -757,54 +732,6 @@ export default function CustomerDetailPage() {
             </div>
           </div>
 
-          <div className="glass-card p-0 overflow-hidden">
-            <div className="glass-card-content px-5 pt-5 pb-1">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-base font-semibold text-white">Store Credit</h3>
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-200">
-                Open Balance: ${openCreditBalance.toFixed(2)}
-              </div>
-            </div>
-            <div className="overflow-x-auto rounded-xl border border-white/10">
-              <Table>
-                <TableHeader>
-                  <TableRow className="border-white/10 bg-white/[0.08] hover:bg-white/[0.08]">
-                    <TableHead className="px-5 py-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Credit #</TableHead>
-                    <TableHead className="px-5 py-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Date</TableHead>
-                    <TableHead className="px-5 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Amount</TableHead>
-                    <TableHead className="px-5 py-4 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Status</TableHead>
-                    <TableHead className="px-5 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-slate-400">Source Return</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {openCredits.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="py-14 text-center">
-                        <p className="text-base font-medium text-white/90">No open store credits.</p>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    openCredits.map((row) => (
-                      <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/[0.06]">
-                        <TableCell className="px-5 py-4 font-medium text-white">{row.id.slice(0, 8)}</TableCell>
-                        <TableCell className="px-5 py-4 text-sm text-slate-300">
-                          {new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
-                        </TableCell>
-                        <TableCell className="px-5 py-4 text-right text-sm tabular-nums text-slate-300">${Number(row.amount).toFixed(2)}</TableCell>
-                        <TableCell className="px-5 py-4 text-sm text-slate-300">{row.status}</TableCell>
-                        <TableCell className="px-5 py-4 text-right">
-                          <Link href={`/returns/${row.returnId}`} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs font-medium text-white/90 hover:bg-white/10">
-                            Open Return
-                          </Link>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-            </div>
-          </div>
         </div>
 
         <aside className="space-y-4">

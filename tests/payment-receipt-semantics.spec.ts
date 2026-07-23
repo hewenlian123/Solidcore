@@ -200,28 +200,6 @@ async function cleanupTaggedFixtures() {
   });
   const afterSalesReturnIds = afterSalesReturns.map((row) => row.id);
 
-  await prisma.storeCreditApplication.deleteMany({
-    where:
-      invoiceIds.length || paymentIds.length
-        ? {
-            OR: [
-              ...(invoiceIds.length ? [{ invoiceId: { in: invoiceIds } }] : []),
-              ...(paymentIds.length ? [{ paymentId: { in: paymentIds } }] : []),
-            ],
-          }
-        : { id: "__none__" },
-  });
-  await prisma.storeCredit.deleteMany({
-    where:
-      customerIds.length || returnIds.length
-        ? {
-            OR: [
-              ...(customerIds.length ? [{ customerId: { in: customerIds } }] : []),
-              ...(returnIds.length ? [{ returnId: { in: returnIds } }] : []),
-            ],
-          }
-        : { id: "__none__" },
-  });
   await prisma.afterSalesReturnItem.deleteMany({
     where: afterSalesReturnIds.length ? { returnId: { in: afterSalesReturnIds } } : { returnId: "__none__" },
   });
@@ -354,28 +332,6 @@ async function countTaggedFixtures() {
       where: orderIds.length ? { salesOrderId: { in: orderIds } } : { salesOrderId: "__none__" },
     }),
     salesOrders: orders.length,
-    storeCreditApplications: await prisma.storeCreditApplication.count({
-      where:
-        invoiceIds.length || paymentIds.length
-          ? {
-              OR: [
-                ...(invoiceIds.length ? [{ invoiceId: { in: invoiceIds } }] : []),
-                ...(paymentIds.length ? [{ paymentId: { in: paymentIds } }] : []),
-              ],
-            }
-          : { id: "__none__" },
-    }),
-    storeCredits: await prisma.storeCredit.count({
-      where:
-        customerIds.length || returnIds.length
-          ? {
-              OR: [
-                ...(customerIds.length ? [{ customerId: { in: customerIds } }] : []),
-                ...(returnIds.length ? [{ returnId: { in: returnIds } }] : []),
-              ],
-            }
-          : { id: "__none__" },
-    }),
   };
 }
 
@@ -574,7 +530,7 @@ async function capturePaymentIdentity(paymentId: string) {
 }
 
 async function captureState(fixture: Fixture) {
-  const [order, invoice, payments, fulfillments, fulfillmentItems, inventoryMovements, storeCredits, storeCreditApplications, returns, afterSalesReturns] =
+  const [order, invoice, payments, fulfillments, fulfillmentItems, inventoryMovements, returns, afterSalesReturns] =
     await Promise.all([
       prisma.salesOrder.findUniqueOrThrow({
         where: { id: fixture.salesOrderId },
@@ -635,20 +591,10 @@ async function captureState(fixture: Fixture) {
         orderBy: { id: "asc" },
         select: { id: true, qty: true, type: true },
       }),
-      prisma.storeCredit.findMany({
-        where: { customerId: fixture.customerId },
-        orderBy: { id: "asc" },
-        select: { amount: true, id: true, status: true, usedAmount: true },
-      }),
-      prisma.storeCreditApplication.findMany({
-        where: { invoiceId: fixture.invoiceId },
-        orderBy: { id: "asc" },
-        select: { amount: true, id: true, paymentId: true },
-      }),
       prisma.salesReturn.findMany({
         where: { OR: [{ salesOrderId: fixture.salesOrderId }, { sourceInvoiceId: fixture.invoiceId }] },
         orderBy: { id: "asc" },
-        select: { creditAmount: true, id: true, status: true },
+        select: { id: true, status: true },
       }),
       prisma.afterSalesReturn.findMany({
         where: { OR: [{ customerId: fixture.customerId }, { salesOrderId: fixture.salesOrderId }, { invoiceId: fixture.invoiceId }] },
@@ -687,13 +633,7 @@ async function captureState(fixture: Fixture) {
       amount: money(payment.amount),
       receivedAt: payment.receivedAt.toISOString(),
     })),
-    returns: returns.map((row) => ({ ...row, creditAmount: money(row.creditAmount) })),
-    storeCreditApplications: storeCreditApplications.map((row) => ({ ...row, amount: money(row.amount) })),
-    storeCredits: storeCredits.map((row) => ({
-      ...row,
-      amount: money(row.amount),
-      usedAmount: money(row.usedAmount),
-    })),
+    returns,
   };
 }
 
@@ -762,8 +702,6 @@ test.describe.serial("payment receipt and PDF semantics", () => {
       returns: 0,
       salesOrderItems: 0,
       salesOrders: 0,
-      storeCreditApplications: 0,
-      storeCredits: 0,
     });
     await prisma.$disconnect();
   });

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { sumSignedPaymentAmount } from "@/lib/payment-ledger";
 
 export type CustomerOrderFilter =
   | "ALL"
@@ -91,39 +92,41 @@ export async function buildCustomerOrderMetrics(customerId: string) {
   const orderIds = orders.map((item) => item.id);
   const invoiceIds = orders.flatMap((item) => item.invoices.map((invoice) => invoice.id));
 
-  const [invoicePaymentGroup, unallocatedOrderPaymentGroup] = await Promise.all([
+  const [invoicePayments, unallocatedOrderPayments] = await Promise.all([
     invoiceIds.length
-      ? prisma.salesOrderPayment.groupBy({
-          by: ["invoiceId"],
+      ? prisma.salesOrderPayment.findMany({
           where: { status: "POSTED", invoiceId: { in: invoiceIds } },
-          _sum: { amount: true },
+          select: { invoiceId: true, amount: true, paymentType: true, status: true },
         })
       : Promise.resolve([]),
     orderIds.length
-      ? prisma.salesOrderPayment.groupBy({
-          by: ["salesOrderId"],
+      ? prisma.salesOrderPayment.findMany({
           where: { status: "POSTED", invoiceId: null, salesOrderId: { in: orderIds } },
-          _sum: { amount: true },
+          select: { salesOrderId: true, amount: true, paymentType: true, status: true },
         })
       : Promise.resolve([]),
   ]);
 
-  const paidByInvoiceId = new Map<string, number>();
-  for (const row of invoicePaymentGroup) {
+  const paymentsByInvoiceId = new Map<string, typeof invoicePayments>();
+  for (const row of invoicePayments) {
     if (!row.invoiceId) continue;
-    paidByInvoiceId.set(row.invoiceId, Number(row._sum.amount ?? 0));
+    const current = paymentsByInvoiceId.get(row.invoiceId) ?? [];
+    current.push(row);
+    paymentsByInvoiceId.set(row.invoiceId, current);
   }
-  const unallocatedByOrderId = new Map<string, number>();
-  for (const row of unallocatedOrderPaymentGroup) {
-    unallocatedByOrderId.set(row.salesOrderId, Number(row._sum.amount ?? 0));
+  const unallocatedByOrderId = new Map<string, typeof unallocatedOrderPayments>();
+  for (const row of unallocatedOrderPayments) {
+    const current = unallocatedByOrderId.get(row.salesOrderId) ?? [];
+    current.push(row);
+    unallocatedByOrderId.set(row.salesOrderId, current);
   }
 
   const rows: CustomerOrderRow[] = orders.map((order) => {
     const paidByInvoice = order.invoices.reduce(
-      (sum, invoice) => sum + (paidByInvoiceId.get(invoice.id) ?? 0),
+      (sum, invoice) => sum + sumSignedPaymentAmount(paymentsByInvoiceId.get(invoice.id) ?? []),
       0,
     );
-    const unallocatedOrderPaid = unallocatedByOrderId.get(order.id) ?? 0;
+    const unallocatedOrderPaid = sumSignedPaymentAmount(unallocatedByOrderId.get(order.id) ?? []);
     const paidTotal = round2(paidByInvoice + unallocatedOrderPaid);
     const total = round2(Number(order.total));
     const balance = round2(Math.max(total - paidTotal, 0));

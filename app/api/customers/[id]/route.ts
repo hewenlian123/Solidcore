@@ -191,14 +191,12 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       select: {
         id: true,
         salesOrders: { select: { id: true, orderNumber: true, status: true }, take: 20 },
-        storeCredits: { select: { id: true, amount: true, status: true }, take: 10 },
         afterSalesReturns: { select: { id: true, returnNumber: true, status: true }, take: 10 },
       },
     });
     if (!existing) return NextResponse.json({ error: "Customer not found." }, { status: 404 });
     const hasBlocking =
       existing.salesOrders.length > 0 ||
-      existing.storeCredits.length > 0 ||
       existing.afterSalesReturns.length > 0;
     if (hasBlocking) {
       return NextResponse.json(
@@ -206,7 +204,6 @@ export async function DELETE(request: NextRequest, { params }: Params) {
           error: "Cannot delete customer with linked records.",
           blocking: {
             salesOrders: existing.salesOrders,
-            storeCredits: existing.storeCredits,
             afterSalesReturns: existing.afterSalesReturns,
           },
         },

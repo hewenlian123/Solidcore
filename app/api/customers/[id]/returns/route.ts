@@ -20,11 +20,6 @@ export async function GET(request: NextRequest, { params }: Params) {
         id: true,
         createdAt: true,
         status: true,
-        creditAmount: true,
-        issueStoreCredit: true,
-        storeCredit: {
-          select: { id: true, amount: true, status: true },
-        },
       },
     });
 
@@ -32,10 +27,6 @@ export async function GET(request: NextRequest, { params }: Params) {
       id: row.id,
       createdAt: row.createdAt,
       status: row.status,
-      creditAmount: Number(row.storeCredit?.amount ?? row.creditAmount ?? 0),
-      issueStoreCredit: row.issueStoreCredit,
-      storeCreditId: row.storeCredit?.id ?? null,
-      storeCreditStatus: row.storeCredit?.status ?? null,
     }));
 
     return NextResponse.json({ data }, { status: 200 });

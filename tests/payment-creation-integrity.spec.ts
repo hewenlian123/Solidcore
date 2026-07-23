@@ -122,14 +122,6 @@ async function cleanupTaggedFixtures() {
   });
   const paymentIds = payments.map((payment) => payment.id);
 
-  await prisma.storeCreditApplication.deleteMany({
-    where: {
-      OR: [
-        ...(invoiceIds.length ? [{ invoiceId: { in: invoiceIds } }] : []),
-        ...(paymentIds.length ? [{ paymentId: { in: paymentIds } }] : []),
-      ],
-    },
-  });
   await prisma.salesOrderPayment.deleteMany({
     where: paymentIds.length ? { id: { in: paymentIds } } : { id: "__none__" },
   });
@@ -241,28 +233,6 @@ async function countTaggedFixtures() {
       where: invoiceIds.length ? { invoiceId: { in: invoiceIds } } : { id: "__none__" },
     }),
     payments: payments.length,
-    storeCredits: await prisma.storeCredit.count({
-      where:
-        customerIds.length || returnIds.length
-          ? {
-              OR: [
-                ...(customerIds.length ? [{ customerId: { in: customerIds } }] : []),
-                ...(returnIds.length ? [{ returnId: { in: returnIds } }] : []),
-              ],
-            }
-          : { id: "__none__" },
-    }),
-    storeCreditApplications: await prisma.storeCreditApplication.count({
-      where:
-        invoiceIds.length || paymentIds.length
-          ? {
-              OR: [
-                ...(invoiceIds.length ? [{ invoiceId: { in: invoiceIds } }] : []),
-                ...(paymentIds.length ? [{ paymentId: { in: paymentIds } }] : []),
-              ],
-            }
-          : { id: "__none__" },
-    }),
     returns: returns.length,
     afterSalesReturns: await prisma.afterSalesReturn.count({
       where:
@@ -383,8 +353,6 @@ async function captureFixtureState(fixture: Fixture) {
     fulfillments,
     fulfillmentItems,
     inventoryMovements,
-    storeCredits,
-    storeCreditApplications,
     salesReturns,
     afterSalesReturns,
   ] = await Promise.all([
@@ -457,21 +425,11 @@ async function captureFixtureState(fixture: Fixture) {
       select: { id: true, qty: true, type: true },
       orderBy: { id: "asc" },
     }),
-    prisma.storeCredit.findMany({
-      where: { customerId: fixture.customerId },
-      select: { id: true, amount: true, usedAmount: true, status: true },
-      orderBy: { id: "asc" },
-    }),
-    prisma.storeCreditApplication.findMany({
-      where: { invoiceId: fixture.invoiceId },
-      select: { id: true, amount: true, paymentId: true },
-      orderBy: { id: "asc" },
-    }),
     prisma.salesReturn.findMany({
       where: {
         OR: [{ salesOrderId: fixture.salesOrderId }, { sourceInvoiceId: fixture.invoiceId }],
       },
-      select: { id: true, status: true, creditAmount: true },
+      select: { id: true, status: true },
       orderBy: { id: "asc" },
     }),
     prisma.afterSalesReturn.findMany({
@@ -533,19 +491,7 @@ async function captureFixtureState(fixture: Fixture) {
       ...movement,
       qty: normalizeMoney(movement.qty),
     })),
-    storeCredits: storeCredits.map((credit) => ({
-      ...credit,
-      amount: normalizeMoney(credit.amount),
-      usedAmount: normalizeMoney(credit.usedAmount),
-    })),
-    storeCreditApplications: storeCreditApplications.map((application) => ({
-      ...application,
-      amount: normalizeMoney(application.amount),
-    })),
-    salesReturns: salesReturns.map((row) => ({
-      ...row,
-      creditAmount: normalizeMoney(row.creditAmount),
-    })),
+    salesReturns,
     afterSalesReturns: afterSalesReturns.map((row) => ({
       ...row,
       refundTotal: normalizeMoney(row.refundTotal),
@@ -638,8 +584,6 @@ test.afterAll(async () => {
     invoices: 0,
     invoiceItems: 0,
     payments: 0,
-    storeCredits: 0,
-    storeCreditApplications: 0,
     returns: 0,
     afterSalesReturns: 0,
     fulfillments: 0,

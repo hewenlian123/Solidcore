@@ -224,9 +224,6 @@ async function cleanupTaggedFixtures() {
     ...(fulfillmentIds.length ? [{ fulfillmentId: { in: fulfillmentIds } }] : []),
   ];
 
-  await prisma.storeCreditApplication.deleteMany({
-    where: invoiceIds.length ? { invoiceId: { in: invoiceIds } } : { invoiceId: "__none__" },
-  });
   await prisma.salesOrderPayment.deleteMany({
     where: paymentWhere.length ? { OR: paymentWhere } : { id: "__none__" },
   });
@@ -334,9 +331,6 @@ async function taggedCounts() {
     }),
     payments: await prisma.salesOrderPayment.count({
       where: paymentWhere.length ? { OR: paymentWhere } : { id: "__none__" },
-    }),
-    storeCreditApplications: await prisma.storeCreditApplication.count({
-      where: invoiceIds.length ? { invoiceId: { in: invoiceIds } } : { invoiceId: "__none__" },
     }),
     returns: await prisma.salesReturn.count({
       where: orderIds.length ? { salesOrderId: { in: orderIds } } : { salesOrderId: "__none__" },
@@ -601,8 +595,6 @@ async function captureNonInvoiceState(orderId: string) {
         }
       : null,
     payments: await prisma.salesOrderPayment.count({ where: { salesOrderId: orderId } }),
-    storeCreditApplications: await prisma.storeCreditApplication.count(),
-    storeCredits: await prisma.storeCredit.count(),
     salesReturns: await prisma.salesReturn.count({ where: { salesOrderId: orderId } }),
     afterSalesReturns: await prisma.afterSalesReturn.count({ where: { salesOrderId: orderId } }),
     fulfillments: await prisma.salesOrderFulfillment.count({ where: { salesOrderId: orderId } }),
@@ -635,7 +627,6 @@ test.describe.serial("invoice snapshot, discount, and immutability integrity", (
       invoices: 0,
       invoiceItems: 0,
       payments: 0,
-      storeCreditApplications: 0,
       returns: 0,
       fulfillments: 0,
       movements: 0,

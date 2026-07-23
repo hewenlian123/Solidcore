@@ -17,3 +17,8 @@ export function getPaymentAllocationLabel(invoiceNumber: string | null | undefin
   const number = String(invoiceNumber ?? "").trim();
   return number ? `Applied to Invoice ${number}` : "Unallocated";
 }
+
+export function getOriginalPaymentLabel(paymentId: string | null | undefined) {
+  const id = String(paymentId ?? "").trim();
+  return id ? `Payment ${id.slice(0, 8).toUpperCase()}` : "-";
+}

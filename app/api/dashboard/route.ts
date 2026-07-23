@@ -1,5 +1,6 @@
 import { ProductCategory } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import { sumSignedPaymentAmount } from "@/lib/payment-ledger";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
@@ -130,12 +131,12 @@ export async function GET(request: NextRequest) {
         select: { salesOrderId: true },
         distinct: ["salesOrderId"],
       }),
-      prisma.salesOrderPayment.aggregate({
+      prisma.salesOrderPayment.findMany({
         where: {
           createdAt: { gte: todayStart, lt: todayEnd },
           status: "POSTED",
         },
-        _sum: { amount: true },
+        select: { amount: true, paymentType: true, status: true },
       }),
       prisma.salesOrder.aggregate({
         where: { balanceDue: { gt: 0 } },
@@ -256,7 +257,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const todayRevenue = Number(todayRevenueAgg._sum.amount ?? 0);
+    const todayRevenue = sumSignedPaymentAmount(todayRevenueAgg);
     const receivableTotal = Number(receivableAgg._sum.balanceDue ?? 0);
     const lowStockCount = lowStockVariantRows.filter((row) => {
       const onHand = Number(row.inventoryStock?.onHand ?? 0);

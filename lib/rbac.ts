@@ -34,7 +34,6 @@ export function canViewPath(role: Role, path: string) {
       path.startsWith("/purchasing") ||
       path.startsWith("/suppliers") ||
       path.startsWith("/customers") ||
-      path.startsWith("/store-credit") ||
       path.startsWith("/price-list") ||
       path.startsWith("/price-management") ||
       path.startsWith("/analytics") ||

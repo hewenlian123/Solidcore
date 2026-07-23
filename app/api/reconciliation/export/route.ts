@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { signedPaymentCents } from "@/lib/payment-ledger";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
@@ -69,6 +70,8 @@ export async function GET(request: NextRequest) {
           id: true,
           invoiceId: true,
           amount: true,
+          paymentType: true,
+          status: true,
           createdAt: true,
           method: true,
           salesOrder: { select: { orderNumber: true, customer: { select: { name: true } } } },
@@ -80,7 +83,7 @@ export async function GET(request: NextRequest) {
     for (const payment of payments) {
       if (!payment.invoiceId) continue;
       const prev = paidByInvoice.get(payment.invoiceId) ?? 0;
-      paidByInvoice.set(payment.invoiceId, round2(prev + Number(payment.amount)));
+      paidByInvoice.set(payment.invoiceId, round2(prev + signedPaymentCents(payment) / 100));
     }
 
     const header = [
@@ -139,7 +142,7 @@ export async function GET(request: NextRequest) {
           payment.id,
           payment.createdAt.toISOString(),
           payment.method,
-          round2(Number(payment.amount)),
+          round2(signedPaymentCents(payment) / 100),
           "NO",
         ]
           .map(csvCell)
@@ -159,4 +162,3 @@ export async function GET(request: NextRequest) {
     return new Response("Failed to export reconciliation report.", { status: 500 });
   }
 }
-

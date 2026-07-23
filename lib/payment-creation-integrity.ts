@@ -1,5 +1,12 @@
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import {
+  centsToNumber,
+  moneyToCents,
+  sumSignedPaymentCents,
+} from "@/lib/payment-ledger";
+
+export { centsToNumber, moneyToCents } from "@/lib/payment-ledger";
 
 export type ParsedPaymentAmount = {
   amount: string;
@@ -11,7 +18,6 @@ export type ParsedIdempotencyKey =
   | { ok: false; error: string };
 
 const MONEY_PATTERN = /^(?:\d+|\d*\.\d+)$/;
-const DECIMAL_MONEY_PATTERN = /^-?(?:\d+|\d*\.\d+)$/;
 const MAX_IDEMPOTENCY_KEY_LENGTH = 255;
 
 export function parsePositivePaymentAmount(value: unknown): ParsedPaymentAmount | null {
@@ -90,52 +96,6 @@ export function buildPaymentIdempotencyFingerprint(payload: Record<string, unkno
   return createHash("sha256").update(JSON.stringify(stable)).digest("hex");
 }
 
-export function moneyToCents(value: unknown) {
-  let raw: string;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) throw new Error("MONEY_VALUE_INVALID");
-    raw = String(value);
-  } else if (typeof value === "string") {
-    raw = value.trim();
-  } else if (value instanceof Prisma.Decimal) {
-    raw = value.toFixed();
-  } else {
-    throw new Error("MONEY_VALUE_INVALID");
-  }
-
-  if (!raw || !DECIMAL_MONEY_PATTERN.test(raw)) {
-    throw new Error("MONEY_VALUE_INVALID");
-  }
-
-  const negative = raw.startsWith("-");
-  const unsigned = negative ? raw.slice(1) : raw;
-  const [wholeRaw, fractionRaw = ""] = unsigned.split(".");
-  const whole = wholeRaw || "0";
-  let fraction = fractionRaw;
-  if (fraction.length > 2) {
-    if (!/^0*$/.test(fraction.slice(2))) {
-      throw new Error("MONEY_VALUE_INVALID");
-    }
-    fraction = fraction.slice(0, 2);
-  }
-
-  const wholeNumber = Number(whole);
-  const fractionNumber = Number(fraction.padEnd(2, "0"));
-  if (!Number.isSafeInteger(wholeNumber) || !Number.isSafeInteger(fractionNumber)) {
-    throw new Error("MONEY_VALUE_INVALID");
-  }
-
-  const cents = wholeNumber * 100 + fractionNumber;
-  if (!Number.isSafeInteger(cents)) {
-    throw new Error("MONEY_VALUE_INVALID");
-  }
-  return negative ? -cents : cents;
-}
-
-export function centsToNumber(cents: number) {
-  return Math.round(cents) / 100;
-}
-
 export function isPaymentOverBalance(amountCents: number, balanceCents: number) {
   return amountCents > Math.max(balanceCents, 0);
 }
@@ -154,6 +114,16 @@ export async function lockInvoiceForPayment(tx: Prisma.TransactionClient, invoic
   return rows.length > 0;
 }
 
+export async function lockSalesOrderPaymentForRefund(
+  tx: Prisma.TransactionClient,
+  paymentId: string,
+) {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>(
+    Prisma.sql`SELECT id FROM "sales_order_payments" WHERE id = ${paymentId} FOR UPDATE`,
+  );
+  return rows.length > 0;
+}
+
 export async function getSalesOrderRemainingCents(tx: Prisma.TransactionClient, salesOrderId: string) {
   const [order, payments] = await Promise.all([
     tx.salesOrder.findUnique({
@@ -162,13 +132,13 @@ export async function getSalesOrderRemainingCents(tx: Prisma.TransactionClient, 
     }),
     tx.salesOrderPayment.findMany({
       where: { salesOrderId, status: "POSTED" },
-      select: { amount: true },
+      select: { amount: true, paymentType: true, status: true },
     }),
   ]);
 
   if (!order) throw new Error("ORDER_NOT_FOUND");
   const totalCents = moneyToCents(order.total);
-  const paidCents = payments.reduce((sum, payment) => sum + moneyToCents(payment.amount), 0);
+  const paidCents = sumSignedPaymentCents(payments);
   return totalCents - paidCents;
 }
 
@@ -180,12 +150,12 @@ export async function getInvoiceRemainingCents(tx: Prisma.TransactionClient, inv
     }),
     tx.salesOrderPayment.findMany({
       where: { invoiceId, status: "POSTED" },
-      select: { amount: true },
+      select: { amount: true, paymentType: true, status: true },
     }),
   ]);
 
   if (!invoice) throw new Error("NOT_FOUND");
   const totalCents = moneyToCents(invoice.total);
-  const paidCents = payments.reduce((sum, payment) => sum + moneyToCents(payment.amount), 0);
+  const paidCents = sumSignedPaymentCents(payments);
   return totalCents - paidCents;
 }

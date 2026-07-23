@@ -124,17 +124,6 @@ async function cleanupTaggedFixtures() {
   });
   const paymentIds = payments.map((payment) => payment.id);
 
-  await prisma.storeCreditApplication.deleteMany({
-    where:
-      invoiceIds.length || paymentIds.length
-        ? {
-            OR: [
-              ...(invoiceIds.length ? [{ invoiceId: { in: invoiceIds } }] : []),
-              ...(paymentIds.length ? [{ paymentId: { in: paymentIds } }] : []),
-            ],
-          }
-        : { id: "__none__" },
-  });
   await prisma.salesOrderPayment.deleteMany({
     where: paymentIds.length ? { id: { in: paymentIds } } : { id: "__none__" },
   });
@@ -270,28 +259,6 @@ async function countTaggedFixtures() {
       where: orderIds.length ? { salesOrderId: { in: orderIds } } : { salesOrderId: "__none__" },
     }),
     salesOrders: orders.length,
-    storeCreditApplications: await prisma.storeCreditApplication.count({
-      where:
-        invoiceIds.length || paymentIds.length
-          ? {
-              OR: [
-                ...(invoiceIds.length ? [{ invoiceId: { in: invoiceIds } }] : []),
-                ...(paymentIds.length ? [{ paymentId: { in: paymentIds } }] : []),
-              ],
-            }
-          : { id: "__none__" },
-    }),
-    storeCredits: await prisma.storeCredit.count({
-      where:
-        customerIds.length || returnIds.length
-          ? {
-              OR: [
-                ...(customerIds.length ? [{ customerId: { in: customerIds } }] : []),
-                ...(returnIds.length ? [{ returnId: { in: returnIds } }] : []),
-              ],
-            }
-          : { id: "__none__" },
-    }),
     variants: variants.length,
   };
 }
@@ -381,7 +348,7 @@ async function createFixture(
 }
 
 async function captureState(fixture: Fixture) {
-  const [order, invoice, payments, fulfillments, fulfillmentItems, inventoryMovements, storeCredits, storeCreditApplications, returns, afterSalesReturns] =
+  const [order, invoice, payments, fulfillments, fulfillmentItems, inventoryMovements, returns, afterSalesReturns] =
     await Promise.all([
       prisma.salesOrder.findUniqueOrThrow({
         where: { id: fixture.salesOrderId },
@@ -441,21 +408,11 @@ async function captureState(fixture: Fixture) {
         select: { id: true, qty: true, type: true },
         orderBy: { id: "asc" },
       }),
-      prisma.storeCredit.findMany({
-        where: { customerId: fixture.customerId },
-        select: { amount: true, id: true, status: true, usedAmount: true },
-        orderBy: { id: "asc" },
-      }),
-      prisma.storeCreditApplication.findMany({
-        where: { invoiceId: fixture.invoiceId },
-        select: { amount: true, id: true, paymentId: true },
-        orderBy: { id: "asc" },
-      }),
       prisma.salesReturn.findMany({
         where: {
           OR: [{ salesOrderId: fixture.salesOrderId }, { sourceInvoiceId: fixture.invoiceId }],
         },
-        select: { creditAmount: true, id: true, status: true },
+        select: { id: true, status: true },
         orderBy: { id: "asc" },
       }),
       prisma.afterSalesReturn.findMany({
@@ -508,13 +465,7 @@ async function captureState(fixture: Fixture) {
       ...payment,
       amount: money(payment.amount),
     })),
-    returns: returns.map((row) => ({ ...row, creditAmount: money(row.creditAmount) })),
-    storeCreditApplications: storeCreditApplications.map((row) => ({ ...row, amount: money(row.amount) })),
-    storeCredits: storeCredits.map((row) => ({
-      ...row,
-      amount: money(row.amount),
-      usedAmount: money(row.usedAmount),
-    })),
+    returns,
   };
 }
 
@@ -601,8 +552,6 @@ function expectFinancialBasisUnchanged(
   expect(after.fulfillments).toEqual(before.fulfillments);
   expect(after.fulfillmentItems).toEqual(before.fulfillmentItems);
   expect(after.inventoryMovements).toEqual(before.inventoryMovements);
-  expect(after.storeCredits).toEqual(before.storeCredits);
-  expect(after.storeCreditApplications).toEqual(before.storeCreditApplications);
   expect(after.returns).toEqual(before.returns);
   expect(after.afterSalesReturns).toEqual(before.afterSalesReturns);
 }
@@ -628,8 +577,6 @@ test.describe.serial("deposit receipt authority and void reconciliation", () => 
       returns: 0,
       salesOrderItems: 0,
       salesOrders: 0,
-      storeCreditApplications: 0,
-      storeCredits: 0,
       variants: 0,
     });
     await prisma.$disconnect();

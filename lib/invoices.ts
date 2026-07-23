@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { centsToNumber, moneyToCents, sumSignedPaymentCents } from "@/lib/payment-ledger";
 
 function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -18,10 +19,11 @@ export async function generateNextInvoiceNumber(tx: Prisma.TransactionClient) {
 export async function computeInvoicePaidAndBalance(tx: Prisma.TransactionClient, invoiceId: string, total: number) {
   const postedPayments = await tx.salesOrderPayment.findMany({
     where: { invoiceId, status: "POSTED" },
-    select: { amount: true },
+    select: { amount: true, paymentType: true, status: true },
   });
-  const paidTotal = roundCurrency(postedPayments.reduce((sum, p) => sum + Number(p.amount), 0));
-  const balanceDue = roundCurrency(total - paidTotal);
+  const paidCents = sumSignedPaymentCents(postedPayments);
+  const paidTotal = roundCurrency(centsToNumber(paidCents));
+  const balanceDue = roundCurrency(centsToNumber(moneyToCents(total) - paidCents));
   return { paidTotal, balanceDue };
 }
 

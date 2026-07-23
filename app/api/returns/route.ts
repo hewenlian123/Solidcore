@@ -289,11 +289,9 @@ export async function POST(request: NextRequest) {
             invoiceId: linkedInvoice?.id ?? null,
             type: normalizedType,
             refundMethod:
-              String(payload?.refundMethod ?? "NO_REFUND").trim().toUpperCase() === "STORE_CREDIT"
-                ? "STORE_CREDIT"
-                : String(payload?.refundMethod ?? "NO_REFUND").trim().toUpperCase() === "REFUND_PAYMENT"
-                  ? "REFUND_PAYMENT"
-                  : "NO_REFUND",
+              String(payload?.refundMethod ?? "NO_REFUND").trim().toUpperCase() === "REFUND_PAYMENT"
+                ? "REFUND_PAYMENT"
+                : "NO_REFUND",
             notes: String(payload?.notes ?? "").trim() || null,
             status: "DRAFT",
           },

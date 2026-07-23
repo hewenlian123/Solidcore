@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import {
-  applyCompletedReturnInventory,
-  ensureStoreCreditForCompletedReturn,
-  ReturnError,
-} from "@/lib/returns";
+import { applyCompletedReturnInventory, ReturnError } from "@/lib/returns";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = { params: Promise<{ id: string }> };
@@ -228,23 +224,16 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Invalid status." }, { status: 400 });
     }
     const reason = payload.reason !== undefined ? String(payload.reason || "").trim() || null : undefined;
-    const issueStoreCredit =
-      payload.issueStoreCredit !== undefined ? Boolean(payload.issueStoreCredit) : undefined;
-    const creditAmount =
-      payload.creditAmount !== undefined ? Number(payload.creditAmount ?? 0) : undefined;
     const nextItems: Array<{ id: string; qty: number }> = Array.isArray(payload.items) ? payload.items : [];
 
     const data = await prisma.$transaction(async (tx) => {
       const existing = await tx.salesReturn.findUnique({
         where: { id },
-        select: { id: true, status: true, completedAt: true, issueStoreCredit: true, creditAmount: true },
+        select: { id: true, status: true, completedAt: true },
       });
       if (!existing) throw new Error("RETURN_NOT_FOUND");
       const isLocked = existing.status === "COMPLETED" || existing.status === "CANCELLED";
       if (isLocked && nextItems.length > 0) throw new Error("RETURN_LOCKED");
-      if (creditAmount !== undefined && (!Number.isFinite(creditAmount) || creditAmount < 0)) {
-        throw new Error("CREDIT_AMOUNT_INVALID");
-      }
 
       if (nextItems.length > 0) {
         for (const item of nextItems) {
@@ -264,14 +253,11 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         data: {
           status: nextStatus,
           reason,
-          issueStoreCredit,
-          creditAmount: creditAmount !== undefined ? creditAmount : undefined,
         },
       });
 
       if (updated.status === "COMPLETED") {
         await applyCompletedReturnInventory(tx, { returnId: updated.id });
-        await ensureStoreCreditForCompletedReturn(tx, { returnId: updated.id });
       }
 
       return tx.salesReturn.findUnique({
@@ -318,9 +304,6 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     }
     if (error instanceof Error && error.message === "AFTER_SALES_STATUS_FLOW_INVALID") {
       return NextResponse.json({ error: "Invalid status transition." }, { status: 400 });
-    }
-    if (error instanceof Error && error.message === "CREDIT_AMOUNT_INVALID") {
-      return NextResponse.json({ error: "Credit amount must be >= 0." }, { status: 400 });
     }
     console.error("PATCH /api/returns/[id] error:", error);
     return NextResponse.json({ error: "Failed to update return." }, { status: 500 });

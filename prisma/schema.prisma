@@ -76,7 +76,6 @@ enum SalesPaymentMethod {
   CARD
   BANK
   OTHER
-  STORE_CREDIT
 }
 
 enum SalesPaymentStatus {
@@ -131,12 +130,6 @@ enum ReturnStatus {
   CANCELLED
 }
 
-enum StoreCreditStatus {
-  OPEN
-  USED
-  VOID
-}
-
 enum AfterSalesReturnType {
   RETURN
   EXCHANGE
@@ -152,7 +145,6 @@ enum AfterSalesReturnStatus {
 }
 
 enum AfterSalesRefundMethod {
-  STORE_CREDIT
   REFUND_PAYMENT
   NO_REFUND
 }
@@ -545,7 +537,6 @@ model SalesCustomer {
   invoices   Invoice[]
   customerNotes CustomerNote[]
   fulfillments SalesOrderFulfillment[]
-  storeCredits StoreCredit[]
   afterSalesReturns AfterSalesReturn[]
 
   @@index([name])
@@ -815,7 +806,6 @@ model SalesOrderPayment {
   invoice         Invoice?           @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   refundOfPayment SalesOrderPayment? @relation("SalesOrderPaymentRefunds", fields: [refundOfPaymentId], references: [id], onDelete: NoAction)
   refunds         SalesOrderPayment[] @relation("SalesOrderPaymentRefunds")
-  storeCreditApplications StoreCreditApplication[]
 
   @@index([salesOrderId])
   @@index([status, salesOrderId])
@@ -856,7 +846,6 @@ model Invoice {
   customer       SalesCustomer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
   items          InvoiceItem[]
   payments       SalesOrderPayment[]
-  storeCreditApplications StoreCreditApplication[]
   sourceReturns  SalesReturn[]        @relation("return_source_invoice")
   afterSalesReturns AfterSalesReturn[]
 
@@ -1065,8 +1054,6 @@ model SalesReturn {
   refundMethod  String?                 @map("refund_method")
   status        ReturnStatus            @default(DRAFT)
   reason        String?
-  issueStoreCredit Boolean              @default(false) @map("issue_store_credit")
-  creditAmount  Decimal                 @default(0) @map("credit_amount")
   completedAt   DateTime?               @map("completed_at")
   createdAt     DateTime                @default(now()) @map("created_at")
 
@@ -1074,7 +1061,6 @@ model SalesReturn {
   fulfillment   SalesOrderFulfillment?  @relation(fields: [fulfillmentId], references: [id], onDelete: SetNull)
   sourceInvoice Invoice?                @relation("return_source_invoice", fields: [sourceInvoiceId], references: [id], onDelete: SetNull)
   items         SalesReturnItem[]
-  storeCredit   StoreCredit?
 
   @@index([salesOrderId, createdAt])
   @@index([fulfillmentId])
@@ -1098,43 +1084,6 @@ model SalesReturnItem {
   @@index([fulfillmentItemId])
   @@index([variantId])
   @@map("return_items")
-}
-
-model StoreCredit {
-  id         String            @id @default(uuid())
-  customerId String            @map("customer_id")
-  returnId   String            @unique @map("return_id")
-  amount     Decimal
-  usedAmount Decimal           @default(0) @map("used_amount")
-  status     StoreCreditStatus @default(OPEN)
-  notes      String?
-  createdAt  DateTime          @default(now()) @map("created_at")
-
-  customer   SalesCustomer     @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  salesReturn SalesReturn      @relation(fields: [returnId], references: [id], onDelete: Cascade)
-  applications StoreCreditApplication[]
-
-  @@index([customerId, createdAt])
-  @@index([status])
-  @@map("store_credits")
-}
-
-model StoreCreditApplication {
-  id            String           @id @default(uuid())
-  storeCreditId String           @map("store_credit_id")
-  invoiceId     String           @map("invoice_id")
-  paymentId     String?          @map("payment_id")
-  amount        Decimal
-  createdAt     DateTime         @default(now()) @map("created_at")
-
-  storeCredit   StoreCredit      @relation(fields: [storeCreditId], references: [id], onDelete: Cascade)
-  invoice       Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  payment       SalesOrderPayment? @relation(fields: [paymentId], references: [id], onDelete: SetNull)
-
-  @@index([invoiceId, createdAt])
-  @@index([storeCreditId, createdAt])
-  @@index([paymentId])
-  @@map("store_credit_applications")
 }
 
 model AfterSalesReturn {

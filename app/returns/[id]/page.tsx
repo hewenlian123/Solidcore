@@ -10,8 +10,6 @@ type ReturnDetail = {
   id: string;
   status: "DRAFT" | "COMPLETED" | "CANCELLED";
   reason: string | null;
-  issueStoreCredit: boolean;
-  creditAmount: string;
   completedAt: string | null;
   createdAt: string;
   salesOrder: {
@@ -41,8 +39,6 @@ export default function ReturnDetailPage() {
   const { role } = useRole();
   const [data, setData] = useState<ReturnDetail | null>(null);
   const [reason, setReason] = useState("");
-  const [issueStoreCredit, setIssueStoreCredit] = useState(false);
-  const [creditAmount, setCreditAmount] = useState("0");
   const [qtyDrafts, setQtyDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -83,8 +79,6 @@ export default function ReturnDetailPage() {
       const next = payload.data as ReturnDetail;
       setData(next);
       setReason(next.reason ?? "");
-      setIssueStoreCredit(Boolean(next.issueStoreCredit));
-      setCreditAmount(String(next.creditAmount ?? "0"));
       setQtyDrafts(
         Object.fromEntries(next.items.map((item) => [item.id, String(item.qty ?? "0")])),
       );
@@ -190,8 +184,6 @@ export default function ReturnDetailPage() {
         headers: { "Content-Type": "application/json", "x-user-role": role },
         body: JSON.stringify({
           reason,
-          issueStoreCredit,
-          creditAmount: Number(creditAmount || 0),
           items,
         }),
       });
@@ -222,8 +214,6 @@ export default function ReturnDetailPage() {
         body: JSON.stringify({
           status,
           reason,
-          issueStoreCredit,
-          creditAmount: Number(creditAmount || 0),
           items,
         }),
       });
@@ -307,29 +297,10 @@ export default function ReturnDetailPage() {
             className="ios-input mt-1 h-auto min-h-[72px] p-3 text-sm"
           />
         </label>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <label className="inline-flex items-center gap-2 text-sm text-slate-600">
-            <input
-              type="checkbox"
-              checked={issueStoreCredit}
-              onChange={(e) => setIssueStoreCredit(e.target.checked)}
-              disabled={isLocked}
-            />
-            Issue Store Credit
-          </label>
-          <label className="block text-xs text-slate-500">
-            Credit Amount
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={creditAmount}
-              onChange={(e) => setCreditAmount(e.target.value)}
-              disabled={isLocked || !issueStoreCredit}
-              className="ios-input mt-1 h-10 w-full px-3 text-sm"
-            />
-          </label>
-        </div>
+        <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+          Refunds are issued from the original payment on the Sales Order. Completing this return
+          restores inventory only.
+        </p>
       </div>
 
       <div className="linear-card overflow-hidden p-0">

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { generateInvoicePDF } from "@/lib/pdf/generateInvoicePDF";
+import { sumSignedPaymentAmount } from "@/lib/payment-ledger";
 
 type Params = {
   params: Promise<{ id: string }>;
@@ -64,7 +65,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       },
       payments: {
         where: { status: "POSTED" },
-        select: { amount: true },
+        select: { amount: true, paymentType: true, status: true },
       },
     },
   });
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     return new Response("Invoice not found", { status: 404 });
   }
 
-  const paidTotal = invoice.payments.reduce((sum, p) => sum + Number(p.amount), 0);
+  const paidTotal = sumSignedPaymentAmount(invoice.payments);
   const total = Number(invoice.total);
   const pdfBytes = await generateInvoicePDF({
     invoiceNumber: invoice.invoiceNumber,

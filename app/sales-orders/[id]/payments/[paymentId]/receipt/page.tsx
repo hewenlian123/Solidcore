@@ -2,10 +2,16 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_SETTINGS } from "@/lib/company-settings";
 import {
+  getOriginalPaymentLabel,
   getPaymentAllocationLabel,
   getPaymentStatusLabel,
   getPaymentTypeLabel,
 } from "@/lib/payment-receipt-semantics";
+import {
+  centsToNumber,
+  remainingRefundableCents,
+  sumPostedRefundCentsForPayment,
+} from "@/lib/payment-ledger";
 import { ReceiptPrintButton } from "./print-button";
 
 type Props = {
@@ -32,17 +38,35 @@ export default async function PaymentReceiptPage({ params }: Props) {
       include: {
         customer: true,
         payments: {
-          where: { id: paymentId },
           include: {
             invoice: { select: { id: true, invoiceNumber: true } },
+            refundOfPayment: {
+              select: {
+                id: true,
+                amount: true,
+                method: true,
+                paymentType: true,
+                referenceNumber: true,
+                receivedAt: true,
+                status: true,
+              },
+            },
+            refunds: {
+              select: {
+                id: true,
+                amount: true,
+                paymentType: true,
+                refundOfPaymentId: true,
+                status: true,
+              },
+            },
           },
           orderBy: { receivedAt: "desc" },
-          take: 1,
         },
       },
     });
 
-    const payment = order?.payments[0];
+    const payment = order?.payments.find((row) => row.id === paymentId);
     if (!order || !payment) {
       return (
         <main className="mx-auto max-w-3xl p-8 text-white">
@@ -64,6 +88,15 @@ export default async function PaymentReceiptPage({ params }: Props) {
     const paymentTypeLabel = getPaymentTypeLabel(payment.paymentType);
     const paymentStatusLabel = getPaymentStatusLabel(payment.status);
     const allocationLabel = getPaymentAllocationLabel(payment.invoice?.invoiceNumber);
+    const isRefund = payment.paymentType === "REFUND";
+    const originalPayment = isRefund ? payment.refundOfPayment : payment;
+    const originalPaymentId = originalPayment?.id ?? null;
+    const refundedTotal = originalPaymentId
+      ? centsToNumber(sumPostedRefundCentsForPayment(originalPaymentId, order.payments))
+      : 0;
+    const remainingRefundable = originalPayment
+      ? centsToNumber(remainingRefundableCents(originalPayment, order.payments))
+      : 0;
 
     return (
       <main className="mx-auto max-w-3xl p-6 text-white print:p-0 print:text-slate-900">
@@ -148,6 +181,37 @@ export default async function PaymentReceiptPage({ params }: Props) {
                 <p className="mt-2 text-sm text-slate-400 print:text-slate-600">
                   <span className="text-slate-500">Notes:</span> {payment.notes}
                 </p>
+              ) : null}
+              {originalPayment ? (
+                <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.035] p-3 text-sm print:border-slate-200 print:bg-slate-50">
+                  <h3 className="font-semibold text-white print:text-slate-800">
+                    {isRefund ? "Refund Authority" : "Refund Status"}
+                  </h3>
+                  <div className="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
+                    <p>
+                      <span className="text-slate-400 print:text-slate-500">Original Payment:</span>{" "}
+                      {getOriginalPaymentLabel(originalPaymentId)}
+                    </p>
+                    <p>
+                      <span className="text-slate-400 print:text-slate-500">Original Amount:</span> $
+                      {formatMoney(originalPayment.amount)}
+                    </p>
+                    <p>
+                      <span className="text-slate-400 print:text-slate-500">Refunded Total:</span> $
+                      {formatMoney(refundedTotal)}
+                    </p>
+                    <p>
+                      <span className="text-slate-400 print:text-slate-500">Remaining Refundable:</span> $
+                      {formatMoney(remainingRefundable)}
+                    </p>
+                    {isRefund ? (
+                      <p className="md:col-span-2">
+                        <span className="text-slate-400 print:text-slate-500">Original Reference:</span>{" "}
+                        {originalPayment.referenceNumber || "-"}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
               ) : null}
             </div>
 

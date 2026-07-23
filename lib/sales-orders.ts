@@ -1,4 +1,5 @@
 import { Prisma, SalesOrderStatus } from "@prisma/client";
+import { centsToNumber, moneyToCents, sumSignedPaymentCents } from "@/lib/payment-ledger";
 
 function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -108,7 +109,7 @@ export async function recalculateSalesOrder(tx: Prisma.TransactionClient, salesO
     }),
     tx.salesOrderPayment.findMany({
       where: { salesOrderId, status: "POSTED" },
-      select: { amount: true },
+      select: { amount: true, paymentType: true, status: true },
     }),
   ]);
 
@@ -119,13 +120,12 @@ export async function recalculateSalesOrder(tx: Prisma.TransactionClient, salesO
   const subtotal = roundCurrency(
     items.reduce((sum, item) => sum + Number(item.lineTotal), 0),
   );
-  const paidAmount = roundCurrency(
-    payments.reduce((sum, p) => sum + Number(p.amount), 0),
-  );
   const discount = Number(order.discount);
   const tax = Number(order.tax);
   const total = roundCurrency(subtotal - discount + tax);
-  const balanceDue = roundCurrency(total - paidAmount);
+  const paidCents = sumSignedPaymentCents(payments);
+  const paidAmount = roundCurrency(centsToNumber(paidCents));
+  const balanceDue = roundCurrency(centsToNumber(moneyToCents(total) - paidCents));
   const commissionAmount = roundCurrency(paidAmount * Number(order.commissionRate));
   const paymentStatus = getSalesPaymentStatusLabel(paidAmount, balanceDue);
 

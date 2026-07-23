@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deriveInvoiceStatus } from "@/lib/invoices";
+import { sumSignedPaymentAmount } from "@/lib/payment-ledger";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = {
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     });
     if (!invoice) return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
 
-    const [invoicePayments, unallocatedPayments, storeCreditApplications] = await Promise.all([
+    const [invoicePayments, unallocatedPayments] = await Promise.all([
       prisma.salesOrderPayment.findMany({
         where: { invoiceId: invoice.id },
         orderBy: { receivedAt: "desc" },
@@ -87,24 +88,10 @@ export async function GET(request: NextRequest, { params }: Params) {
         where: { salesOrderId: invoice.salesOrderId, invoiceId: null, status: "POSTED" },
         orderBy: { receivedAt: "desc" },
       }),
-      prisma.storeCreditApplication.findMany({
-        where: { invoiceId: invoice.id },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-        include: {
-          storeCredit: {
-            select: { id: true, returnId: true },
-          },
-        },
-      }),
     ]);
-    const paidTotal = roundCurrency(
-      invoicePayments
-        .filter((p) => p.status === "POSTED")
-        .reduce((sum, p) => sum + Number(p.amount), 0),
-    );
+    const paidTotal = roundCurrency(sumSignedPaymentAmount(invoicePayments));
     const unallocatedPaymentTotal = roundCurrency(
-      unallocatedPayments.reduce((sum, p) => sum + Number(p.amount), 0),
+      sumSignedPaymentAmount(unallocatedPayments),
     );
     const total = Number(invoice.total);
     const balanceDue = roundCurrency(total - paidTotal);
@@ -126,7 +113,6 @@ export async function GET(request: NextRequest, { params }: Params) {
           payments: invoicePayments,
           unallocatedPayments,
           unallocatedPaymentTotal: String(unallocatedPaymentTotal),
-          storeCreditApplications,
           paidTotal: String(paidTotal),
           balanceDue: String(balanceDue),
         },

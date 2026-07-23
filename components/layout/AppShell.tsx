@@ -151,10 +151,9 @@ const shellItems: ShellNavItem[] = [
     href: "/after-sales",
     icon: RotateCcw,
     roles: ["ADMIN", "SALES"],
-    matchStartsWith: ["/after-sales", "/tickets", "/store-credit"],
+    matchStartsWith: ["/after-sales", "/tickets"],
     children: [
       { label: "Tickets", href: "/after-sales", roles: ["ADMIN", "SALES"], exact: true },
-      { label: "Store Credit", href: "/after-sales/store-credit", roles: ["ADMIN", "SALES"], matchStartsWith: ["/after-sales/store-credit", "/store-credit"] },
     ],
   },
   {

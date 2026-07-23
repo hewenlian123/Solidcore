@@ -77,7 +77,7 @@ function AfterSalesReturnsContent() {
     salesOrderId: "",
     invoiceId: "",
     returnType: "RETURN",
-    refundMethod: "STORE_CREDIT",
+    refundMethod: "REFUND_PAYMENT",
     notes: "",
   });
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
@@ -147,7 +147,7 @@ function AfterSalesReturnsContent() {
       salesOrderId: String(searchParams.get("salesOrderId") ?? "").trim(),
       invoiceId: String(searchParams.get("invoiceId") ?? "").trim(),
       returnType: "RETURN",
-      refundMethod: "STORE_CREDIT",
+      refundMethod: "REFUND_PAYMENT",
       notes: "",
     };
     setForm(nextForm);
@@ -164,7 +164,7 @@ function AfterSalesReturnsContent() {
       salesOrderId: "",
       invoiceId: "",
       returnType: "RETURN",
-      refundMethod: "STORE_CREDIT",
+      refundMethod: "REFUND_PAYMENT",
       notes: "",
     };
     setForm(nextForm);
@@ -433,8 +433,8 @@ function AfterSalesReturnsContent() {
                     onChange={(event) => setForm((prev) => ({ ...prev, refundMethod: event.target.value }))}
                     className="ios-input h-10 w-full px-3 text-sm"
                   >
-                    <option value="STORE_CREDIT">Store Credit</option>
                     <option value="REFUND_PAYMENT">Refund Payment</option>
+                    <option value="NO_REFUND">No Refund</option>
                   </select>
                 </label>
               </div>

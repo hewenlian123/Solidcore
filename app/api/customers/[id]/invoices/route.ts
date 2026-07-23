@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deriveInvoiceStatus } from "@/lib/invoices";
+import { sumSignedPaymentAmount } from "@/lib/payment-ledger";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = {
@@ -48,19 +49,20 @@ export async function GET(request: NextRequest, { params }: Params) {
             invoiceId: { in: invoiceIds },
             status: "POSTED",
           },
-          select: { invoiceId: true, amount: true },
+          select: { invoiceId: true, amount: true, paymentType: true, status: true },
         })
       : [];
 
-    const paidByInvoice = new Map<string, number>();
+    const paymentsByInvoice = new Map<string, typeof postedPayments>();
     for (const payment of postedPayments) {
       const key = payment.invoiceId ?? "";
-      const prev = paidByInvoice.get(key) ?? 0;
-      paidByInvoice.set(key, roundCurrency(prev + Number(payment.amount)));
+      const current = paymentsByInvoice.get(key) ?? [];
+      current.push(payment);
+      paymentsByInvoice.set(key, current);
     }
 
     const data = invoices.map((invoice) => {
-      const paidTotal = roundCurrency(paidByInvoice.get(invoice.id) ?? 0);
+      const paidTotal = roundCurrency(sumSignedPaymentAmount(paymentsByInvoice.get(invoice.id) ?? []));
       const total = Number(invoice.total);
       const balance = roundCurrency(total - paidTotal);
       return {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { signedPaymentCents } from "@/lib/payment-ledger";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 const RECONCILED_TAG = "[RECONCILED]";
@@ -83,6 +84,8 @@ export async function GET(request: NextRequest) {
           createdAt: true,
           amount: true,
           method: true,
+          paymentType: true,
+          status: true,
           notes: true,
           invoice: {
             select: {
@@ -115,7 +118,7 @@ export async function GET(request: NextRequest) {
         id: payment.id,
         date: payment.createdAt,
         method: payment.method,
-        amount: round2(Number(payment.amount)),
+        amount: round2(signedPaymentCents(payment) / 100),
         reconciled: isReconciled(payment.notes),
       }));
       const paid = round2(matchedPayments.reduce((sum, row) => sum + row.amount, 0));
@@ -146,7 +149,7 @@ export async function GET(request: NextRequest) {
           payment.invoice?.customer?.name ??
           "Unknown",
         method: payment.method,
-        amount: round2(Number(payment.amount)),
+        amount: round2(signedPaymentCents(payment) / 100),
         salesOrderNumber: payment.salesOrder?.orderNumber ?? null,
         invoiceNumber: payment.invoice?.invoiceNumber ?? null,
         reconciled: isReconciled(payment.notes),
@@ -220,4 +223,3 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Failed to mark reconciled." }, { status: 500 });
   }
 }
-

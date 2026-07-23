@@ -17,6 +17,7 @@ import {
   parsePositivePaymentAmount,
   requirePaymentIdempotencyKey,
 } from "@/lib/payment-creation-integrity";
+import { sumSignedPaymentCents } from "@/lib/payment-ledger";
 import { recalculateSalesOrder } from "@/lib/sales-orders";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
@@ -185,9 +186,9 @@ export async function POST(request: NextRequest, { params }: Params) {
         if (invoice) {
           const postedPayments = await prisma.salesOrderPayment.findMany({
             where: { invoiceId: invoice.id, status: "POSTED" },
-            select: { amount: true },
+            select: { amount: true, paymentType: true, status: true },
           });
-          const paidCents = postedPayments.reduce((sum, payment) => sum + moneyToCents(payment.amount), 0);
+          const paidCents = sumSignedPaymentCents(postedPayments);
           const balanceCents = moneyToCents(invoice.total) - paidCents;
           const result = {
             paidTotal: centsToNumber(paidCents),

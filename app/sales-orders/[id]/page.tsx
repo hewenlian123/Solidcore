@@ -195,6 +195,7 @@ type SalesOrderDetail = {
     id: string;
     amount: string;
     invoiceId: string | null;
+    refundOfPaymentId?: string | null;
     method: string;
     paymentType?: "DEPOSIT" | "FINAL" | "REFUND";
     status: "POSTED" | "VOIDED";
@@ -554,6 +555,18 @@ function createPaymentIntentKey() {
     return globalThis.crypto.randomUUID();
   }
   return `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function getPaymentTypeDisplay(type: string | null | undefined) {
+  const normalized = String(type ?? "").toUpperCase();
+  if (normalized === "DEPOSIT") return "Deposit";
+  if (normalized === "REFUND") return "Refund";
+  return "Final";
+}
+
+function formatPaymentAmount(payment: SalesOrderDetail["payments"][number]) {
+  const prefix = payment.paymentType === "REFUND" ? "-" : "";
+  return `${prefix}${formatMoney(payment.amount)}`;
 }
 
 function toDateInputValue(value: string | null | undefined) {
@@ -1294,6 +1307,17 @@ export default function SalesOrderDetailPage() {
     notes: "",
   });
   const [paymentIntentKey, setPaymentIntentKey] = useState(createPaymentIntentKey);
+  const [openRefund, setOpenRefund] = useState(false);
+  const [refundTarget, setRefundTarget] = useState<SalesOrderDetail["payments"][number] | null>(null);
+  const [savingRefund, setSavingRefund] = useState(false);
+  const [refundForm, setRefundForm] = useState({
+    amount: "",
+    method: "CASH",
+    referenceNumber: "",
+    receivedAt: "",
+    notes: "",
+  });
+  const [refundIntentKey, setRefundIntentKey] = useState(createPaymentIntentKey);
   const [fulfillmentForm, setFulfillmentForm] = useState({
     type: "DELIVERY",
     scheduledDate: "",
@@ -1541,6 +1565,7 @@ export default function SalesOrderDetailPage() {
     let depositReceived = 0;
     let allocatedDeposit = 0;
     let unallocatedDeposit = 0;
+    const depositPaymentsById = new Map<string, { amount: number; invoiceId: string | null; refunded: number }>();
     for (const payment of data.payments ?? []) {
       if (payment.status !== "POSTED" || payment.paymentType !== "DEPOSIT") continue;
       const amount = Number(payment.amount || 0);
@@ -1548,17 +1573,46 @@ export default function SalesOrderDetailPage() {
       depositReceived += amount;
       if (payment.invoiceId) allocatedDeposit += amount;
       else unallocatedDeposit += amount;
+      depositPaymentsById.set(payment.id, { amount, invoiceId: payment.invoiceId, refunded: 0 });
+    }
+    for (const payment of data.payments ?? []) {
+      if (payment.status !== "POSTED" || payment.paymentType !== "REFUND" || !payment.refundOfPaymentId) continue;
+      const original = depositPaymentsById.get(payment.refundOfPaymentId);
+      if (!original) continue;
+      const amount = Number(payment.amount || 0);
+      if (!Number.isFinite(amount)) continue;
+      const refundAmount = Math.min(amount, Math.max(original.amount - original.refunded, 0));
+      original.refunded += refundAmount;
+      depositReceived -= refundAmount;
+      if (original.invoiceId) allocatedDeposit -= refundAmount;
+      else unallocatedDeposit -= refundAmount;
     }
 
     return {
-      allocatedDeposit: allocatedDeposit.toFixed(2),
-      depositDue: Math.max(depositRequired - depositReceived, 0).toFixed(2),
-      depositReceived: depositReceived.toFixed(2),
+      allocatedDeposit: Math.max(allocatedDeposit, 0).toFixed(2),
+      depositDue: Math.max(depositRequired - Math.max(depositReceived, 0), 0).toFixed(2),
+      depositReceived: Math.max(depositReceived, 0).toFixed(2),
       depositRequired: depositRequired.toFixed(2),
-      unallocatedDeposit: unallocatedDeposit.toFixed(2),
+      unallocatedDeposit: Math.max(unallocatedDeposit, 0).toFixed(2),
     };
   }, [data]);
   const depositDueForPayment = Number(depositSummary?.depositDue ?? 0);
+  const refundTotalsByPaymentId = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const payment of data?.payments ?? []) {
+      if (payment.status !== "POSTED" || payment.paymentType !== "REFUND" || !payment.refundOfPaymentId) continue;
+      const amount = Number(payment.amount || 0);
+      if (!Number.isFinite(amount)) continue;
+      totals.set(payment.refundOfPaymentId, roundTo2((totals.get(payment.refundOfPaymentId) ?? 0) + amount));
+    }
+    return totals;
+  }, [data?.payments]);
+  const getRemainingRefundable = (payment: SalesOrderDetail["payments"][number]) => {
+    if (payment.status !== "POSTED" || payment.paymentType === "REFUND") return 0;
+    const amount = Number(payment.amount || 0);
+    if (!Number.isFinite(amount) || amount <= 0) return 0;
+    return roundTo2(Math.max(amount - (refundTotalsByPaymentId.get(payment.id) ?? 0), 0));
+  };
   const filteredSuppliers = useMemo(() => {
     const q = supplierQuery.trim().toLowerCase();
     if (!q) return suppliers;
@@ -2209,6 +2263,65 @@ export default function SalesOrderDetailPage() {
       setError(err instanceof Error ? err.message : "Failed to add payment");
     } finally {
       setSavingPayment(false);
+    }
+  };
+
+  const openRefundModal = (payment: SalesOrderDetail["payments"][number]) => {
+    const remaining = getRemainingRefundable(payment);
+    if (remaining <= 0) {
+      setError("This payment has no remaining refundable amount.");
+      return;
+    }
+    setRefundTarget(payment);
+    setRefundForm({
+      amount: remaining.toFixed(2),
+      method: payment.method || "CASH",
+      referenceNumber: "",
+      receivedAt: "",
+      notes: "",
+    });
+    setRefundIntentKey(createPaymentIntentKey());
+    setOpenRefund(true);
+    setError(null);
+  };
+
+  const submitRefund = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!data || !refundTarget || savingRefund) return;
+    try {
+      setSavingRefund(true);
+      setError(null);
+      const amount = Number(refundForm.amount || 0);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error("Refund amount must be greater than 0.");
+      }
+      const res = await fetch(`/api/sales-orders/${id}/payments/${refundTarget.id}/refunds`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Idempotency-Key": refundIntentKey,
+          "x-user-role": role,
+        },
+        body: JSON.stringify({
+          amount,
+          method: refundForm.method,
+          referenceNumber: refundForm.referenceNumber || null,
+          receivedAt: refundForm.receivedAt || null,
+          notes: refundForm.notes || null,
+        }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.error ?? "Failed to create refund");
+      setData(payload.data);
+      setOpenRefund(false);
+      setRefundTarget(null);
+      setRefundForm({ amount: "", method: "CASH", referenceNumber: "", receivedAt: "", notes: "" });
+      setRefundIntentKey(createPaymentIntentKey());
+      setSuccessMessage("Refund recorded.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create refund");
+    } finally {
+      setSavingRefund(false);
     }
   };
 
@@ -4080,77 +4193,94 @@ export default function SalesOrderDetailPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {data.payments.map((payment) => (
-                          <tr
-                            key={payment.id}
-                            className={`border-b border-white/10 transition hover:bg-white/[0.04] ${
-                              payment.status === "VOIDED" ? "text-slate-500" : "text-white/90"
-                            }`}
-                          >
-                            <td className="py-2 pr-4">
-                              {new Date(payment.receivedAt).toLocaleDateString("en-US", {
-                                timeZone: "UTC",
-                              })}
-                            </td>
-                            <td className="py-2 pr-4">{payment.method}</td>
-                            <td className="py-2 pr-4">
-                              <div className="flex flex-col gap-1">
-                                <span>{payment.paymentType === "DEPOSIT" ? "Deposit" : "Final"}</span>
-                                <span className="text-[11px] text-slate-500">
-                                  {payment.invoiceId ? "Allocated" : "Unallocated"}
+                        {data.payments.map((payment) => {
+                          const remainingRefundable = getRemainingRefundable(payment);
+                          return (
+                            <tr
+                              key={payment.id}
+                              className={`border-b border-white/10 transition hover:bg-white/[0.04] ${
+                                payment.status === "VOIDED" ? "text-slate-500" : "text-white/90"
+                              }`}
+                            >
+                              <td className="py-2 pr-4">
+                                {new Date(payment.receivedAt).toLocaleDateString("en-US", {
+                                  timeZone: "UTC",
+                                })}
+                              </td>
+                              <td className="py-2 pr-4">{payment.method}</td>
+                              <td className="py-2 pr-4">
+                                <div className="flex flex-col gap-1">
+                                  <span>{getPaymentTypeDisplay(payment.paymentType)}</span>
+                                  <span className="text-[11px] text-slate-500">
+                                    {payment.invoiceId ? "Allocated" : "Unallocated"}
+                                  </span>
+                                  {payment.paymentType !== "REFUND" && remainingRefundable > 0 ? (
+                                    <span className="text-[11px] text-slate-500">
+                                      Refundable {formatMoney(remainingRefundable)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </td>
+                              <td className="py-2 pr-4">{payment.referenceNumber || "-"}</td>
+                              <td className="py-2 pr-4">{formatPaymentAmount(payment)}</td>
+                              <td className="py-2 pr-4">
+                                <span
+                                  className={`rounded-full border px-2 py-0.5 text-xs ${
+                                    payment.status === "VOIDED"
+                                      ? "border-white/10 bg-white/5 text-slate-500"
+                                      : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+                                  }`}
+                                >
+                                  {payment.status === "VOIDED" ? "Voided" : "Posted"}
                                 </span>
-                              </div>
-                            </td>
-                            <td className="py-2 pr-4">{payment.referenceNumber || "-"}</td>
-                            <td className="py-2 pr-4">${Number(payment.amount).toFixed(2)}</td>
-                            <td className="py-2 pr-4">
-                              <span
-                                className={`rounded-full border px-2 py-0.5 text-xs ${
-                                  payment.status === "VOIDED"
-                                    ? "border-white/10 bg-white/5 text-slate-500"
-                                    : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
-                                }`}
-                              >
-                                {payment.status === "VOIDED" ? "Voided" : "Posted"}
-                              </span>
-                            </td>
-                            <td className="py-2">
-                              <div className="flex items-center gap-2">
-                                <Link
-                                  href={`/sales-orders/${data.id}/payments/${payment.id}/receipt`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="ios-secondary-btn h-8 px-2 text-xs"
-                                >
-                                  Print Receipt
-                                </Link>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setPdfPreview({
-                                      title: `Payment ${payment.id.slice(0, 8)}`,
-                                      src: `/api/pdf/payment/${payment.id}`,
-                                    })
-                                  }
-                                  className="ios-secondary-btn h-8 px-2 text-xs"
-                                >
-                                  Preview Receipt PDF
-                                </button>
-                                {payment.status === "POSTED" ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => voidPayment(payment.id)}
+                              </td>
+                              <td className="py-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <Link
+                                    href={`/sales-orders/${data.id}/payments/${payment.id}/receipt`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
                                     className="ios-secondary-btn h-8 px-2 text-xs"
                                   >
-                                    Void
+                                    Print Receipt
+                                  </Link>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setPdfPreview({
+                                        title: `Payment ${payment.id.slice(0, 8)}`,
+                                        src: `/api/pdf/payment/${payment.id}`,
+                                      })
+                                    }
+                                    className="ios-secondary-btn h-8 px-2 text-xs"
+                                  >
+                                    Preview Receipt PDF
                                   </button>
-                                ) : (
-                                  <span className="text-xs text-slate-400">Voided</span>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
+                                  {remainingRefundable > 0 ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openRefundModal(payment)}
+                                      className="ios-secondary-btn h-8 px-2 text-xs"
+                                    >
+                                      Refund
+                                    </button>
+                                  ) : null}
+                                  {payment.status === "POSTED" ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => voidPayment(payment.id)}
+                                      className="ios-secondary-btn h-8 px-2 text-xs"
+                                    >
+                                      Void
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs text-slate-400">Voided</span>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -4433,6 +4563,88 @@ export default function SalesOrderDetailPage() {
                   className="ios-primary-btn h-11 flex-1 text-sm disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {savingPayment ? "Saving..." : "Save Payment"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+      {openRefund && refundTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/25 p-4 backdrop-blur-sm">
+          <div className="so-modal-shell w-full max-w-md p-6">
+            <h3 className="text-base font-semibold text-white">Record Refund</h3>
+            <p className="mt-1 text-xs text-slate-400">
+              Original {getPaymentTypeDisplay(refundTarget.paymentType)} {refundTarget.id.slice(0, 8)} · Remaining{" "}
+              {formatMoney(getRemainingRefundable(refundTarget))}
+            </p>
+            <form className="mt-3 space-y-3" onSubmit={submitRefund}>
+              <input
+                required
+                type="number"
+                min="0.01"
+                step="0.01"
+                max={getRemainingRefundable(refundTarget).toFixed(2)}
+                placeholder="Refund Amount"
+                value={refundForm.amount}
+                onChange={(e) => setRefundForm((p) => ({ ...p, amount: e.target.value }))}
+                className="ios-input h-11 w-full px-3 text-sm"
+              />
+              <select
+                value={refundForm.method}
+                onChange={(e) => setRefundForm((p) => ({ ...p, method: e.target.value }))}
+                className="ios-input h-11 w-full px-3 text-sm"
+                aria-label="Refund Method"
+              >
+                <option value="CASH">Cash</option>
+                <option value="CHECK">Check</option>
+                <option value="CARD">Card</option>
+                <option value="BANK">Bank</option>
+                <option value="OTHER">Other</option>
+              </select>
+              <input
+                placeholder="Reference Number"
+                value={refundForm.referenceNumber}
+                onChange={(e) => setRefundForm((p) => ({ ...p, referenceNumber: e.target.value }))}
+                className="ios-input h-11 w-full px-3 text-sm"
+              />
+              <input
+                type="datetime-local"
+                value={refundForm.receivedAt}
+                onChange={(e) => setRefundForm((p) => ({ ...p, receivedAt: e.target.value }))}
+                className="ios-input h-11 w-full px-3 text-sm"
+              />
+              <textarea
+                placeholder="Refund reason or notes"
+                value={refundForm.notes}
+                onChange={(e) => setRefundForm((p) => ({ ...p, notes: e.target.value }))}
+                className="ios-input h-auto min-h-[84px] rounded-xl p-3 text-sm"
+                rows={3}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenRefund(false);
+                    setRefundTarget(null);
+                    setRefundForm({
+                      amount: "",
+                      method: "CASH",
+                      referenceNumber: "",
+                      receivedAt: "",
+                      notes: "",
+                    });
+                    setRefundIntentKey(createPaymentIntentKey());
+                  }}
+                  className="ios-secondary-btn h-11 flex-1 text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingRefund}
+                  className="ios-primary-btn h-11 flex-1 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingRefund ? "Saving..." : "Save Refund"}
                 </button>
               </div>
             </form>

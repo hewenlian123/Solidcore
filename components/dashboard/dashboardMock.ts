@@ -56,7 +56,6 @@ export const dashboardMenu: MenuItem[] = [
   { label: "After-Sales", icon: "ShieldCheck", href: "/after-sales" },
   { label: "Tickets", icon: "Ticket", href: "/tickets" },
   { label: "Returns", icon: "RotateCcw", href: "/returns" },
-  { label: "Store Credit", icon: "Wallet", href: "/store-credit" },
   { label: "Analytics", icon: "LineChart", href: "/analytics" },
   { label: "Settings", icon: "Settings", href: "/settings" },
 ];

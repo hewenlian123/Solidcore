@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { signedPaymentCents, sumSignedPaymentAmount } from "@/lib/payment-ledger";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 function round2(value: number) {
@@ -23,27 +24,27 @@ export async function GET(request: NextRequest) {
     const trendStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29);
 
     const [
-      todayAgg,
-      monthAgg,
+      todayPayments,
+      monthPayments,
       invoices,
-      invoicePaymentGroup,
+      invoicePayments,
       trendPayments,
       recentPayments,
     ] =
       await Promise.all([
-        prisma.salesOrderPayment.aggregate({
+        prisma.salesOrderPayment.findMany({
           where: {
             status: "POSTED",
             createdAt: { gte: todayStart, lt: tomorrowStart },
           },
-          _sum: { amount: true },
+          select: { amount: true, paymentType: true, status: true },
         }),
-        prisma.salesOrderPayment.aggregate({
+        prisma.salesOrderPayment.findMany({
           where: {
             status: "POSTED",
             createdAt: { gte: monthStart, lt: monthEnd },
           },
-          _sum: { amount: true },
+          select: { amount: true, paymentType: true, status: true },
         }),
         prisma.invoice.findMany({
           where: { status: { not: "void" } },
@@ -55,17 +56,16 @@ export async function GET(request: NextRequest) {
             customer: { select: { name: true } },
           },
         }),
-        prisma.salesOrderPayment.groupBy({
-          by: ["invoiceId"],
+        prisma.salesOrderPayment.findMany({
           where: { status: "POSTED", invoiceId: { not: null } },
-          _sum: { amount: true },
+          select: { invoiceId: true, amount: true, paymentType: true, status: true },
         }),
         prisma.salesOrderPayment.findMany({
           where: {
             status: "POSTED",
             createdAt: { gte: trendStart, lt: tomorrowStart },
           },
-          select: { createdAt: true, amount: true },
+          select: { createdAt: true, amount: true, paymentType: true, status: true },
         }),
         prisma.salesOrderPayment.findMany({
           where: { status: "POSTED" },
@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
             createdAt: true,
             amount: true,
             method: true,
+            paymentType: true,
             status: true,
             invoice: {
               select: { id: true, invoiceNumber: true },
@@ -91,18 +92,19 @@ export async function GET(request: NextRequest) {
         }),
       ]);
 
-    const paidByInvoiceId = new Map<string, number>();
-    for (const row of invoicePaymentGroup) {
+    const paymentsByInvoiceId = new Map<string, typeof invoicePayments>();
+    for (const row of invoicePayments) {
       if (!row.invoiceId) continue;
-      paidByInvoiceId.set(row.invoiceId, Number(row._sum.amount ?? 0));
+      const current = paymentsByInvoiceId.get(row.invoiceId) ?? [];
+      current.push(row);
+      paymentsByInvoiceId.set(row.invoiceId, current);
     }
 
     let unpaidInvoicesCount = 0;
     let outstandingTotal = 0;
     const outstandingByCustomer = new Map<string, { customerId: string; customerName: string; balance: number }>();
     for (const invoice of invoices) {
-      const paidByInvoice = paidByInvoiceId.get(invoice.id) ?? 0;
-      const paidTotal = round2(paidByInvoice);
+      const paidTotal = round2(sumSignedPaymentAmount(paymentsByInvoiceId.get(invoice.id) ?? []));
       const balanceDue = round2(Math.max(Number(invoice.total) - paidTotal, 0));
       if (balanceDue <= 0) continue;
       unpaidInvoicesCount += 1;
@@ -129,7 +131,7 @@ export async function GET(request: NextRequest) {
     for (const payment of trendPayments) {
       const key = toYmd(new Date(payment.createdAt));
       if (!trendMap.has(key)) continue;
-      trendMap.set(key, round2((trendMap.get(key) ?? 0) + Number(payment.amount)));
+      trendMap.set(key, round2((trendMap.get(key) ?? 0) + signedPaymentCents(payment) / 100));
     }
     const paymentTrend = Array.from(trendMap.entries()).map(([date, amount]) => ({ date, amount }));
 
@@ -137,8 +139,8 @@ export async function GET(request: NextRequest) {
       {
         data: {
           kpis: {
-            todayPayments: round2(Number(todayAgg._sum.amount ?? 0)),
-            thisMonthPayments: round2(Number(monthAgg._sum.amount ?? 0)),
+            todayPayments: round2(sumSignedPaymentAmount(todayPayments)),
+            thisMonthPayments: round2(sumSignedPaymentAmount(monthPayments)),
             unpaidInvoices: unpaidInvoicesCount,
             totalOutstandingBalance: round2(outstandingTotal),
           },
@@ -152,7 +154,8 @@ export async function GET(request: NextRequest) {
             relatedNumber: payment.invoice?.invoiceNumber ?? payment.salesOrder.orderNumber,
             relatedId: payment.invoice?.id ?? payment.salesOrder.id,
             method: payment.method,
-            amount: round2(Number(payment.amount)),
+            amount: round2(signedPaymentCents(payment) / 100),
+            paymentType: payment.paymentType,
             status: payment.status,
           })),
         },

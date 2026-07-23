@@ -114,17 +114,6 @@ async function cleanupTaggedFixtures() {
   });
   const paymentIds = payments.map((payment) => payment.id);
 
-  await prisma.storeCreditApplication.deleteMany({
-    where:
-      invoiceIds.length || paymentIds.length
-        ? {
-            OR: [
-              ...(invoiceIds.length ? [{ invoiceId: { in: invoiceIds } }] : []),
-              ...(paymentIds.length ? [{ paymentId: { in: paymentIds } }] : []),
-            ],
-          }
-        : { id: "__none__" },
-  });
   await prisma.salesOrderPayment.deleteMany({
     where: paymentIds.length ? { id: { in: paymentIds }, paymentType: "REFUND" } : { id: "__none__" },
   });
@@ -208,20 +197,6 @@ async function taggedCounts() {
       where: invoiceIds.length ? { invoiceId: { in: invoiceIds } } : { invoiceId: "__none__" },
     }),
     payments: payments.length,
-    storeCredits: await prisma.storeCredit.count({
-      where: customerIds.length ? { customerId: { in: customerIds } } : { id: "__none__" },
-    }),
-    storeCreditApplications: await prisma.storeCreditApplication.count({
-      where:
-        invoiceIds.length || paymentIds.length
-          ? {
-              OR: [
-                ...(invoiceIds.length ? [{ invoiceId: { in: invoiceIds } }] : []),
-                ...(paymentIds.length ? [{ paymentId: { in: paymentIds } }] : []),
-              ],
-            }
-          : { id: "__none__" },
-    }),
     salesReturns: await prisma.salesReturn.count({
       where: orderIds.length ? { salesOrderId: { in: orderIds } } : { id: "__none__" },
     }),
@@ -360,7 +335,7 @@ async function createRefundPayment(fixture: Fixture, originalPaymentId: string, 
 }
 
 async function captureState(fixture: Fixture) {
-  const [order, invoice, payments, storeCredits, storeCreditApplications, fulfillments, fulfillmentItems, movements] =
+  const [order, invoice, payments, fulfillments, fulfillmentItems, movements] =
     await Promise.all([
       prisma.salesOrder.findUniqueOrThrow({
         where: { id: fixture.salesOrderId },
@@ -398,8 +373,6 @@ async function captureState(fixture: Fixture) {
         },
         orderBy: { id: "asc" },
       }),
-      prisma.storeCredit.count({ where: { customerId: fixture.customerId } }),
-      prisma.storeCreditApplication.count({ where: { invoiceId: fixture.invoiceId } }),
       prisma.salesOrderFulfillment.findMany({
         where: { salesOrderId: fixture.salesOrderId },
         select: { id: true, status: true },
@@ -438,8 +411,6 @@ async function captureState(fixture: Fixture) {
       ...payment,
       amount: money(payment.amount),
     })),
-    storeCredits,
-    storeCreditApplications,
     fulfillments,
     fulfillmentItems: fulfillmentItems.map((item) => ({
       ...item,
@@ -521,8 +492,6 @@ test.afterAll(async () => {
     salesOrderItems: 0,
     salesOrders: 0,
     salesReturns: 0,
-    storeCreditApplications: 0,
-    storeCredits: 0,
   });
   await prisma.$disconnect();
 });
@@ -650,7 +619,7 @@ test("payment allocation route rejects REFUND rows without mutation", async ({ r
   expect(currentRefund.refundOfPaymentId).toBe(original.id);
 });
 
-test("DEPOSIT and FINAL routes remain valid and do not create refund or store-credit rows", async ({
+test("DEPOSIT and FINAL routes remain valid and do not create refund rows", async ({
   request,
 }) => {
   const fixture = await createFixture("VALID-DEPOSIT-FINAL", 120);
@@ -665,8 +634,6 @@ test("DEPOSIT and FINAL routes remain valid and do not create refund or store-cr
   expect(state.payments).toHaveLength(2);
   expect(state.payments.every((payment) => payment.refundOfPaymentId === null)).toBe(true);
   expect(state.payments.some((payment) => payment.paymentType === "REFUND")).toBe(false);
-  expect(state.storeCredits).toBe(0);
-  expect(state.storeCreditApplications).toBe(0);
   expect(state.fulfillments).toEqual([]);
   expect(state.fulfillmentItems).toEqual([]);
   expect(state.movements).toEqual([]);

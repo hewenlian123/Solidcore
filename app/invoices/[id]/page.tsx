@@ -94,29 +94,8 @@ type InvoiceDetail = {
     notes: string | null;
   }>;
   unallocatedPaymentTotal: string;
-  storeCreditApplications: Array<{
-    id: string;
-    amount: string;
-    createdAt: string;
-    storeCredit: {
-      id: string;
-      returnId: string;
-    };
-  }>;
   paidTotal: string;
   balanceDue: string;
-};
-
-type StoreCreditPreview = {
-  previewAmount: number;
-  invoiceBalance: number;
-  openCreditBalance: number;
-  allocations: Array<{
-    creditId: string;
-    sourceReturnId: string | null;
-    remainingBefore: number;
-    willUse: number;
-  }>;
 };
 
 function createPaymentIntentKey() {
@@ -124,6 +103,18 @@ function createPaymentIntentKey() {
     return globalThis.crypto.randomUUID();
   }
   return `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function normalizeInvoiceDetail(invoice: InvoiceDetail): InvoiceDetail {
+  return {
+    ...invoice,
+    items: Array.isArray(invoice.items) ? invoice.items : [],
+    payments: Array.isArray(invoice.payments) ? invoice.payments : [],
+    unallocatedPayments: Array.isArray(invoice.unallocatedPayments) ? invoice.unallocatedPayments : [],
+    unallocatedPaymentTotal: invoice.unallocatedPaymentTotal ?? "0",
+    paidTotal: invoice.paidTotal ?? "0",
+    balanceDue: invoice.balanceDue ?? invoice.total ?? "0",
+  };
 }
 
 export default function InvoiceDetailPage() {
@@ -137,7 +128,6 @@ export default function InvoiceDetailPage() {
   const [saving, setSaving] = useState(false);
   const [allocatingPaymentId, setAllocatingPaymentId] = useState<string | null>(null);
   const [openPayment, setOpenPayment] = useState(false);
-  const [openStoreCredit, setOpenStoreCredit] = useState(false);
   const [pdfPreview, setPdfPreview] = useState<{ title: string; src: string } | null>(null);
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
@@ -148,14 +138,6 @@ export default function InvoiceDetailPage() {
     notes: "",
   });
   const [paymentIntentKey, setPaymentIntentKey] = useState(createPaymentIntentKey);
-  const [applyingCredit, setApplyingCredit] = useState(false);
-  const [storeCreditBalance, setStoreCreditBalance] = useState(0);
-  const [storeCreditForm, setStoreCreditForm] = useState({
-    amount: "",
-  });
-  const [storeCreditPreview, setStoreCreditPreview] = useState<StoreCreditPreview | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
   const [hasRelatedReturns, setHasRelatedReturns] = useState(false);
 
   const load = async () => {
@@ -168,10 +150,12 @@ export default function InvoiceDetailPage() {
       });
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? "Failed to load invoice");
-      setData(payload.data);
-      const soId = String(payload.data?.salesOrder?.id ?? "").trim();
+      if (!payload.data) throw new Error("Failed to load invoice");
+      const invoiceData = normalizeInvoiceDetail(payload.data);
+      setData(invoiceData);
+      const soId = String(invoiceData.salesOrder?.id ?? "").trim();
       if (soId) {
-        const returnRes = await fetch(`/api/after-sales/returns?salesOrderId=${soId}&invoiceId=${payload.data?.id ?? ""}`, {
+        const returnRes = await fetch(`/api/after-sales/returns?salesOrderId=${soId}&invoiceId=${invoiceData.id}`, {
           cache: "no-store",
           headers: { "x-user-role": role },
         });
@@ -210,15 +194,6 @@ export default function InvoiceDetailPage() {
     Number.isFinite(paymentAmount) &&
     paymentAmount > 0 &&
     paymentAmount > currentBalance + 0.0001;
-  const appliedStoreCreditTotal = Number(
-    (data?.storeCreditApplications ?? []).reduce((sum, row) => sum + Number(row.amount), 0),
-  );
-  const canConfirmStoreCredit =
-    !previewLoading &&
-    !applyingCredit &&
-    !saving &&
-    Number(storeCreditPreview?.previewAmount ?? 0) > 0;
-
   const markSent = async () => {
     if (!data) return;
     try {
@@ -333,81 +308,6 @@ export default function InvoiceDetailPage() {
     }
   };
 
-  const fetchStoreCreditPreview = async (amount: number) => {
-    if (!data) return null;
-    try {
-      setPreviewLoading(true);
-      setPreviewError(null);
-      const query = encodeURIComponent(Number.isFinite(amount) ? amount.toFixed(2) : "0");
-      const res = await fetch(`/api/invoices/${data.id}/store-credit-preview?amount=${query}`, {
-        cache: "no-store",
-        headers: { "x-user-role": role },
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to preview store credit");
-      const preview: StoreCreditPreview = {
-        previewAmount: Number(payload.data?.previewAmount ?? 0),
-        invoiceBalance: Number(payload.data?.invoiceBalance ?? 0),
-        openCreditBalance: Number(payload.data?.openCreditBalance ?? 0),
-        allocations: Array.isArray(payload.data?.allocations)
-          ? payload.data.allocations.map((row: Record<string, unknown>) => ({
-              creditId: String(row.creditId ?? ""),
-              sourceReturnId: row.sourceReturnId ? String(row.sourceReturnId) : null,
-              remainingBefore: Number(row.remainingBefore ?? 0),
-              willUse: Number(row.willUse ?? 0),
-            }))
-          : [],
-      };
-      setStoreCreditPreview(preview);
-      setStoreCreditBalance(preview.openCreditBalance);
-      return preview;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to preview store credit";
-      setPreviewError(message);
-      setStoreCreditPreview(null);
-      return null;
-    } finally {
-      setPreviewLoading(false);
-    }
-  };
-
-  const openApplyStoreCreditModal = async () => {
-    if (!data) return;
-    try {
-      setSaving(true);
-      setPreviewError(null);
-      const preview = await fetchStoreCreditPreview(Number(data.balanceDue ?? 0));
-      const defaultAmount = Number(preview?.previewAmount ?? 0);
-      setStoreCreditForm({ amount: defaultAmount > 0 ? defaultAmount.toFixed(2) : "" });
-      setOpenStoreCredit(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load store credits");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const applyStoreCredit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!data) return;
-    try {
-      setApplyingCredit(true);
-      const res = await fetch(`/api/invoices/${data.id}/apply-store-credit`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-role": role },
-        body: JSON.stringify({ amount: Number(storeCreditForm.amount || 0) }),
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to apply store credit");
-      setOpenStoreCredit(false);
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to apply store credit");
-    } finally {
-      setApplyingCredit(false);
-    }
-  };
-
   const createReturnFromInvoice = () => {
     if (!data) return;
     const params = new URLSearchParams();
@@ -417,15 +317,6 @@ export default function InvoiceDetailPage() {
     params.set("invoiceId", data.id);
     router.push(`/after-sales/returns?${params.toString()}`);
   };
-
-  useEffect(() => {
-    if (!openStoreCredit || !data) return;
-    const timer = window.setTimeout(() => {
-      const requestedAmount = Number(storeCreditForm.amount || 0);
-      void fetchStoreCreditPreview(Number.isFinite(requestedAmount) ? requestedAmount : 0);
-    }, 300);
-    return () => window.clearTimeout(timer);
-  }, [openStoreCredit, data, role, storeCreditForm.amount]);
 
   if (loading) return <div className="glass-card p-8 text-sm text-slate-400">Loading invoice...</div>;
   if (!data) return <div className="glass-card p-8 text-sm text-slate-400">Invoice not found.</div>;
@@ -476,14 +367,6 @@ export default function InvoiceDetailPage() {
             </button>
             <button type="button" onClick={() => setOpenPayment(true)} disabled={saving || data.status === "void"} className="ios-primary-btn h-9 px-3 text-xs disabled:opacity-60">
               Add Payment
-            </button>
-            <button
-              type="button"
-              onClick={openApplyStoreCreditModal}
-              disabled={saving || data.status === "void" || Number(data.balanceDue) <= 0}
-              className="ios-secondary-btn h-9 px-3 text-xs disabled:opacity-60"
-            >
-              Apply Store Credit
             </button>
             <button
               type="button"
@@ -735,47 +618,6 @@ export default function InvoiceDetailPage() {
         )}
       </article>
 
-      <article className="linear-card p-8">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold text-slate-900">Store Credit Applied</h2>
-          <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-semibold text-emerald-700">
-            Store Credit Applied: ${appliedStoreCreditTotal.toFixed(2)}
-          </span>
-        </div>
-        {data.storeCreditApplications.length === 0 ? (
-          <p className="text-sm text-slate-500">No store credit applications yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-left text-slate-400">
-                  <th className="py-2 pr-4">Date</th>
-                  <th className="py-2 pr-4">Credit #</th>
-                  <th className="py-2 pr-4">Amount</th>
-                  <th className="py-2">Source Return</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.storeCreditApplications.map((row) => (
-                  <tr key={row.id} className="border-b border-white/10">
-                    <td className="py-2 pr-4">
-                      {new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
-                    </td>
-                    <td className="py-2 pr-4">{row.storeCredit.id.slice(0, 8)}</td>
-                    <td className="py-2 pr-4">${Number(row.amount).toFixed(2)}</td>
-                    <td className="py-2">
-                      <Link href={`/returns/${row.storeCredit.returnId}`} className="ios-secondary-btn h-8 px-2 text-xs">
-                        Open Return
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </article>
-
       {openPayment ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/25 p-4">
           <form onSubmit={addPayment} className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-5 shadow-xl backdrop-blur-xl">
@@ -832,94 +674,6 @@ export default function InvoiceDetailPage() {
               </button>
               <button type="submit" className="ios-primary-btn h-10 px-3 text-sm" disabled={saving || isOverPayment}>
                 {saving ? "Saving..." : "Save Payment"}
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : null}
-      {openStoreCredit ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/25 p-4">
-          <form onSubmit={applyStoreCredit} className="w-full max-w-md rounded-2xl border border-white/10 bg-white/5 p-5 shadow-xl backdrop-blur-xl">
-            <h3 className="text-base font-semibold text-slate-900">Apply Store Credit</h3>
-            <div className="mt-3 space-y-3">
-              <p className="text-xs text-slate-500">
-                Open Credit Balance: ${storeCreditBalance.toFixed(2)}
-              </p>
-              <p className="text-xs text-slate-500">
-                Invoice Balance: ${Number(data.balanceDue).toFixed(2)}
-              </p>
-              <label className="block space-y-1">
-                <span className="text-xs text-slate-500">Amount to Apply</span>
-                <input
-                  className="ios-input h-10 w-full px-3 text-sm"
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  max={Math.min(Number(data.balanceDue), storeCreditBalance).toFixed(2)}
-                  value={storeCreditForm.amount}
-                  onChange={(e) => setStoreCreditForm({ amount: e.target.value })}
-                  required
-                />
-              </label>
-              <div className="rounded-xl border border-white/10 bg-white/5 p-3 backdrop-blur-xl">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-700">Credit Breakdown Preview</h4>
-                {previewLoading ? (
-                  <p className="mt-2 text-xs text-slate-500">Calculating preview...</p>
-                ) : previewError ? (
-                  <p className="mt-2 text-xs text-rose-600">{previewError}</p>
-                ) : Number(storeCreditPreview?.previewAmount ?? 0) <= 0 ? (
-                  <p className="mt-2 text-xs text-amber-700">No available credit or invoice already paid.</p>
-                ) : (
-                  <div className="mt-2 space-y-2">
-                    <div className="grid grid-cols-3 gap-2 text-[11px] text-slate-500">
-                      <span>Invoice Balance: ${Number(storeCreditPreview?.invoiceBalance ?? 0).toFixed(2)}</span>
-                      <span>Open Credit: ${Number(storeCreditPreview?.openCreditBalance ?? 0).toFixed(2)}</span>
-                      <span>Will Apply: ${Number(storeCreditPreview?.previewAmount ?? 0).toFixed(2)}</span>
-                    </div>
-                    <div className="max-h-40 overflow-y-auto rounded-xl border border-white/10 bg-white/5 backdrop-blur-xl">
-                      <table className="min-w-full text-xs">
-                        <thead>
-                          <tr className="border-b border-white/10 text-left text-slate-400">
-                            <th className="px-2 py-1.5">Credit #</th>
-                            <th className="px-2 py-1.5">Source</th>
-                            <th className="px-2 py-1.5 text-right">Remaining</th>
-                            <th className="px-2 py-1.5 text-right">Will Use</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(storeCreditPreview?.allocations ?? []).map((row) => (
-                            <tr key={`${row.creditId}-${row.sourceReturnId ?? "none"}`} className="border-b border-white/10">
-                              <td className="px-2 py-1.5">{row.creditId.slice(0, 8)}</td>
-                              <td className="px-2 py-1.5">
-                                {row.sourceReturnId ? (
-                                  <Link href={`/returns/${row.sourceReturnId}`} className="text-slate-700 underline">
-                                    Return {row.sourceReturnId.slice(0, 8)}
-                                  </Link>
-                                ) : (
-                                  "-"
-                                )}
-                              </td>
-                              <td className="px-2 py-1.5 text-right">${Number(row.remainingBefore).toFixed(2)}</td>
-                              <td className="px-2 py-1.5 text-right font-semibold text-slate-900">${Number(row.willUse).toFixed(2)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={() => setOpenStoreCredit(false)} className="ios-secondary-btn h-10 px-3 text-sm">
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="ios-primary-btn h-10 px-3 text-sm disabled:opacity-60"
-                disabled={!canConfirmStoreCredit}
-              >
-                {applyingCredit ? "Applying..." : "Confirm Apply"}
               </button>
             </div>
           </form>

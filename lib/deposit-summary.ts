@@ -1,7 +1,11 @@
+import { centsToMoney, moneyToCents } from "@/lib/payment-ledger";
+
 export type DepositSummaryPayment = {
   amount: unknown;
+  id?: string | null;
   invoiceId?: string | null;
   paymentType?: string | null;
+  refundOfPaymentId?: string | null;
   status?: string | null;
 };
 
@@ -13,59 +17,58 @@ export type SalesOrderDepositSummary = {
   unallocatedDeposit: string;
 };
 
-function moneyToCents(value: unknown) {
-  let raw: string;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value)) return 0;
-    raw = String(value);
-  } else if (typeof value === "string") {
-    raw = value.trim();
-  } else if (value && typeof (value as { toFixed?: unknown }).toFixed === "function") {
-    raw = (value as { toFixed: () => string }).toFixed();
-  } else {
-    return 0;
-  }
-
-  if (!raw || !/^-?(?:\d+|\d*\.\d+)$/.test(raw)) return 0;
-  const negative = raw.startsWith("-");
-  const unsigned = negative ? raw.slice(1) : raw;
-  const [wholeRaw, fractionRaw = ""] = unsigned.split(".");
-  if (fractionRaw.length > 2 && !/^0+$/.test(fractionRaw.slice(2))) return 0;
-  const whole = Number(wholeRaw || "0");
-  const fraction = Number(fractionRaw.slice(0, 2).padEnd(2, "0"));
-  if (!Number.isSafeInteger(whole) || !Number.isSafeInteger(fraction)) return 0;
-  const cents = whole * 100 + fraction;
-  return negative ? -cents : cents;
-}
-
-function centsToMoney(cents: number) {
-  const safeCents = Number.isFinite(cents) ? Math.round(cents) : 0;
-  const sign = safeCents < 0 ? "-" : "";
-  const absolute = Math.abs(safeCents);
-  return `${sign}${Math.floor(absolute / 100)}.${String(absolute % 100).padStart(2, "0")}`;
-}
-
 export function calculateSalesOrderDepositSummary(args: {
   depositRequired: unknown;
   payments: DepositSummaryPayment[];
 }): SalesOrderDepositSummary {
-  const depositRequiredCents = Math.max(0, moneyToCents(args.depositRequired));
+  const depositRequiredCents = Math.max(0, safeMoneyToCents(args.depositRequired));
   let depositReceivedCents = 0;
   let allocatedDepositCents = 0;
   let unallocatedDepositCents = 0;
+  const depositPayments = new Map<string, { amountCents: number; invoiceId: string | null }>();
 
   for (const payment of args.payments) {
     if (String(payment.status ?? "").toUpperCase() !== "POSTED") continue;
     if (String(payment.paymentType ?? "").toUpperCase() !== "DEPOSIT") continue;
 
-    const amountCents = moneyToCents(payment.amount);
+    const amountCents = safeMoneyToCents(payment.amount);
     depositReceivedCents += amountCents;
     if (payment.invoiceId) {
       allocatedDepositCents += amountCents;
     } else {
       unallocatedDepositCents += amountCents;
     }
+    if (payment.id) {
+      depositPayments.set(payment.id, { amountCents, invoiceId: payment.invoiceId ?? null });
+    }
   }
+
+  const refundCentsByDepositId = new Map<string, number>();
+  for (const payment of args.payments) {
+    if (String(payment.status ?? "").toUpperCase() !== "POSTED") continue;
+    if (String(payment.paymentType ?? "").toUpperCase() !== "REFUND") continue;
+    if (!payment.refundOfPaymentId) continue;
+
+    const originalDeposit = depositPayments.get(payment.refundOfPaymentId);
+    if (!originalDeposit) continue;
+
+    const currentRefunded = refundCentsByDepositId.get(payment.refundOfPaymentId) ?? 0;
+    const refundCents = Math.min(
+      safeMoneyToCents(payment.amount),
+      Math.max(originalDeposit.amountCents - currentRefunded, 0),
+    );
+    refundCentsByDepositId.set(payment.refundOfPaymentId, currentRefunded + refundCents);
+    depositReceivedCents -= refundCents;
+    if (originalDeposit.invoiceId) {
+      allocatedDepositCents -= refundCents;
+    } else {
+      unallocatedDepositCents -= refundCents;
+    }
+  }
+
+  depositReceivedCents = Math.max(0, depositReceivedCents);
+  allocatedDepositCents = Math.max(0, allocatedDepositCents);
+  unallocatedDepositCents = Math.max(0, unallocatedDepositCents);
 
   return {
     allocatedDeposit: centsToMoney(allocatedDepositCents),
@@ -74,6 +77,14 @@ export function calculateSalesOrderDepositSummary(args: {
     depositRequired: centsToMoney(depositRequiredCents),
     unallocatedDeposit: centsToMoney(unallocatedDepositCents),
   };
+}
+
+function safeMoneyToCents(value: unknown) {
+  try {
+    return moneyToCents(value);
+  } catch {
+    return 0;
+  }
 }
 
 export function withSalesOrderDepositSummary<

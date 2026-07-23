@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { computeInvoicePaidAndBalance, deriveInvoiceStatus } from "@/lib/invoices";
 import { voidSalesOrderPaymentWithReconciliation } from "@/lib/payment-void-reconciliation";
+import { sumSignedPaymentAmount } from "@/lib/payment-ledger";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
@@ -54,9 +55,9 @@ export async function GET(request: NextRequest, { params }: Params) {
 
     const postedPayments = await prisma.salesOrderPayment.findMany({
       where: { invoiceId: id, status: "POSTED" },
-      select: { amount: true },
+      select: { amount: true, paymentType: true, status: true },
     });
-    const paidTotal = roundCurrency(postedPayments.reduce((sum, p) => sum + Number(p.amount), 0));
+    const paidTotal = roundCurrency(sumSignedPaymentAmount(postedPayments));
     const balanceDue = roundCurrency(Number(invoice.total) - paidTotal);
 
     return NextResponse.json(

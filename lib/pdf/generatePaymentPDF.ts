@@ -1,6 +1,7 @@
 import { PDFDocument, PageSizes, StandardFonts, rgb } from "pdf-lib";
 import { COMPANY_SETTINGS } from "@/lib/company-settings";
 import {
+  getOriginalPaymentLabel,
   getPaymentAllocationLabel,
   getPaymentStatusLabel,
   getPaymentTypeLabel,
@@ -20,6 +21,11 @@ type PaymentPDFData = {
   referenceNumber?: string | null;
   receivedAt: string | Date;
   status: string;
+  originalPaymentAmount?: number | null;
+  originalPaymentId?: string | null;
+  originalPaymentReference?: string | null;
+  refundedTotal?: number | null;
+  remainingRefundable?: number | null;
   subtotal: number;
   taxRate?: number | null;
   taxAmount: number;
@@ -52,6 +58,7 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
   const paymentTypeLabel = getPaymentTypeLabel(data.paymentType);
   const allocationLabel = getPaymentAllocationLabel(data.invoiceNumber);
   const statusLabel = getPaymentStatusLabel(data.status);
+  const hasRefundContext = Boolean(data.originalPaymentId);
 
   let y = pageHeight - margin;
 
@@ -181,9 +188,9 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
 
   page.drawRectangle({
     x: margin,
-    y: y - 112,
+    y: y - (hasRefundContext ? 176 : 112),
     width: contentWidth,
-    height: 116,
+    height: hasRefundContext ? 180 : 116,
     borderWidth: 1,
     borderColor: rgb(0.88, 0.9, 0.94),
     color: rgb(0.99, 0.99, 0.995),
@@ -200,6 +207,22 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
   y -= 14;
   drawText("Amount", margin + 12, 10, { bold: true });
   drawRight(formatMoney(data.amount), pageWidth - margin - 12, 12, true);
+  if (hasRefundContext) {
+    y -= 18;
+    drawText(
+      `${String(data.paymentType).toUpperCase() === "REFUND" ? "Original Payment" : "Refund Status"}: ${getOriginalPaymentLabel(data.originalPaymentId)}`,
+      margin + 12,
+      10,
+    );
+    y -= 14;
+    drawText(`Original Amount: ${formatMoney(data.originalPaymentAmount ?? 0)}`, margin + 12, 10);
+    y -= 14;
+    drawText(`Refunded Total: ${formatMoney(data.refundedTotal ?? 0)}`, margin + 12, 10);
+    y -= 14;
+    drawText(`Remaining Refundable: ${formatMoney(data.remainingRefundable ?? 0)}`, margin + 12, 10);
+    y -= 14;
+    drawText(`Original Reference: ${data.originalPaymentReference || "-"}`, margin + 12, 10);
+  }
   y -= 30;
 
   const totalsLeft = pageWidth - margin - 210;
