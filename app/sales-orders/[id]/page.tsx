@@ -80,6 +80,13 @@ type SalesOrderDetail = {
   specialOrderStatus: string | null;
   supplierNotes: string | null;
   depositRequired: string;
+  depositSummary?: {
+    allocatedDeposit: string;
+    depositDue: string;
+    depositReceived: string;
+    depositRequired: string;
+    unallocatedDeposit: string;
+  };
   subtotal: string;
   discount: string;
   taxRate: string | null;
@@ -187,7 +194,9 @@ type SalesOrderDetail = {
   payments: Array<{
     id: string;
     amount: string;
+    invoiceId: string | null;
     method: string;
+    paymentType?: "DEPOSIT" | "FINAL" | "REFUND";
     status: "POSTED" | "VOIDED";
     referenceNumber: string | null;
     receivedAt: string;
@@ -872,9 +881,9 @@ function SpecialOrderPanel({
   const orderEta = formatDisplayDate(data.etaDate);
   const firstLineStatus = specialOrderItems.find((item) => item.specialOrderStatus)?.specialOrderStatus ?? null;
   const currentStatus = data.specialOrderStatus ?? firstLineStatus;
-  const depositRequired = Number(data.depositRequired || 0);
-  const totalPaid = Number(data.paidAmount || 0);
-  const depositStillNeeded = Math.max(depositRequired - totalPaid, 0);
+  const depositRequired = Number(data.depositSummary?.depositRequired ?? data.depositRequired ?? 0);
+  const depositReceived = Number(data.depositSummary?.depositReceived ?? 0);
+  const depositStillNeeded = Math.max(Number(data.depositSummary?.depositDue ?? depositRequired - depositReceived), 0);
   const hasUnlinkedLine = specialOrderItems.some((item) => !item.linkedPoId);
   const hasAnyEta = Boolean(data.etaDate || specialOrderItems.some((item) => item.linkedPo?.expectedArrival));
   const nextAction = (() => {
@@ -1010,19 +1019,26 @@ function SpecialOrderPanel({
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
               Deposit And Balance
             </div>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
               <div>
                 <div className="text-[11px] text-slate-500">Required Deposit</div>
-                <div className="font-semibold text-white">{formatMoney(data.depositRequired)}</div>
+                <div className="font-semibold text-white">{formatMoney(data.depositSummary?.depositRequired ?? data.depositRequired)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-slate-500">Deposit Received</div>
+                <div className="font-semibold text-white">{formatMoney(data.depositSummary?.depositReceived ?? 0)}</div>
+              </div>
+              <div>
+                <div className="text-[11px] text-slate-500">Deposit Due</div>
+                <div className="font-semibold text-white">{formatMoney(data.depositSummary?.depositDue ?? 0)}</div>
               </div>
               <div>
                 <div className="text-[11px] text-slate-500">Total Paid</div>
                 <div className="font-semibold text-white">{formatMoney(data.paidAmount)}</div>
               </div>
-              <div>
-                <div className="text-[11px] text-slate-500">Remaining Order Balance</div>
-                <div className="font-semibold text-white">{formatMoney(data.balanceDue)}</div>
-              </div>
+            </div>
+            <div className="mt-2 text-[11px] text-slate-500">
+              Remaining Order Balance: {formatMoney(data.balanceDue)}
             </div>
           </div>
 
@@ -1272,6 +1288,7 @@ export default function SalesOrderDetailPage() {
   const [paymentForm, setPaymentForm] = useState({
     amount: "",
     method: "CASH",
+    type: "FINAL",
     referenceNumber: "",
     receivedAt: "",
     notes: "",
@@ -1516,6 +1533,32 @@ export default function SalesOrderDetailPage() {
     () => (data ? Number.isFinite(Number(data.total)) : false),
     [data],
   );
+  const depositSummary = useMemo(() => {
+    if (!data) return null;
+    if (data.depositSummary) return data.depositSummary;
+
+    const depositRequired = Math.max(Number(data.depositRequired || 0), 0);
+    let depositReceived = 0;
+    let allocatedDeposit = 0;
+    let unallocatedDeposit = 0;
+    for (const payment of data.payments ?? []) {
+      if (payment.status !== "POSTED" || payment.paymentType !== "DEPOSIT") continue;
+      const amount = Number(payment.amount || 0);
+      if (!Number.isFinite(amount)) continue;
+      depositReceived += amount;
+      if (payment.invoiceId) allocatedDeposit += amount;
+      else unallocatedDeposit += amount;
+    }
+
+    return {
+      allocatedDeposit: allocatedDeposit.toFixed(2),
+      depositDue: Math.max(depositRequired - depositReceived, 0).toFixed(2),
+      depositReceived: depositReceived.toFixed(2),
+      depositRequired: depositRequired.toFixed(2),
+      unallocatedDeposit: unallocatedDeposit.toFixed(2),
+    };
+  }, [data]);
+  const depositDueForPayment = Number(depositSummary?.depositDue ?? 0);
   const filteredSuppliers = useMemo(() => {
     const q = supplierQuery.trim().toLowerCase();
     if (!q) return suppliers;
@@ -2149,6 +2192,7 @@ export default function SalesOrderDetailPage() {
         body: JSON.stringify({
           amount,
           method: paymentForm.method,
+          type: paymentForm.type,
           referenceNumber: paymentForm.referenceNumber || null,
           receivedAt: paymentForm.receivedAt || null,
           notes: paymentForm.notes || null,
@@ -2159,7 +2203,7 @@ export default function SalesOrderDetailPage() {
       setData(payload.data);
       setOpenPayment(false);
       setPaymentQuickHint(null);
-      setPaymentForm({ amount: "", method: "CASH", referenceNumber: "", receivedAt: "", notes: "" });
+      setPaymentForm({ amount: "", method: "CASH", type: "FINAL", referenceNumber: "", receivedAt: "", notes: "" });
       setPaymentIntentKey(createPaymentIntentKey());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add payment");
@@ -2173,20 +2217,20 @@ export default function SalesOrderDetailPage() {
       setPaymentQuickHint("Order total is missing.");
       return;
     }
-    const depositRequired = Number(data.depositRequired || 0);
-    const paidAmount = Number(data.paidAmount || 0);
-    if (!Number.isFinite(depositRequired) || !Number.isFinite(paidAmount)) {
+    const depositRequired = Number(depositSummary?.depositRequired ?? data.depositRequired ?? 0);
+    const depositDueRaw = Number(depositSummary?.depositDue ?? 0);
+    if (!Number.isFinite(depositRequired) || !Number.isFinite(depositDueRaw)) {
       setPaymentQuickHint("Unable to calculate deposit due.");
       return;
     }
-    const depositDue = roundTo2(Math.max(depositRequired - paidAmount, 0));
+    const depositDue = roundTo2(Math.max(depositDueRaw, 0));
     if (depositRequired <= 0 || depositDue <= 0) {
       setPaymentQuickHint("No deposit due.");
-      setPaymentForm((prev) => ({ ...prev, amount: "0.00" }));
+      setPaymentForm((prev) => ({ ...prev, amount: "0.00", type: "DEPOSIT" }));
       return;
     }
     setPaymentQuickHint(null);
-    setPaymentForm((prev) => ({ ...prev, amount: depositDue.toFixed(2) }));
+    setPaymentForm((prev) => ({ ...prev, amount: depositDue.toFixed(2), type: "DEPOSIT" }));
   };
 
   const applyBalanceQuickFill = () => {
@@ -2202,11 +2246,11 @@ export default function SalesOrderDetailPage() {
     const collectBalance = roundTo2(Math.max(balanceDue, 0));
     if (collectBalance <= 0) {
       setPaymentQuickHint("No balance due.");
-      setPaymentForm((prev) => ({ ...prev, amount: "0.00" }));
+      setPaymentForm((prev) => ({ ...prev, amount: "0.00", type: "FINAL" }));
       return;
     }
     setPaymentQuickHint(null);
-    setPaymentForm((prev) => ({ ...prev, amount: collectBalance.toFixed(2) }));
+    setPaymentForm((prev) => ({ ...prev, amount: collectBalance.toFixed(2), type: "FINAL" }));
   };
 
   const voidPayment = async (paymentId: string) => {
@@ -3981,11 +4025,43 @@ export default function SalesOrderDetailPage() {
                   <h2 className="text-sm font-semibold text-white">Payments</h2>
                   <button
                     type="button"
-                    onClick={() => setOpenPayment(true)}
+                    onClick={() => {
+                      setPaymentQuickHint(null);
+                      setPaymentForm({
+                        amount: "",
+                        method: "CASH",
+                        type: "FINAL",
+                        referenceNumber: "",
+                        receivedAt: "",
+                        notes: "",
+                      });
+                      setOpenPayment(true);
+                    }}
                     className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/90 transition hover:bg-white/10"
                   >
                     Add Payment
                   </button>
+                </div>
+                <div
+                  className="mb-4 grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-3 sm:grid-cols-4"
+                  data-testid="deposit-summary"
+                >
+                  <div>
+                    <div className="text-[11px] text-slate-500">Deposit Required</div>
+                    <div className="font-semibold text-white">{formatMoney(depositSummary?.depositRequired ?? data.depositRequired)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] text-slate-500">Deposit Received</div>
+                    <div className="font-semibold text-white">{formatMoney(depositSummary?.depositReceived ?? 0)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] text-slate-500">Deposit Due</div>
+                    <div className="font-semibold text-white">{formatMoney(depositSummary?.depositDue ?? 0)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[11px] text-slate-500">Total Paid</div>
+                    <div className="font-semibold text-white">{formatMoney(data.paidAmount)}</div>
+                  </div>
                 </div>
                 {data.payments.length === 0 ? (
                   <p className="text-sm text-slate-500">No payments yet.</p>
@@ -3996,6 +4072,7 @@ export default function SalesOrderDetailPage() {
                         <tr className="border-b border-white/10 text-left text-slate-400">
                           <th className="py-2 pr-4">Received</th>
                           <th className="py-2 pr-4">Method</th>
+                          <th className="py-2 pr-4">Type</th>
                           <th className="py-2 pr-4">Reference</th>
                           <th className="py-2 pr-4">Amount</th>
                           <th className="py-2 pr-4">Status</th>
@@ -4016,6 +4093,14 @@ export default function SalesOrderDetailPage() {
                               })}
                             </td>
                             <td className="py-2 pr-4">{payment.method}</td>
+                            <td className="py-2 pr-4">
+                              <div className="flex flex-col gap-1">
+                                <span>{payment.paymentType === "DEPOSIT" ? "Deposit" : "Final"}</span>
+                                <span className="text-[11px] text-slate-500">
+                                  {payment.invoiceId ? "Allocated" : "Unallocated"}
+                                </span>
+                              </div>
+                            </td>
                             <td className="py-2 pr-4">{payment.referenceNumber || "-"}</td>
                             <td className="py-2 pr-4">${Number(payment.amount).toFixed(2)}</td>
                             <td className="py-2 pr-4">
@@ -4263,7 +4348,7 @@ export default function SalesOrderDetailPage() {
                 <button
                   type="button"
                   onClick={applyDepositQuickFill}
-                  disabled={!hasValidTotal}
+                  disabled={!hasValidTotal || depositDueForPayment <= 0}
                   className="ios-secondary-btn h-9 px-3 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   Collect Deposit
@@ -4283,6 +4368,15 @@ export default function SalesOrderDetailPage() {
               {!hasValidTotal ? (
                 <p className="text-xs text-rose-600">Order total is missing.</p>
               ) : null}
+              <select
+                value={paymentForm.type}
+                onChange={(e) => setPaymentForm((p) => ({ ...p, type: e.target.value }))}
+                className="ios-input h-11 w-full px-3 text-sm"
+                aria-label="Payment Type"
+              >
+                <option value="FINAL">Final Payment</option>
+                <option value="DEPOSIT">Deposit</option>
+              </select>
               <select
                 value={paymentForm.method}
                 onChange={(e) => setPaymentForm((p) => ({ ...p, method: e.target.value }))}
@@ -4320,6 +4414,14 @@ export default function SalesOrderDetailPage() {
                     setOpenPayment(false);
                     setPaymentQuickHint(null);
                     setPaymentIntentKey(createPaymentIntentKey());
+                    setPaymentForm({
+                      amount: "",
+                      method: "CASH",
+                      type: "FINAL",
+                      referenceNumber: "",
+                      receivedAt: "",
+                      notes: "",
+                    });
                   }}
                   className="ios-secondary-btn h-11 flex-1 text-sm"
                 >

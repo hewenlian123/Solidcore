@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, SalesPaymentMethod, SalesPaymentType } from "@prisma/client";
+import { withSalesOrderDepositSummary } from "@/lib/deposit-summary";
 import { prisma } from "@/lib/prisma";
 import {
   buildPaymentIdempotencyFingerprint,
@@ -21,7 +22,7 @@ type Params = {
 };
 
 const SALES_PAYMENT_METHOD_VALUES = ["CASH", "CHECK", "CARD", "BANK", "OTHER"] as const;
-const SALES_PAYMENT_TYPE_VALUES = ["DEPOSIT", "FINAL", "REFUND"] as const;
+const SALES_PAYMENT_TYPE_VALUES = ["DEPOSIT", "FINAL"] as const;
 
 export async function POST(request: NextRequest, { params }: Params) {
   let idempotencyKey: string | null = null;
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         outboundQueue: true,
       },
     });
-    return NextResponse.json({ data, idempotent }, { status });
+    return NextResponse.json({ data: withSalesOrderDepositSummary(data), idempotent }, { status });
   };
 
   try {
@@ -51,7 +52,8 @@ export async function POST(request: NextRequest, { params }: Params) {
     const payload = await request.json();
     const amount = parsePositivePaymentAmount(payload.amount);
     const method = String(payload.method ?? "OTHER").toUpperCase();
-    const paymentType = String(payload.type ?? "FINAL").toUpperCase();
+    const rawPaymentType = payload.type;
+    const paymentType = typeof rawPaymentType === "string" ? rawPaymentType.trim().toUpperCase() : "";
     const parsedKey = parseIdempotencyKey(request.headers.get("idempotency-key"));
     const receivedAt = parseOptionalReceivedAt(payload.receivedAt);
     const referenceNumber = normalizeOptionalText(payload.referenceNumber, { trim: false });
@@ -62,6 +64,9 @@ export async function POST(request: NextRequest, { params }: Params) {
     }
     if (!SALES_PAYMENT_METHOD_VALUES.includes(method as (typeof SALES_PAYMENT_METHOD_VALUES)[number])) {
       return NextResponse.json({ error: "Invalid payment method." }, { status: 400 });
+    }
+    if (!paymentType) {
+      return NextResponse.json({ error: "Payment type is required." }, { status: 400 });
     }
     if (!SALES_PAYMENT_TYPE_VALUES.includes(paymentType as (typeof SALES_PAYMENT_TYPE_VALUES)[number])) {
       return NextResponse.json({ error: "Invalid payment type." }, { status: 400 });

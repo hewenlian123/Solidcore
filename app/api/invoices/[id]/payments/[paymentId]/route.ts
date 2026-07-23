@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
 import { computeInvoicePaidAndBalance, deriveInvoiceStatus } from "@/lib/invoices";
-import { recalculateSalesOrder } from "@/lib/sales-orders";
+import { voidSalesOrderPaymentWithReconciliation } from "@/lib/payment-void-reconciliation";
+import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = {
@@ -96,41 +96,21 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     const data = await prisma.$transaction(async (tx) => {
       const invoice = await tx.invoice.findUnique({
         where: { id },
-        select: { id: true, status: true, total: true, salesOrderId: true },
+        select: { id: true },
       });
       if (!invoice) throw new Error("INVOICE_NOT_FOUND");
 
-      const payment = await tx.salesOrderPayment.findFirst({
-        where: { id: paymentId, invoiceId: id },
-        select: { id: true, status: true, salesOrderId: true },
+      const voidResult = await voidSalesOrderPaymentWithReconciliation(tx, paymentId, {
+        invoiceId: invoice.id,
       });
-      if (!payment) throw new Error("PAYMENT_NOT_FOUND");
-
-      if (hardDelete) {
-        await tx.salesOrderPayment.delete({
-          where: { id: payment.id },
-        });
-      } else if (payment.status !== "VOIDED") {
-        await tx.salesOrderPayment.update({
-          where: { id: payment.id },
-          data: { status: "VOIDED" },
-        });
-      }
-
-      const totals = await computeInvoicePaidAndBalance(tx, invoice.id, Number(invoice.total));
-      const nextStatus = deriveInvoiceStatus(invoice.status, totals.paidTotal, Number(invoice.total));
-      await tx.invoice.update({
-        where: { id: invoice.id },
-        data: { status: nextStatus },
-      });
-      await recalculateSalesOrder(tx, payment.salesOrderId);
 
       return {
-        paymentId: payment.id,
+        alreadyVoided: voidResult.alreadyVoided,
+        balanceDue: voidResult.invoice?.balanceDue ?? 0,
         invoiceId: invoice.id,
         mode: hardDelete ? "hard_delete" : "void",
-        paidTotal: totals.paidTotal,
-        balanceDue: totals.balanceDue,
+        paidTotal: voidResult.invoice?.paidTotal ?? 0,
+        paymentId: voidResult.paymentId,
       };
     });
 
@@ -141,6 +121,12 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     }
     if (error instanceof Error && error.message === "PAYMENT_NOT_FOUND") {
       return NextResponse.json({ error: "Payment not found for this invoice." }, { status: 404 });
+    }
+    if (error instanceof Error && error.message === "PAYMENT_VOID_CONFLICT") {
+      return NextResponse.json(
+        { error: "Payment changed while voiding. Refresh and try again." },
+        { status: 409 },
+      );
     }
     console.error("DELETE /api/invoices/[id]/payments/[paymentId] error:", error);
     return NextResponse.json({ error: "Failed to delete payment." }, { status: 500 });

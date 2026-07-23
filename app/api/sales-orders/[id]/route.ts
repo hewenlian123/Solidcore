@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { withSalesOrderDepositSummary } from "@/lib/deposit-summary";
 import { recalculateSalesOrder, syncInventoryReservationForSalesOrder } from "@/lib/sales-orders";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
@@ -154,7 +155,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     if (!data) {
       return NextResponse.json({ error: "Sales order not found." }, { status: 404 });
     }
-    return NextResponse.json({ data }, { status: 200 });
+    return NextResponse.json({ data: withSalesOrderDepositSummary(data) }, { status: 200 });
   } catch (error) {
     console.error("GET /api/sales-orders/[id] error:", error);
     return NextResponse.json(
@@ -396,7 +397,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       updated?.specialOrder && !updated?.supplierId
         ? "Special order is enabled but no supplier is selected."
         : null;
-    return NextResponse.json({ data: updated, warning }, { status: 200 });
+    return NextResponse.json({ data: withSalesOrderDepositSummary(updated), warning }, { status: 200 });
   } catch (error) {
     console.error("PATCH /api/sales-orders/[id] error:", error);
     return NextResponse.json({ error: "Failed to update sales order." }, { status: 500 });
