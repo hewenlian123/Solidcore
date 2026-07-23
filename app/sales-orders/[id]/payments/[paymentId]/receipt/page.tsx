@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { COMPANY_SETTINGS } from "@/lib/company-settings";
+import {
+  getPaymentAllocationLabel,
+  getPaymentStatusLabel,
+  getPaymentTypeLabel,
+} from "@/lib/payment-receipt-semantics";
 import { ReceiptPrintButton } from "./print-button";
 
 type Props = {
@@ -28,6 +33,9 @@ export default async function PaymentReceiptPage({ params }: Props) {
         customer: true,
         payments: {
           where: { id: paymentId },
+          include: {
+            invoice: { select: { id: true, invoiceNumber: true } },
+          },
           orderBy: { receivedAt: "desc" },
           take: 1,
         },
@@ -53,16 +61,31 @@ export default async function PaymentReceiptPage({ params }: Props) {
       );
     }
 
+    const paymentTypeLabel = getPaymentTypeLabel(payment.paymentType);
+    const paymentStatusLabel = getPaymentStatusLabel(payment.status);
+    const allocationLabel = getPaymentAllocationLabel(payment.invoice?.invoiceNumber);
+
     return (
       <main className="mx-auto max-w-3xl p-6 text-white print:p-0 print:text-slate-900">
         <div className="mb-4 flex items-center justify-between print:hidden">
           <Link href={`/orders/${order.id}`} className="ios-secondary-btn inline-flex h-10 items-center px-3 text-sm">
             Back to Sales Order
           </Link>
-          <ReceiptPrintButton />
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/api/pdf/payment/${payment.id}?download=true`}
+              className="ios-secondary-btn inline-flex h-10 items-center px-3 text-sm"
+            >
+              Download PDF
+            </Link>
+            <ReceiptPrintButton />
+          </div>
         </div>
 
-        <section className="glass-card p-8 print:shadow-none print:bg-white print:border print:border-slate-200">
+        <section
+          className="glass-card p-8 print:shadow-none print:bg-white print:border print:border-slate-200"
+          data-testid="payment-receipt"
+        >
           <div className="glass-card-content">
             <header className="flex items-start justify-between border-b border-white/10 pb-4 print:border-slate-200">
               <div>
@@ -100,6 +123,12 @@ export default async function PaymentReceiptPage({ params }: Props) {
                   <span className="text-slate-400 print:text-slate-500">Amount:</span> ${formatMoney(payment.amount)}
                 </p>
                 <p>
+                  <span className="text-slate-400 print:text-slate-500">Payment Type:</span> {paymentTypeLabel}
+                </p>
+                <p>
+                  <span className="text-slate-400 print:text-slate-500">Allocation:</span> {allocationLabel}
+                </p>
+                <p>
                   <span className="text-slate-400 print:text-slate-500">Method:</span> {payment.method}
                 </p>
                 <p>
@@ -110,7 +139,9 @@ export default async function PaymentReceiptPage({ params }: Props) {
                 </p>
                 <p>
                   <span className="text-slate-400 print:text-slate-500">Status:</span>{" "}
-                  {payment.status === "VOIDED" ? "Voided" : "Posted"}
+                  <span className={payment.status === "VOIDED" ? "font-semibold text-rose-300 print:text-rose-700" : ""}>
+                    {paymentStatusLabel}
+                  </span>
                 </p>
               </div>
               {payment.notes ? (

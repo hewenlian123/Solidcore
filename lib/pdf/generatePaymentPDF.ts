@@ -1,5 +1,10 @@
 import { PDFDocument, PageSizes, StandardFonts, rgb } from "pdf-lib";
 import { COMPANY_SETTINGS } from "@/lib/company-settings";
+import {
+  getPaymentAllocationLabel,
+  getPaymentStatusLabel,
+  getPaymentTypeLabel,
+} from "@/lib/payment-receipt-semantics";
 import { getPdfThemeColors } from "@/lib/pdf/theme";
 
 type PaymentPDFData = {
@@ -9,7 +14,9 @@ type PaymentPDFData = {
   customerPhone?: string | null;
   customerEmail?: string | null;
   amount: number;
+  invoiceNumber?: string | null;
   method: string;
+  paymentType: string;
   referenceNumber?: string | null;
   receivedAt: string | Date;
   status: string;
@@ -42,6 +49,9 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
   const [pageWidth, pageHeight] = PageSizes.Letter;
   const contentWidth = pageWidth - margin * 2;
   const page = pdfDoc.addPage(PageSizes.Letter);
+  const paymentTypeLabel = getPaymentTypeLabel(data.paymentType);
+  const allocationLabel = getPaymentAllocationLabel(data.invoiceNumber);
+  const statusLabel = getPaymentStatusLabel(data.status);
 
   let y = pageHeight - margin;
 
@@ -159,27 +169,31 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
     font: fontBold,
     color: rgb(0.35, 0.38, 0.43),
   });
-  page.drawText(data.status, {
+  page.drawText(statusLabel, {
     x: metaX + 92,
     y: metaTop - 28,
     size: 10,
     font,
-    color: rgb(0.15, 0.16, 0.2),
+    color: String(data.status).toUpperCase() === "VOIDED" ? rgb(0.7, 0.15, 0.15) : rgb(0.15, 0.16, 0.2),
   });
 
   y -= 28;
 
   page.drawRectangle({
     x: margin,
-    y: y - 84,
+    y: y - 112,
     width: contentWidth,
-    height: 88,
+    height: 116,
     borderWidth: 1,
     borderColor: rgb(0.88, 0.9, 0.94),
     color: rgb(0.99, 0.99, 0.995),
   });
   drawText("Payment Summary", margin + 12, 11, { bold: true });
   y -= 18;
+  drawText(`Payment Type: ${paymentTypeLabel}`, margin + 12, 10);
+  y -= 14;
+  drawText(`Allocation: ${allocationLabel}`, margin + 12, 10);
+  y -= 14;
   drawText(`Method: ${data.method}`, margin + 12, 10);
   y -= 14;
   drawText(`Reference: ${data.referenceNumber || "-"}`, margin + 12, 10);

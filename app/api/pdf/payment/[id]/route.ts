@@ -15,6 +15,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   const payment = await prisma.salesOrderPayment.findUnique({
     where: { id },
     include: {
+      invoice: { select: { invoiceNumber: true } },
       salesOrder: {
         include: {
           customer: true,
@@ -34,7 +35,9 @@ export async function GET(request: NextRequest, { params }: Params) {
     customerPhone: order.customer.phone,
     customerEmail: order.customer.email,
     amount: Number(payment.amount),
+    invoiceNumber: payment.invoice?.invoiceNumber ?? null,
     method: payment.method,
+    paymentType: payment.paymentType,
     referenceNumber: payment.referenceNumber,
     receivedAt: payment.receivedAt,
     status: payment.status,
