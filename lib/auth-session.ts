@@ -16,7 +16,8 @@ const SESSION_COOKIE_NAME = "solidcore_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 function getSessionSecret() {
-  const configured = process.env.AUTH_SESSION_SECRET;
+  const configured =
+    process.env.AUTH_SESSION_SECRET ?? process.env.NEXTAUTH_SECRET;
   if (process.env.NODE_ENV === "production") {
     if (!configured || configured.length < 32) {
       throw new Error(

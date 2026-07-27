@@ -3,6 +3,10 @@ import { createHmac, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { authenticateUser } from "@/lib/auth-users";
 import {
+  createSessionToken as createSignedSessionToken,
+  verifySessionToken,
+} from "@/lib/auth-session";
+import {
   clearLoginFailures,
   loginRateLimitStatus,
   recordLoginFailure,
@@ -224,6 +228,28 @@ test("login credentials are environment-owned and failed attempts are throttled"
   expect(loginRateLimitStatus(key, 1_001)).toMatchObject({
     allowed: true,
   });
+});
+
+test("session signing supports the existing NEXTAUTH_SECRET during migration", () => {
+  const previousAuthSecret = process.env.AUTH_SESSION_SECRET;
+  const previousNextAuthSecret = process.env.NEXTAUTH_SECRET;
+  delete process.env.AUTH_SESSION_SECRET;
+  process.env.NEXTAUTH_SECRET = "test-only-nextauth-secret-32-characters";
+
+  const token = createSignedSessionToken({
+    userId: "secret-compatibility-test",
+    role: "ADMIN",
+    name: "Secret Compatibility Test",
+  });
+  expect(verifySessionToken(token)).toMatchObject({
+    userId: "secret-compatibility-test",
+    role: "ADMIN",
+  });
+
+  if (previousAuthSecret === undefined) delete process.env.AUTH_SESSION_SECRET;
+  else process.env.AUTH_SESSION_SECRET = previousAuthSecret;
+  if (previousNextAuthSecret === undefined) delete process.env.NEXTAUTH_SECRET;
+  else process.env.NEXTAUTH_SECRET = previousNextAuthSecret;
 });
 
 test("application responses include the release security headers", async ({
