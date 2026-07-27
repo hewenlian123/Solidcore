@@ -6,6 +6,7 @@ import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { getCustomerSpecLine, getEffectiveSpecs } from "@/lib/specs/glass";
 import { formatFlooringSubtitle } from "@/lib/specs/effective";
 import { resolveSellingUnit } from "@/lib/selling-unit";
+import { calculateAvailable } from "@/lib/inventory-availability";
 
 export async function GET(request: NextRequest) {
   try {
@@ -59,21 +60,27 @@ export async function GET(request: NextRequest) {
             slidingConfigDefault: true,
             brand: true,
             collection: true,
-              price: true,
-              cost: true,
-              unit: true,
-              active: true,
+            price: true,
+            cost: true,
+            unit: true,
+            active: true,
           },
         },
         inventoryStock: {
-          select: { onHand: true, reserved: true },
+          select: { onHand: true, reserved: true, hold: true },
         },
       },
     });
     const productMetaRows =
       data.length > 0
         ? await prisma.product.findMany({
-            where: { id: { in: Array.from(new Set(data.map((variant) => variant.productId))) } },
+            where: {
+              id: {
+                in: Array.from(
+                  new Set(data.map((variant) => variant.productId)),
+                ),
+              },
+            },
             select: {
               id: true,
               category: true,
@@ -112,112 +119,124 @@ export async function GET(request: NextRequest) {
             },
           })
         : [];
-    const productMetaById = new Map(productMetaRows.map((row) => [row.id, row]));
+    const productMetaById = new Map(
+      productMetaRows.map((row) => [row.id, row]),
+    );
     const templateRows = await prisma.descriptionTemplate.findMany({
       where: { enabled: true },
       select: { category: true, templateJson: true },
     });
-    const templateByCategory = new Map(templateRows.map((row) => [row.category, row.templateJson]));
+    const templateByCategory = new Map(
+      templateRows.map((row) => [row.category, row.templateJson]),
+    );
 
     const mappedData = data.map((variant) => ({
-          ...(function () {
-            const productMeta = productMetaById.get(variant.productId);
-            const normalizedCategory = String(productMeta?.category ?? "");
-            const categoryName =
-              normalizedCategory === "WINDOW"
-                ? "Windows"
-                : normalizedCategory === "FLOOR"
-                  ? "Flooring"
-                  : normalizedCategory === "DOOR"
-                    ? "Doors"
-                    : normalizedCategory === "MIRROR"
-                      ? "Mirrors"
-                      : normalizedCategory;
-            const generatedDescription = renderDescription({
-              category: categoryName,
-              product: {
-                ...productMeta,
-                name: variant.product.name,
-              },
-              variant: {
-                ...variant,
-                type: variant.variantType,
-              },
-              templateJson: templateByCategory.get(categoryName) ?? null,
-            });
-            const windowSummary =
-              productMeta?.category === "WINDOW"
-                ? getCustomerSpecLine(
-                    getEffectiveSpecs(productMeta, {
-                      glassTypeOverride: variant.glassTypeOverride,
-                      slidingConfigOverride: variant.slidingConfigOverride,
-                      glassCoatingOverride: variant.glassCoatingOverride,
-                      glassThicknessMmOverride: variant.glassThicknessMmOverride,
-                      glassFinishOverride: variant.glassFinishOverride,
-                      screenOverride: variant.screenOverride,
-                      openingTypeOverride: variant.openingTypeOverride,
-                      glassType: variant.glassType,
-                      screenType: variant.screenType,
-                      slideDirection: variant.slideDirection,
-                    }),
-                  )
-                : "";
-            const flooringSummary = formatFlooringSubtitle({
-              flooringMaterial: productMeta?.flooringMaterial,
-              flooringWearLayer: productMeta?.flooringWearLayer,
-              flooringThicknessMm:
-                productMeta?.flooringThicknessMm != null ? Number(productMeta.flooringThicknessMm) : null,
-              flooringPlankLengthIn:
-                productMeta?.flooringPlankLengthIn != null ? Number(productMeta.flooringPlankLengthIn) : null,
-              flooringPlankWidthIn:
-                productMeta?.flooringPlankWidthIn != null ? Number(productMeta.flooringPlankWidthIn) : null,
-              flooringCoreThicknessMm:
-                productMeta?.flooringCoreThicknessMm != null
-                  ? Number(productMeta.flooringCoreThicknessMm)
-                  : null,
-              flooringInstallation: productMeta?.flooringInstallation,
-              flooringUnderlayment: productMeta?.flooringUnderlayment,
-              flooringUnderlaymentType: productMeta?.flooringUnderlaymentType,
-              flooringUnderlaymentMm:
-                productMeta?.flooringUnderlaymentMm != null
-                  ? Number(productMeta.flooringUnderlaymentMm)
-                  : null,
-              flooringBoxCoverageSqft:
-                productMeta?.flooringBoxCoverageSqft != null
-                  ? Number(productMeta.flooringBoxCoverageSqft)
-                  : null,
-            });
-            const effectiveDescription = windowSummary || flooringSummary || generatedDescription || null;
-            return {
-              specsLine: effectiveDescription ?? "",
-              category: categoryName || null,
-              flooringBoxCoverageSqft:
-                productMeta?.flooringBoxCoverageSqft != null
-                  ? Number(productMeta.flooringBoxCoverageSqft)
-                  : null,
-              generatedDescription: effectiveDescription,
-            };
-          })(),
-          id: variant.id,
-          productId: variant.productId,
-          name: variant.displayName ?? variant.product.name,
-          title: variant.displayName ?? variant.product.name,
-          sku: variant.sku,
-          displayName: variant.displayName ?? null,
-          skuSuffix: variant.skuSuffix ?? null,
-          variantDescription: variant.description ?? null,
-          defaultDescription: variant.product.defaultDescription ?? null,
-          brand: variant.product.brand,
-          collection: variant.product.collection,
-          onHandStock: String(Number(variant.inventoryStock?.onHand ?? 0)),
-          availableStock: String(
-            Number(variant.inventoryStock?.onHand ?? 0) - Number(variant.inventoryStock?.reserved ?? 0),
-          ),
-          price: String(variant.price ?? 0),
-          imageUrl: variant.imageUrl ?? null,
-          unit: variant.product.unit ?? null,
-          sellingUnit: resolveSellingUnit(productMetaById.get(variant.productId)?.category, variant.product.unit),
-        }));
+      ...(function () {
+        const productMeta = productMetaById.get(variant.productId);
+        const normalizedCategory = String(productMeta?.category ?? "");
+        const categoryName =
+          normalizedCategory === "WINDOW"
+            ? "Windows"
+            : normalizedCategory === "FLOOR"
+              ? "Flooring"
+              : normalizedCategory === "DOOR"
+                ? "Doors"
+                : normalizedCategory === "MIRROR"
+                  ? "Mirrors"
+                  : normalizedCategory;
+        const generatedDescription = renderDescription({
+          category: categoryName,
+          product: {
+            ...productMeta,
+            name: variant.product.name,
+          },
+          variant: {
+            ...variant,
+            type: variant.variantType,
+          },
+          templateJson: templateByCategory.get(categoryName) ?? null,
+        });
+        const windowSummary =
+          productMeta?.category === "WINDOW"
+            ? getCustomerSpecLine(
+                getEffectiveSpecs(productMeta, {
+                  glassTypeOverride: variant.glassTypeOverride,
+                  slidingConfigOverride: variant.slidingConfigOverride,
+                  glassCoatingOverride: variant.glassCoatingOverride,
+                  glassThicknessMmOverride: variant.glassThicknessMmOverride,
+                  glassFinishOverride: variant.glassFinishOverride,
+                  screenOverride: variant.screenOverride,
+                  openingTypeOverride: variant.openingTypeOverride,
+                  glassType: variant.glassType,
+                  screenType: variant.screenType,
+                  slideDirection: variant.slideDirection,
+                }),
+              )
+            : "";
+        const flooringSummary = formatFlooringSubtitle({
+          flooringMaterial: productMeta?.flooringMaterial,
+          flooringWearLayer: productMeta?.flooringWearLayer,
+          flooringThicknessMm:
+            productMeta?.flooringThicknessMm != null
+              ? Number(productMeta.flooringThicknessMm)
+              : null,
+          flooringPlankLengthIn:
+            productMeta?.flooringPlankLengthIn != null
+              ? Number(productMeta.flooringPlankLengthIn)
+              : null,
+          flooringPlankWidthIn:
+            productMeta?.flooringPlankWidthIn != null
+              ? Number(productMeta.flooringPlankWidthIn)
+              : null,
+          flooringCoreThicknessMm:
+            productMeta?.flooringCoreThicknessMm != null
+              ? Number(productMeta.flooringCoreThicknessMm)
+              : null,
+          flooringInstallation: productMeta?.flooringInstallation,
+          flooringUnderlayment: productMeta?.flooringUnderlayment,
+          flooringUnderlaymentType: productMeta?.flooringUnderlaymentType,
+          flooringUnderlaymentMm:
+            productMeta?.flooringUnderlaymentMm != null
+              ? Number(productMeta.flooringUnderlaymentMm)
+              : null,
+          flooringBoxCoverageSqft:
+            productMeta?.flooringBoxCoverageSqft != null
+              ? Number(productMeta.flooringBoxCoverageSqft)
+              : null,
+        });
+        const effectiveDescription =
+          windowSummary || flooringSummary || generatedDescription || null;
+        return {
+          specsLine: effectiveDescription ?? "",
+          category: categoryName || null,
+          flooringBoxCoverageSqft:
+            productMeta?.flooringBoxCoverageSqft != null
+              ? Number(productMeta.flooringBoxCoverageSqft)
+              : null,
+          generatedDescription: effectiveDescription,
+        };
+      })(),
+      id: variant.id,
+      productId: variant.productId,
+      name: variant.displayName ?? variant.product.name,
+      title: variant.displayName ?? variant.product.name,
+      sku: variant.sku,
+      displayName: variant.displayName ?? null,
+      skuSuffix: variant.skuSuffix ?? null,
+      variantDescription: variant.description ?? null,
+      defaultDescription: variant.product.defaultDescription ?? null,
+      brand: variant.product.brand,
+      collection: variant.product.collection,
+      onHandStock: String(Number(variant.inventoryStock?.onHand ?? 0)),
+      availableStock: String(calculateAvailable(variant.inventoryStock)),
+      price: String(variant.price ?? 0),
+      imageUrl: variant.imageUrl ?? null,
+      unit: variant.product.unit ?? null,
+      sellingUnit: resolveSellingUnit(
+        productMetaById.get(variant.productId)?.category,
+        variant.product.unit,
+      ),
+    }));
     const withSpecs = mappedData.map((item) => ({
       ...item,
       specsLine: String(item.specsLine || item.generatedDescription || ""),
@@ -227,8 +246,10 @@ export async function GET(request: NextRequest) {
       ? withSpecs.filter((variant) => {
           const productMeta = productMetaById.get(variant.productId);
           const sizeText =
-            productMeta?.sizeW !== null && productMeta?.sizeW !== undefined &&
-            productMeta?.sizeH !== null && productMeta?.sizeH !== undefined
+            productMeta?.sizeW !== null &&
+            productMeta?.sizeW !== undefined &&
+            productMeta?.sizeH !== null &&
+            productMeta?.sizeH !== undefined
               ? `${productMeta.sizeW}x${productMeta.sizeH}`
               : "";
           const searchBlob = [
@@ -253,6 +274,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ data: filtered }, { status: 200 });
   } catch (error) {
     console.error("GET /api/sales-orders/products error:", error);
-    return NextResponse.json({ error: "Failed to fetch products." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch products." },
+      { status: 500 },
+    );
   }
 }

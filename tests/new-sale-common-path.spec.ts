@@ -6,6 +6,7 @@ type WriteRequest = {
   method: string;
   pathname: string;
   body: unknown;
+  idempotencyKey: string | null;
 };
 
 const customer = {
@@ -76,6 +77,7 @@ type MockNewSaleOptions = {
   orderId?: string;
   statusGate?: Promise<void>;
   statusFailure?: { status?: number; error: string };
+  statusFailureCount?: number;
 };
 
 async function mockNewSaleApis(
@@ -84,6 +86,7 @@ async function mockNewSaleApis(
   options: MockNewSaleOptions = {},
 ) {
   const orderId = options.orderId ?? "mock-order-1";
+  let statusAttempts = 0;
   await page.route("**/api/**", async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -99,11 +102,21 @@ async function mockNewSaleApis(
           body = rawBody;
         }
       }
-      writes.push({ method, pathname: url.pathname, body });
+      writes.push({
+        method,
+        pathname: url.pathname,
+        body,
+        idempotencyKey: request.headers()["idempotency-key"] ?? null,
+      });
 
       if (url.pathname === `/api/sales-orders/${orderId}/status`) {
+        statusAttempts += 1;
         if (options.statusGate) await options.statusGate;
-        if (options.statusFailure) {
+        if (
+          options.statusFailure &&
+          (options.statusFailureCount === undefined ||
+            statusAttempts <= options.statusFailureCount)
+        ) {
           await route.fulfill({
             status: options.statusFailure.status ?? 500,
             contentType: "application/json",
@@ -195,7 +208,7 @@ async function mockNewSaleApis(
 async function openNewSale(page: Page, query = "") {
   await page.goto(`/sales-orders/new${query}`);
   await expect(page.getByTestId("new-sale-mode")).toBeVisible();
-  await expect(page.getByLabel("Customer search")).toBeVisible();
+  await expect(page.getByLabel("Product or SKU search")).toBeVisible();
 }
 
 test("sales order APIs reject empty and non-positive quantities before persistence", async ({
@@ -241,10 +254,14 @@ test("sales order APIs reject empty and non-positive quantities before persisten
 });
 
 async function selectCustomer(page: Page) {
+  await page.getByRole("button", { name: "Customers", exact: true }).click();
   const search = page.getByLabel("Customer search");
   await search.fill("Test Customer");
-  await page.getByRole("button", { name: /Test Customer/ }).click();
-  await expect(search).toHaveValue("Test Customer");
+  await page.getByRole("button", { name: /Use Test Customer/ }).click();
+  await expect(page.getByLabel("Product or SKU search")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Customer Test Customer/ }),
+  ).toBeVisible();
 }
 
 async function addProduct(page: Page) {
@@ -259,11 +276,7 @@ async function preparePopulatedSale(page: Page) {
   await addProduct(page);
 }
 
-function writesFor(
-  writes: WriteRequest[],
-  method: string,
-  pathname: string,
-) {
+function writesFor(writes: WriteRequest[], method: string, pathname: string) {
   return writes.filter(
     (write) => write.method === method && write.pathname === pathname,
   );
@@ -306,19 +319,14 @@ test("the common path stays visible and delivery details use progressive disclos
   await mockNewSaleApis(page, writes);
   await openNewSale(page);
 
-  await expect(page.getByLabel("Customer search")).toBeVisible();
   await expect(page.getByLabel("Product or SKU search")).toBeVisible();
+  await expect(page.getByLabel("Customer search")).toHaveCount(0);
   await expect(page.getByText("Cart is empty")).toBeVisible();
   await expect(page.getByTestId("totals-summary")).toContainText("Subtotal");
   await expect(page.getByTestId("totals-summary")).toContainText("Tax");
   await expect(page.getByTestId("totals-summary")).toContainText("Total");
 
-  await page.getByRole("button", { name: "Details" }).click();
-  await expect(page.getByPlaceholder("Street address")).toHaveCount(0);
-  await page.getByRole("button", { name: "Close details" }).click();
-
   await page.getByRole("button", { name: "Delivery", exact: true }).click();
-  await page.getByRole("button", { name: "Details" }).click();
   await expect(page.getByPlaceholder("Street address")).toBeVisible();
   await expect(page.getByPlaceholder("City")).toBeVisible();
   await expect(page.getByPlaceholder("State")).toBeVisible();
@@ -373,7 +381,9 @@ test("quote save waits for QUOTED status success before redirecting", async ({
   await preparePopulatedSale(page);
 
   const click = page.getByTestId("primary-sale-action").click();
-  await expect.poll(() => writesFor(writes, "POST", "/api/sales-orders").length).toBe(1);
+  await expect
+    .poll(() => writesFor(writes, "POST", "/api/sales-orders").length)
+    .toBe(1);
   await expect.poll(() => statusWrites(writes).length).toBe(1);
   await expect(page).toHaveURL(/\/sales-orders\/new\?docType=QUOTE$/);
 
@@ -428,10 +438,12 @@ test("quote status failure keeps the user on the entry page with a draft link", 
     "/orders/mock-order-1",
   );
   await expect(page.getByTestId("primary-sale-action")).toBeEnabled();
-  await expect(page.getByTestId("primary-sale-action")).toHaveText(/Save Quote/);
-  await expect(page.getByText("Sales Order created and confirmed.")).toHaveCount(
-    0,
+  await expect(page.getByTestId("primary-sale-action")).toHaveText(
+    /Save Quote/,
   );
+  await expect(
+    page.getByText("Sales Order created and confirmed."),
+  ).toHaveCount(0);
   expect(writesFor(writes, "POST", "/api/sales-orders")).toHaveLength(1);
   expect(statusWrites(writes)).toHaveLength(1);
 });
@@ -479,7 +491,9 @@ test("rapid repeated primary clicks do not issue duplicate creates", async ({
 
   const button = page.getByTestId("primary-sale-action");
   const firstClick = button.click();
-  await expect.poll(() => writesFor(writes, "POST", "/api/sales-orders").length).toBe(1);
+  await expect
+    .poll(() => writesFor(writes, "POST", "/api/sales-orders").length)
+    .toBe(1);
   await button.click({ timeout: 500 }).catch(() => undefined);
   expect(writesFor(writes, "POST", "/api/sales-orders")).toHaveLength(1);
 
@@ -490,6 +504,39 @@ test("rapid repeated primary clicks do not issue duplicate creates", async ({
   );
   expect(writesFor(writes, "POST", "/api/sales-orders")).toHaveLength(1);
   expect(statusWrites(writes)).toHaveLength(1);
+});
+
+test("refresh retry preserves the request identity and recovers the same draft", async ({
+  page,
+}) => {
+  const writes: WriteRequest[] = [];
+  await mockNewSaleApis(page, writes, {
+    statusFailure: { error: "Temporary confirmation failure." },
+    statusFailureCount: 1,
+  });
+  await openNewSale(page, "?docType=SALES_ORDER");
+  await preparePopulatedSale(page);
+
+  await page.getByTestId("primary-sale-action").click();
+  await expect(page.getByRole("link", { name: "Open draft" })).toBeVisible();
+  await page.reload();
+
+  await expect(
+    page.getByText("Test Tile", { exact: false }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Customer Test Customer/ }),
+  ).toBeVisible();
+  await Promise.all([
+    page.waitForURL(/\/orders\/mock-order-1\?created=1&status=confirmed$/),
+    page.getByTestId("primary-sale-action").click(),
+  ]);
+
+  const creates = writesFor(writes, "POST", "/api/sales-orders");
+  expect(creates).toHaveLength(2);
+  expect(creates[0]?.idempotencyKey).toBeTruthy();
+  expect(creates[1]?.idempotencyKey).toBe(creates[0]?.idempotencyKey);
+  expect(statusWrites(writes)).toHaveLength(2);
 });
 
 const viewports = [
@@ -527,8 +574,8 @@ for (const viewport of viewports) {
       scrollWidth: document.documentElement.scrollWidth,
     }));
     expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
-    await expect(page.getByLabel("Customer search")).toBeVisible();
     await expect(page.getByLabel("Product or SKU search")).toBeVisible();
+    await expect(page.getByLabel("Customer search")).toHaveCount(0);
     await expect(page.getByText("Cart is empty")).toBeVisible();
     await expect(page.getByTestId("totals-summary")).toBeVisible();
     await expect(page.getByTestId("primary-sale-action")).toBeVisible();

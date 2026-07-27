@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useRole } from "@/components/layout/role-provider";
 import { formatLineItemTitle } from "@/lib/display";
 
@@ -1686,9 +1687,12 @@ function NewSalesOrderPageContent({ editOrderId }: { editOrderId?: string }) {
                                 className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-white/[0.06] rounded-md text-xs"
                               >
                                 {product.imageUrl ? (
-                                  <img
+                                  <Image
                                     src={product.imageUrl}
                                     alt={displayName}
+                                    width={32}
+                                    height={32}
+                                    unoptimized
                                     className="h-8 w-8 rounded object-cover shrink-0"
                                   />
                                 ) : (

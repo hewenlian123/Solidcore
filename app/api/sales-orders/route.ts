@@ -5,6 +5,10 @@ import {
   generateNextSalesOrderNumber,
   recalculateSalesOrder,
 } from "@/lib/sales-orders";
+import {
+  buildOrderCreationFingerprint,
+  parseOrderCreationKey,
+} from "@/lib/order-creation-integrity";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { parsePositiveQuantity } from "@/lib/sales-order-quantity";
 import { resolveSellingUnit } from "@/lib/selling-unit";
@@ -109,9 +113,23 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  let creationKey: string | null = null;
+  let creationFingerprint: string | null = null;
+
+  const loadIdempotentOrder = async (id: string) => {
+    const data = await prisma.salesOrder.findUnique({ where: { id } });
+    return NextResponse.json({ data, idempotent: true }, { status: 200 });
+  };
+
   try {
     const role = getRequestRole(request);
     if (!hasOneOf(role, ["ADMIN", "SALES"])) return deny();
+
+    const parsedCreationKey = parseOrderCreationKey(request.headers.get("idempotency-key"));
+    if (!parsedCreationKey.ok) {
+      return NextResponse.json({ error: parsedCreationKey.error }, { status: 400 });
+    }
+    creationKey = parsedCreationKey.key;
 
     const payload = await request.json();
     const requestedCustomerId = String(payload.customerId ?? "").trim();
@@ -156,14 +174,78 @@ export async function POST(request: NextRequest) {
       ? (fulfillmentMethodRaw as "PICKUP" | "DELIVERY")
       : "PICKUP";
     const deliveryAddress1 = String(payload.deliveryAddress1 ?? "").trim();
+    const deliveryAddress2 = String(payload.deliveryAddress2 ?? "").trim();
     const deliveryCity = String(payload.deliveryCity ?? "").trim();
     const deliveryState = String(payload.deliveryState ?? "").trim();
     const deliveryZip = String(payload.deliveryZip ?? "").trim();
+    const deliveryName = String(payload.deliveryName ?? "").trim();
+    const deliveryPhone = String(payload.deliveryPhone ?? "").trim();
+    const deliveryNotes = String(payload.deliveryNotes ?? "").trim();
+    const pickupNotes = String(payload.pickupNotes ?? "").trim();
     if (fulfillmentMethod === "DELIVERY" && !deliveryAddress1) {
       return NextResponse.json(
         { error: "Delivery address is required when delivery is selected." },
         { status: 400 },
       );
+    }
+
+    creationFingerprint = creationKey
+      ? buildOrderCreationFingerprint({
+          customerId: requestedCustomerId || "WALK_IN",
+          docType,
+          projectName: String(payload.projectName ?? "").trim() || null,
+          fulfillmentMethod,
+          deliveryName: fulfillmentMethod === "DELIVERY" ? deliveryName || null : null,
+          deliveryPhone: fulfillmentMethod === "DELIVERY" ? deliveryPhone || null : null,
+          deliveryAddress1: fulfillmentMethod === "DELIVERY" ? deliveryAddress1 : null,
+          deliveryAddress2: fulfillmentMethod === "DELIVERY" ? deliveryAddress2 || null : null,
+          deliveryCity: fulfillmentMethod === "DELIVERY" ? deliveryCity || null : null,
+          deliveryState: fulfillmentMethod === "DELIVERY" ? deliveryState || null : null,
+          deliveryZip: fulfillmentMethod === "DELIVERY" ? deliveryZip || null : null,
+          deliveryNotes: fulfillmentMethod === "DELIVERY" ? deliveryNotes || null : null,
+          pickupNotes: fulfillmentMethod === "PICKUP" ? pickupNotes || null : null,
+          depositRequired: toNumber(payload.depositRequired, 0),
+          discount,
+          taxRate: requestedTaxRateRaw,
+          salespersonName: String(payload.salespersonName ?? "").trim() || null,
+          commissionRate: toNumber(payload.commissionRate, 0),
+          notes: String(payload.notes ?? "").trim() || null,
+          orderDate: payload.orderDate ? String(payload.orderDate) : null,
+          requestedDeliveryAt: payload.requestedDeliveryAt
+            ? String(payload.requestedDeliveryAt)
+            : null,
+          timeWindow: String(payload.timeWindow ?? "").trim() || null,
+          items: items.map((item: any) => ({
+            productId: item.productId ? String(item.productId) : null,
+            variantId: item.variantId ? String(item.variantId) : null,
+            productSku: item.productSku ? String(item.productSku) : null,
+            productTitle: item.productTitle ? String(item.productTitle) : null,
+            uomSnapshot: item.uomSnapshot ? String(item.uomSnapshot) : null,
+            lineDescription: String(item.lineDescription ?? ""),
+            quantity: parsePositiveQuantity(item.quantity),
+            unitPrice: toNumber(item.unitPrice, 0),
+            lineDiscount: toNumber(item.lineDiscount, 0),
+          })),
+        })
+      : null;
+
+    if (creationKey) {
+      const existing = await prisma.salesOrder.findUnique({
+        where: { creationKey },
+        select: { id: true, creationFingerprint: true },
+      });
+      if (existing) {
+        if (existing.creationFingerprint !== creationFingerprint) {
+          return NextResponse.json(
+            {
+              error: "This sale request was already used for a different order.",
+              existingOrderId: existing.id,
+            },
+            { status: 409 },
+          );
+        }
+        return loadIdempotentOrder(existing.id);
+      }
     }
 
     const created = await prisma.$transaction(async (tx) => {
@@ -235,6 +317,13 @@ export async function POST(request: NextRequest) {
           orderDate: payload.orderDate ? new Date(payload.orderDate) : new Date(),
           requestedDeliveryAt: payload.requestedDeliveryAt ? new Date(payload.requestedDeliveryAt) : null,
           timeWindow: payload.timeWindow ? String(payload.timeWindow).trim() || null : null,
+          deliveryName: fulfillmentMethod === "DELIVERY" ? deliveryName || null : null,
+          deliveryPhone: fulfillmentMethod === "DELIVERY" ? deliveryPhone || null : null,
+          deliveryAddress2: fulfillmentMethod === "DELIVERY" ? deliveryAddress2 || null : null,
+          deliveryNotes: fulfillmentMethod === "DELIVERY" ? deliveryNotes || null : null,
+          pickupNotes: fulfillmentMethod === "PICKUP" ? pickupNotes || null : null,
+          creationKey,
+          creationFingerprint,
         },
         // Avoid selecting non-existent columns in environments where DB is behind schema
         select: { id: true },
@@ -325,8 +414,29 @@ export async function POST(request: NextRequest) {
       return updated;
     });
 
-    return NextResponse.json({ data: created }, { status: 201 });
+    return NextResponse.json({ data: created, idempotent: false }, { status: 201 });
   } catch (error) {
+    if (
+      creationKey &&
+      creationFingerprint &&
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      const existing = await prisma.salesOrder.findUnique({
+        where: { creationKey },
+        select: { id: true, creationFingerprint: true },
+      });
+      if (existing?.creationFingerprint === creationFingerprint) {
+        return loadIdempotentOrder(existing.id);
+      }
+      return NextResponse.json(
+        {
+          error: "This sale request was already used for a different order.",
+          existingOrderId: existing?.id ?? null,
+        },
+        { status: 409 },
+      );
+    }
     if (error instanceof Error && error.message === "VARIANT_NOT_FOUND") {
       return NextResponse.json({ error: "Variant not found." }, { status: 404 });
     }

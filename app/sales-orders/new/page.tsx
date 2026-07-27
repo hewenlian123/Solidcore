@@ -1,12 +1,18 @@
 "use client";
 
 import { Suspense } from "react";
-import { SalesOrderEntryContent } from "../entry-content";
+import { CreateSaleContent } from "../create-sale-content";
 
 export default function NewSalesOrderPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-400">Loading...</div>}>
-      <SalesOrderEntryContent />
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-canvas text-sm text-foreground-secondary">
+          Loading sale...
+        </div>
+      }
+    >
+      <CreateSaleContent />
     </Suspense>
   );
 }

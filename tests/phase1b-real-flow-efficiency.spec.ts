@@ -156,7 +156,9 @@ function assertSafeDatabase() {
   const isLocal = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
   const isExplicitTestDb = /test/i.test(url.pathname);
   if (!isLocal && !isExplicitTestDb) {
-    throw new Error("Refusing to run Phase 1B against a non-local, non-test database.");
+    throw new Error(
+      "Refusing to run Phase 1B against a non-local, non-test database.",
+    );
   }
 }
 
@@ -170,9 +172,14 @@ function createSessionToken() {
     name: "Phase 1B Test Admin",
     exp: Math.floor(Date.now() / 1000) + 60 * 60,
   };
-  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-  const secret = process.env.AUTH_SESSION_SECRET || "solidcore-dev-session-secret-change-me";
-  const signature = createHmac("sha256", secret).update(encoded).digest("base64url");
+  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString(
+    "base64url",
+  );
+  const secret =
+    process.env.AUTH_SESSION_SECRET || "solidcore-dev-session-secret-change-me";
+  const signature = createHmac("sha256", secret)
+    .update(encoded)
+    .digest("base64url");
   return `${encoded}.${signature}`;
 }
 
@@ -333,7 +340,9 @@ async function cleanupPhase1BRecords() {
       ],
     },
   });
-  await prisma.inventoryStock.deleteMany({ where: { variantId: { in: variantIds } } });
+  await prisma.inventoryStock.deleteMany({
+    where: { variantId: { in: variantIds } },
+  });
   await prisma.productVariant.deleteMany({ where: { id: { in: variantIds } } });
   await prisma.salesProduct.deleteMany({ where: { id: { in: productIds } } });
   await prisma.product.deleteMany({
@@ -344,7 +353,9 @@ async function cleanupPhase1BRecords() {
   if (fixture?.warehouseId) {
     await prisma.warehouse.deleteMany({ where: { id: fixture.warehouseId } });
   }
-  await prisma.warehouse.deleteMany({ where: { name: { contains: QA_MARKER } } });
+  await prisma.warehouse.deleteMany({
+    where: { name: { contains: QA_MARKER } },
+  });
 
   return { orderIds, customerIds, productIds, variantIds, fulfillmentIds };
 }
@@ -522,24 +533,56 @@ async function seedFixture() {
   results.counts.afterFixture = await captureCounts();
 }
 
-async function selectExistingCustomer(page: Page, metrics: ScenarioMetrics, query = fixture.existingCustomerName) {
+async function selectExistingCustomer(
+  page: Page,
+  metrics: ScenarioMetrics,
+  query = fixture.existingCustomerName,
+) {
+  await page.getByRole("button", { name: "Customers", exact: true }).click();
+  metrics.majorInteractions += 1;
   await page.getByLabel("Customer search").fill(query);
   metrics.keyboardActions += 1;
-  await page.getByRole("button", { name: new RegExp(escapeRegex(fixture.existingCustomerName)) }).click();
+  await page
+    .getByRole("button", {
+      name: new RegExp(`Use ${escapeRegex(fixture.existingCustomerName)}`),
+    })
+    .click();
   metrics.majorInteractions += 1;
-  await expect(page.getByLabel("Customer search")).toHaveValue(fixture.existingCustomerName);
+  await expect(page.getByLabel("Product or SKU search")).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: new RegExp(`Customer ${escapeRegex(fixture.existingCustomerName)}`),
+    }),
+  ).toBeVisible();
 }
 
-async function addProductFromBrowse(page: Page, product: FixtureProduct, metrics: ScenarioMetrics) {
+async function addProductFromBrowse(
+  page: Page,
+  product: FixtureProduct,
+  metrics: ScenarioMetrics,
+) {
   await page.getByPlaceholder("Search products...").fill(product.sku);
   metrics.keyboardActions += 1;
-  await page.getByRole("button", { name: new RegExp(`Add ${escapeRegex(product.name)} to cart`) }).click();
+  await page
+    .getByRole("button", {
+      name: new RegExp(`Add ${escapeRegex(product.name)} to cart`),
+    })
+    .click();
   metrics.majorInteractions += 1;
-  await expect(page.getByLabel(new RegExp(`Quantity for .*${escapeRegex(product.sku)}`))).toBeVisible();
+  await expect(
+    page.getByLabel(new RegExp(`Quantity for .*${escapeRegex(product.sku)}`)),
+  ).toBeVisible();
 }
 
-async function setLineQuantity(page: Page, product: FixtureProduct, quantity: string, metrics: ScenarioMetrics) {
-  const quantityInput = page.getByLabel(new RegExp(`Quantity for .*${escapeRegex(product.sku)}`));
+async function setLineQuantity(
+  page: Page,
+  product: FixtureProduct,
+  quantity: string,
+  metrics: ScenarioMetrics,
+) {
+  const quantityInput = page.getByLabel(
+    new RegExp(`Quantity for .*${escapeRegex(product.sku)}`),
+  );
   await quantityInput.fill(quantity);
   metrics.keyboardActions += 1;
 }
@@ -573,7 +616,9 @@ async function captureOrderEvidence(orderId: string): Promise<OrderEvidence> {
     },
   });
   if (!order) throw new Error(`Order ${orderId} not found`);
-  const variantIds = order.items.map((item) => item.variantId).filter(Boolean) as string[];
+  const variantIds = order.items
+    .map((item) => item.variantId)
+    .filter(Boolean) as string[];
   const [movements, stock] = await Promise.all([
     prisma.inventoryMovement.findMany({
       where: {
@@ -640,7 +685,8 @@ async function assertNoHorizontalOverflow(page: Page) {
   return dimensions;
 }
 
-test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", () => {
+test.describe
+  .serial("SolidCore Phase 1B real-flow counter-sales validation", () => {
   test.beforeAll(async () => {
     await seedFixture();
   });
@@ -653,7 +699,9 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     await prisma.$disconnect();
   });
 
-  test("Scenario A - simple pickup sales order opens confirmed order", async ({ page }) => {
+  test("Scenario A - simple pickup sales order opens confirmed order", async ({
+    page,
+  }) => {
     const metrics = newMetrics("Scenario A - Simple Pickup Sales Order");
     await openNewSale(page, "SALES_ORDER");
     await selectExistingCustomer(page, metrics);
@@ -668,7 +716,9 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     metrics.finalUrl = page.url();
     metrics.createdOrderId = orderIdFromUrl(page.url());
     createdOrderIds.add(metrics.createdOrderId);
-    await expect(page.getByText("Sales Order created and confirmed.")).toBeVisible();
+    await expect(
+      page.getByText("Confirmed", { exact: true }).first(),
+    ).toBeVisible();
     await expect(
       page.getByText(fixture.existingCustomerName, { exact: true }).first(),
     ).toBeVisible();
@@ -693,7 +743,11 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     expect(evidence.paymentCount).toBe(0);
     expect(evidence.inventoryMovements).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ variantId: fixture.standardOne.variantId, type: "RESERVE", qty: 1 }),
+        expect.objectContaining({
+          variantId: fixture.standardOne.variantId,
+          type: "RESERVE",
+          qty: 1,
+        }),
       ]),
     );
 
@@ -701,12 +755,18 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     results.evidence.A = evidence;
   });
 
-  test("Scenario B - quote saves as quoted without reservation or fulfillment", async ({ page }) => {
+  test("Scenario B - quote saves as quoted without reservation or fulfillment", async ({
+    page,
+  }) => {
     const metrics = newMetrics("Scenario B - Quote");
     await openNewSale(page, "QUOTE");
     await selectExistingCustomer(page, metrics);
     const beforeStock = await prisma.inventoryStock.findMany({
-      where: { variantId: { in: [fixture.standardOne.variantId, fixture.standardTwo.variantId] } },
+      where: {
+        variantId: {
+          in: [fixture.standardOne.variantId, fixture.standardTwo.variantId],
+        },
+      },
       orderBy: { variantId: "asc" },
       select: { variantId: true, onHand: true, reserved: true },
     });
@@ -723,16 +783,32 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     metrics.createdOrderId = orderIdFromUrl(page.url());
     createdOrderIds.add(metrics.createdOrderId);
     expect(page.url()).not.toContain("status=confirmed");
-    await expect(page.getByText("Sales Order created and confirmed.")).toHaveCount(0);
+    await expect(
+      page.getByText("Sales Order created and confirmed."),
+    ).toHaveCount(0);
     await expect(page.getByText("Quoted")).toBeVisible();
 
     const afterStock = await prisma.inventoryStock.findMany({
-      where: { variantId: { in: [fixture.standardOne.variantId, fixture.standardTwo.variantId] } },
+      where: {
+        variantId: {
+          in: [fixture.standardOne.variantId, fixture.standardTwo.variantId],
+        },
+      },
       orderBy: { variantId: "asc" },
       select: { variantId: true, onHand: true, reserved: true },
     });
-    expect(afterStock.map((row) => ({ ...row, onHand: toNumber(row.onHand), reserved: toNumber(row.reserved) }))).toEqual(
-      beforeStock.map((row) => ({ ...row, onHand: toNumber(row.onHand), reserved: toNumber(row.reserved) })),
+    expect(
+      afterStock.map((row) => ({
+        ...row,
+        onHand: toNumber(row.onHand),
+        reserved: toNumber(row.reserved),
+      })),
+    ).toEqual(
+      beforeStock.map((row) => ({
+        ...row,
+        onHand: toNumber(row.onHand),
+        reserved: toNumber(row.reserved),
+      })),
     );
 
     const evidence = await captureOrderEvidence(metrics.createdOrderId);
@@ -748,24 +824,48 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     results.evidence.B = { ...evidence, beforeStock, afterStock };
   });
 
-  test("Scenario C - quick-created customer delivery order opens confirmed order", async ({ page }) => {
-    const metrics = newMetrics("Scenario C - Quick-Created Customer Delivery Order");
+  test("Scenario C - quick-created customer delivery order opens confirmed order", async ({
+    page,
+  }) => {
+    const metrics = newMetrics(
+      "Scenario C - Quick-Created Customer Delivery Order",
+    );
     const quickCustomerName = `${QA_MARKER} Quick Customer ${RUN_ID}`;
     await openNewSale(page, "SALES_ORDER");
 
+    await page.getByRole("button", { name: "Customers", exact: true }).click();
+    metrics.majorInteractions += 1;
     await page.getByLabel("Customer search").fill(quickCustomerName);
     metrics.keyboardActions += 1;
-    await page.getByRole("button", { name: "+ New Customer" }).click();
+    await page.getByRole("button", { name: /New customer/ }).click();
     metrics.majorInteractions += 1;
     metrics.dialogCount += 1;
-    await page.getByRole("textbox", { name: "Name", exact: true }).fill(quickCustomerName);
-    await page.getByRole("textbox", { name: "Phone", exact: true }).fill("808-555-2020");
-    await page.getByRole("textbox", { name: "Email", exact: true }).fill(`${RUN_ID}-quick@example.com`);
-    await page.getByRole("textbox", { name: "Address", exact: true }).fill("202 Quick Delivery Lane");
-    metrics.keyboardActions += 4;
-    await page.getByRole("button", { name: "Save Customer" }).click();
+    await page
+      .getByRole("textbox", { name: "Primary contact" })
+      .fill("P1B Site Contact");
+    await page
+      .getByRole("textbox", { name: "Phone", exact: true })
+      .fill("808-555-2020");
+    await page
+      .getByRole("textbox", { name: "Email", exact: true })
+      .fill(`${RUN_ID}-quick@example.com`);
+    await page
+      .getByRole("textbox", { name: "Job site name" })
+      .fill("P1B Delivery Site");
+    await page
+      .getByRole("textbox", { name: "Street address" })
+      .fill("202 Quick Delivery Lane");
+    await page.getByRole("textbox", { name: "City" }).fill("Honolulu");
+    await page.getByRole("textbox", { name: "ZIP" }).fill("96813");
+    metrics.keyboardActions += 7;
+    await page.getByRole("button", { name: "Create customer" }).click();
     metrics.majorInteractions += 1;
-    await expect(page.getByLabel("Customer search")).toHaveValue(quickCustomerName);
+    await expect(page.getByLabel("Product or SKU search")).toBeVisible();
+    await expect(
+      page.getByRole("button", {
+        name: new RegExp(`Customer ${escapeRegex(quickCustomerName)}`),
+      }),
+    ).toBeVisible();
 
     await expect
       .poll(async () =>
@@ -785,16 +885,12 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     await addProductFromBrowse(page, fixture.standardTwo, metrics);
     await page.getByRole("button", { name: "Delivery", exact: true }).click();
     metrics.majorInteractions += 1;
-    await page.getByRole("button", { name: "Details" }).click();
-    metrics.majorInteractions += 1;
-    metrics.dialogCount += 1;
-    await page.getByPlaceholder("Street address").fill("303 Delivery Jobsite Ave");
-    await page.getByPlaceholder("City").fill("Honolulu");
-    await page.getByPlaceholder("State").fill("HI");
-    await page.getByPlaceholder("Zip").fill("96813");
-    metrics.keyboardActions += 4;
-    await page.getByRole("button", { name: "Close details" }).click();
-    metrics.majorInteractions += 1;
+    await expect(page.getByLabel("Job site name")).toHaveValue(
+      "P1B Delivery Site",
+    );
+    await expect(page.getByLabel("Street address")).toHaveValue(
+      "202 Quick Delivery Lane",
+    );
 
     await Promise.all([
       page.waitForURL(/\/orders\/[^/?#]+\?created=1&status=confirmed$/),
@@ -819,7 +915,9 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     results.evidence.C = evidence;
   });
 
-  test("Scenario D - positive decimal quantity remains decimal with correct UOM and totals", async ({ page }) => {
+  test("Scenario D - positive decimal quantity remains decimal with correct UOM and totals", async ({
+    page,
+  }) => {
     const metrics = newMetrics("Scenario D - Decimal Quantity");
     await openNewSale(page, "SALES_ORDER");
     await selectExistingCustomer(page, metrics);
@@ -853,7 +951,9 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     results.evidence.D = evidence;
   });
 
-  test("Scenario F - status transition failure leaves one accessible draft", async ({ page }) => {
+  test("Scenario F - status transition failure leaves one accessible draft", async ({
+    page,
+  }) => {
     const metrics = newMetrics("Scenario F - Failure Recovery");
     await authenticate(page);
     await page.route("**/api/sales-orders/*/status", async (route) => {
@@ -868,7 +968,9 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
       await route.continue();
     });
     await page.goto("/sales-orders/new?docType=SALES_ORDER");
-    await expect(page.getByTestId("new-sale-mode")).toHaveText("New Sales Order");
+    await expect(page.getByTestId("new-sale-mode")).toHaveText(
+      "New Sales Order",
+    );
     await selectExistingCustomer(page, metrics);
     await addProductFromBrowse(page, fixture.standardTwo, metrics);
 
@@ -878,7 +980,9 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
       "The Sales Order draft was created, but confirmation failed.",
     );
     await expect(page.getByTestId("primary-sale-action")).toBeEnabled();
-    const draftHref = await page.getByRole("link", { name: "Open draft" }).getAttribute("href");
+    const draftHref = await page
+      .getByRole("link", { name: "Open draft" })
+      .getAttribute("href");
     expect(draftHref).toMatch(/^\/orders\/.+/);
     const draftId = draftHref!.split("/").pop()!;
     createdOrderIds.add(draftId);
@@ -896,7 +1000,9 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     await page.getByRole("link", { name: "Open draft" }).click();
     metrics.majorInteractions += 1;
     metrics.routeTransitions += 1;
-    await expect(page).toHaveURL(new RegExp(`/orders/${escapeRegex(draftId)}$`));
+    await expect(page).toHaveURL(
+      new RegExp(`/orders/${escapeRegex(draftId)}$`),
+    );
     metrics.finalUrl = page.url();
 
     const evidence = await captureOrderEvidence(draftId);
@@ -908,7 +1014,9 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     results.evidence.F = evidence;
   });
 
-  test("Responsive viewports keep common path visible without horizontal overflow", async ({ page }) => {
+  test("Responsive viewports keep common path visible without horizontal overflow", async ({
+    page,
+  }) => {
     const viewports = [
       { name: "desktop", width: 1440, height: 900 },
       { name: "ipad-landscape", width: 1180, height: 820 },
@@ -917,21 +1025,29 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     ];
 
     for (const viewport of viewports) {
-      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.setViewportSize({
+        width: viewport.width,
+        height: viewport.height,
+      });
       await openNewSale(page, "SALES_ORDER");
       const dimensions = await assertNoHorizontalOverflow(page);
-      await expect(page.getByLabel("Customer search")).toBeVisible();
       await expect(page.getByLabel("Product or SKU search")).toBeVisible();
+      await expect(page.getByLabel("Customer search")).toHaveCount(0);
       await expect(page.getByPlaceholder("Search products...")).toBeVisible();
-      await expect(page.getByText("Product Name")).toBeVisible();
-      await expect(page.getByText("Price").first()).toBeVisible();
-      await expect(page.getByText("Stock")).toBeVisible();
-      await expect(page.getByRole("button", { name: new RegExp(`Add ${escapeRegex(fixture.standardOne.name)} to cart`) })).toBeVisible();
+      await expect(
+        page.getByRole("button", {
+          name: new RegExp(
+            `Add ${escapeRegex(fixture.standardOne.name)} to cart`,
+          ),
+        }),
+      ).toBeVisible();
       await expect(page.getByTestId("totals-summary")).toBeVisible();
       await expect(page.getByTestId("primary-sale-action")).toBeVisible();
       await page.goto("/sales-orders/new?docType=QUOTE");
       await expect(page.getByTestId("new-sale-mode")).toHaveText("New Quote");
-      await expect(page.getByTestId("primary-sale-action")).toHaveText(/Save Quote/);
+      await expect(page.getByTestId("primary-sale-action")).toHaveText(
+        /Save Quote/,
+      );
       await assertNoHorizontalOverflow(page);
       await page.screenshot({
         path: `/private/tmp/solidcore-phase1b-${viewport.name}.png`,
@@ -943,7 +1059,7 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
         horizontalOverflow: false,
         clientWidth: dimensions.clientWidth,
         scrollWidth: dimensions.scrollWidth,
-        customerSearchVisible: true,
+        customerSearchAvailableByMode: true,
         productSearchVisible: true,
         productNameVisible: true,
         skuReadable: true,
@@ -957,14 +1073,20 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     }
   });
 
-  test("Scenario E - flooring browse path preserves BOX UOM and square-foot summary", async ({ page }) => {
+  test("Scenario E - flooring browse path preserves BOX UOM and square-foot summary", async ({
+    page,
+  }) => {
     const metrics = newMetrics("Scenario E - Flooring-Compatible Quantity");
     await openNewSale(page, "SALES_ORDER");
     await selectExistingCustomer(page, metrics);
 
-    const productApiResponse = await page.request.get(`/api/sales-orders/products?q=${encodeURIComponent(fixture.flooring.sku)}`);
+    const productApiResponse = await page.request.get(
+      `/api/sales-orders/products?q=${encodeURIComponent(fixture.flooring.sku)}`,
+    );
     const productApiBody = await productApiResponse.json();
-    const flooringProduct = productApiBody.data?.find((row: { id?: string }) => row.id === fixture.flooring.variantId);
+    const flooringProduct = productApiBody.data?.find(
+      (row: { id?: string }) => row.id === fixture.flooring.variantId,
+    );
     expect(flooringProduct).toMatchObject({
       id: fixture.flooring.variantId,
       productId: fixture.flooring.salesProductId,
@@ -976,8 +1098,8 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     await addProductFromBrowse(page, fixture.flooring, metrics);
     await setLineQuantity(page, fixture.flooring, "2", metrics);
     await Promise.all([
-      page.waitForURL(/\/orders\/[^/?#]+\?created=1&status=draft$/),
-      page.getByRole("button", { name: /Save Draft/ }).click(),
+      page.waitForURL(/\/orders\/[^/?#]+\?created=1&status=confirmed$/),
+      page.getByTestId("primary-sale-action").click(),
     ]);
     metrics.majorInteractions += 1;
     metrics.routeTransitions += 1;
@@ -986,7 +1108,7 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
     createdOrderIds.add(metrics.createdOrderId);
 
     const evidence = await captureOrderEvidence(metrics.createdOrderId);
-    expect(evidence.status).toBe("DRAFT");
+    expect(evidence.status).toBe("CONFIRMED");
     expect(evidence.items).toHaveLength(1);
     expect(evidence.items[0]).toMatchObject({
       variantId: fixture.flooring.variantId,
@@ -997,7 +1119,6 @@ test.describe.serial("SolidCore Phase 1B real-flow counter-sales validation", ()
       lineTotal: 60,
       uomSnapshot: "BOX",
     });
-    await expect(page.getByText("Unit: boxes")).toBeVisible();
     await expect(page.getByText("2 boxes (40 sqft)")).toBeVisible();
 
     results.scenarios.E = finishMetrics(metrics);
