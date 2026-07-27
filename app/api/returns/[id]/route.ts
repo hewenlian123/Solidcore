@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { applyCompletedReturnInventory, ReturnError } from "@/lib/returns";
-import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import {
+  deny,
+  getRequestRole,
+  getRequestUser,
+  hasOneOf,
+} from "@/lib/server-role";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -53,14 +58,17 @@ export async function GET(request: NextRequest, { params }: Params) {
     const afterSales = await prisma.afterSalesReturn.findUnique({
       where: { id },
       include: {
-        customer: { select: { id: true, name: true, phone: true, email: true } },
+        customer: {
+          select: { id: true, name: true, phone: true, email: true },
+        },
         salesOrder: { select: { id: true, orderNumber: true } },
         invoice: { select: { id: true, invoiceNumber: true } },
         items: { orderBy: { createdAt: "asc" } },
         events: { orderBy: { createdAt: "desc" }, take: 20 },
       },
     });
-    if (afterSales) return NextResponse.json({ data: afterSales }, { status: 200 });
+    if (afterSales)
+      return NextResponse.json({ data: afterSales }, { status: 200 });
 
     const data = await prisma.salesReturn.findUnique({
       where: { id },
@@ -93,11 +101,15 @@ export async function GET(request: NextRequest, { params }: Params) {
         },
       },
     });
-    if (!data) return NextResponse.json({ error: "Return not found." }, { status: 404 });
+    if (!data)
+      return NextResponse.json({ error: "Return not found." }, { status: 404 });
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
     console.error("GET /api/returns/[id] error:", error);
-    return NextResponse.json({ error: "Failed to load return." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to load return." },
+      { status: 500 },
+    );
   }
 }
 
@@ -105,6 +117,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   try {
     const role = getRequestRole(request);
     if (!hasOneOf(role, ["ADMIN", "SALES", "WAREHOUSE"])) return deny();
+    const requestUser = getRequestUser(request);
 
     const { id } = await params;
     const payload = await request.json();
@@ -122,12 +135,50 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       }
       const nextItems = Array.isArray(payload.items) ? payload.items : [];
       const data = await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw(
+          Prisma.sql`SELECT id FROM "after_sales_returns" WHERE id = ${id} FOR UPDATE`,
+        );
+        const currentReturn = await tx.afterSalesReturn.findUnique({
+          where: { id },
+          select: { id: true, refundMethod: true, status: true },
+        });
+        if (!currentReturn) throw new Error("AFTER_SALES_RETURN_NOT_FOUND");
         if (
           afterSalesStatus &&
-          afterSalesStatus !== existingAfterSales.status &&
-          !NEXT_AFTER_SALES_STATUS[existingAfterSales.status].includes(afterSalesStatus)
+          afterSalesStatus !== currentReturn.status &&
+          !NEXT_AFTER_SALES_STATUS[currentReturn.status].includes(
+            afterSalesStatus,
+          )
         ) {
           throw new Error("AFTER_SALES_STATUS_FLOW_INVALID");
+        }
+        if (
+          afterSalesStatus &&
+          afterSalesStatus !== currentReturn.status &&
+          ((afterSalesStatus === "APPROVED" && role !== "ADMIN") ||
+            (afterSalesStatus === "RECEIVED" &&
+              !hasOneOf(role, ["ADMIN", "WAREHOUSE"])) ||
+            (["REFUNDED", "CLOSED", "VOID"].includes(afterSalesStatus) &&
+              role !== "ADMIN"))
+        ) {
+          throw new Error("AFTER_SALES_STATUS_PERMISSION");
+        }
+        if (
+          afterSalesStatus === "REFUNDED" ||
+          (afterSalesStatus === "CLOSED" &&
+            currentReturn.status === "RECEIVED" &&
+            currentReturn.refundMethod === "REFUND_PAYMENT")
+        ) {
+          const postedRefundCount = await tx.salesOrderPayment.count({
+            where: {
+              approvedReturnId: id,
+              paymentType: "REFUND",
+              status: "POSTED",
+            },
+          });
+          if (postedRefundCount === 0) {
+            throw new Error("RETURN_REFUND_EVIDENCE_REQUIRED");
+          }
         }
         if (nextItems.length > 0) {
           for (const item of nextItems) {
@@ -136,8 +187,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             const qtyReturn = Number(item.qtyReturn ?? 0);
             const unitPrice = Number(item.unitPrice ?? 0);
             if (!itemId) throw new Error("RETURN_ITEM_ID_REQUIRED");
-            if (!Number.isFinite(qtyReturn) || qtyReturn < 0) throw new Error("RETURN_ITEM_QTY_INVALID");
-            if (Number.isFinite(qtyPurchased) && qtyPurchased >= 0 && qtyReturn > qtyPurchased + 0.0001) {
+            if (!Number.isFinite(qtyReturn) || qtyReturn < 0)
+              throw new Error("RETURN_ITEM_QTY_INVALID");
+            if (
+              Number.isFinite(qtyPurchased) &&
+              qtyPurchased >= 0 &&
+              qtyReturn > qtyPurchased + 0.0001
+            ) {
               throw new Error("RETURN_ITEM_QTY_EXCEED_PURCHASED");
             }
             const clampedQtyReturn = Number.isFinite(qtyPurchased)
@@ -147,10 +203,23 @@ export async function PATCH(request: NextRequest, { params }: Params) {
               where: { id: itemId },
               data: {
                 qtyReturn: clampedQtyReturn,
-                reason: item.reason !== undefined ? String(item.reason || "").trim() || null : undefined,
-                condition: item.condition !== undefined ? String(item.condition || "").trim() || null : undefined,
-                unitPrice: Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : undefined,
-                lineRefund: round2((Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : 0) * clampedQtyReturn),
+                reason:
+                  item.reason !== undefined
+                    ? String(item.reason || "").trim() || null
+                    : undefined,
+                condition:
+                  item.condition !== undefined
+                    ? String(item.condition || "").trim() || null
+                    : undefined,
+                unitPrice:
+                  Number.isFinite(unitPrice) && unitPrice >= 0
+                    ? unitPrice
+                    : undefined,
+                lineRefund: round2(
+                  (Number.isFinite(unitPrice) && unitPrice >= 0
+                    ? unitPrice
+                    : 0) * clampedQtyReturn,
+                ),
               },
             });
           }
@@ -161,17 +230,21 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           _sum: { lineRefund: true },
         });
         const refundTotal = round2(Number(aggregates._sum.lineRefund ?? 0));
-        const isClosingTransition =
-          afterSalesStatus === "CLOSED" && existingAfterSales.status !== "CLOSED";
+        const isReceivingTransition =
+          afterSalesStatus === "RECEIVED" &&
+          currentReturn.status !== "RECEIVED";
         const updated = await tx.afterSalesReturn.update({
           where: { id },
           data: {
             status: afterSalesStatus ?? undefined,
-            notes: payload.notes !== undefined ? String(payload.notes || "").trim() || null : undefined,
+            notes:
+              payload.notes !== undefined
+                ? String(payload.notes || "").trim() || null
+                : undefined,
             refundTotal,
           },
         });
-        if (isClosingTransition) {
+        if (isReceivingTransition) {
           const restockItems = await tx.afterSalesReturnItem.findMany({
             where: {
               returnId: id,
@@ -191,26 +264,36 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             if (qty.lte(0)) continue;
             await tx.inventoryStock.upsert({
               where: { variantId: row.variantId },
-              create: { variantId: row.variantId, onHand: qty, reserved: new Prisma.Decimal(0) },
-              update: { onHand: { increment: qty } },
+              create: {
+                variantId: row.variantId,
+                onHand: qty,
+                reserved: new Prisma.Decimal(0),
+                hold: qty,
+              },
+              update: {
+                onHand: { increment: qty },
+                hold: { increment: qty },
+              },
             });
             await tx.inventoryMovement.create({
               data: {
                 variantId: row.variantId,
-                type: "RETURN_ADD",
+                type: "RETURN_HOLD",
                 qty,
                 unit: "piece",
-                note: `After-sales return ${id}: Closed - ${row.sku || row.title || row.variantId}`,
+                note: `After-sales return ${id}: Received to Hold - ${row.sku || row.title || row.variantId}`,
               },
             });
           }
         }
-        if (afterSalesStatus) {
+        if (afterSalesStatus && afterSalesStatus !== currentReturn.status) {
           await tx.afterSalesReturnEvent.create({
             data: {
               returnId: id,
               status: afterSalesStatus,
-              note: payload.statusNote ? String(payload.statusNote) : `Status moved to ${afterSalesStatus}.`,
+              note: payload.statusNote
+                ? String(payload.statusNote)
+                : `Status moved to ${afterSalesStatus} by ${requestUser?.name || requestUser?.userId || "authorized user"}.`,
             },
           });
         }
@@ -219,12 +302,25 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       return NextResponse.json({ data }, { status: 200 });
     }
 
-    const nextStatus = payload.status !== undefined ? STATUS_MAP[String(payload.status).toLowerCase()] : undefined;
+    const nextStatus =
+      payload.status !== undefined
+        ? STATUS_MAP[String(payload.status).toLowerCase()]
+        : undefined;
     if (payload.status !== undefined && !nextStatus) {
       return NextResponse.json({ error: "Invalid status." }, { status: 400 });
     }
-    const reason = payload.reason !== undefined ? String(payload.reason || "").trim() || null : undefined;
-    const nextItems: Array<{ id: string; qty: number }> = Array.isArray(payload.items) ? payload.items : [];
+    const reason =
+      payload.reason !== undefined
+        ? String(payload.reason || "").trim() || null
+        : undefined;
+    const nextItems: Array<{ id: string; qty: number }> = Array.isArray(
+      payload.items,
+    )
+      ? payload.items
+      : [];
+    if (nextStatus === "COMPLETED" && role === "SALES") {
+      throw new Error("RETURN_RECEIVE_PERMISSION");
+    }
 
     const data = await prisma.$transaction(async (tx) => {
       const existing = await tx.salesReturn.findUnique({
@@ -232,7 +328,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         select: { id: true, status: true, completedAt: true },
       });
       if (!existing) throw new Error("RETURN_NOT_FOUND");
-      const isLocked = existing.status === "COMPLETED" || existing.status === "CANCELLED";
+      const isLocked =
+        existing.status === "COMPLETED" || existing.status === "CANCELLED";
       if (isLocked && nextItems.length > 0) throw new Error("RETURN_LOCKED");
 
       if (nextItems.length > 0) {
@@ -240,7 +337,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           const itemId = String(item.id ?? "").trim();
           const qty = Number(item.qty ?? 0);
           if (!itemId) throw new Error("RETURN_ITEM_ID_REQUIRED");
-          if (!Number.isFinite(qty) || qty < 0) throw new Error("RETURN_ITEM_QTY_INVALID");
+          if (!Number.isFinite(qty) || qty < 0)
+            throw new Error("RETURN_ITEM_QTY_INVALID");
           await tx.salesReturnItem.update({
             where: { id: itemId },
             data: { qty },
@@ -268,7 +366,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           items: {
             orderBy: { createdAt: "asc" },
             include: {
-              fulfillmentItem: { select: { id: true, title: true, sku: true, unit: true } },
+              fulfillmentItem: {
+                select: { id: true, title: true, sku: true, unit: true },
+              },
               variant: { select: { id: true, sku: true, displayName: true } },
             },
           },
@@ -279,33 +379,102 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
     if (error instanceof ReturnError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
+      return NextResponse.json(
+        { error: error.message },
+        { status: error.status },
+      );
     }
     if (error instanceof Error && error.message === "RETURN_NOT_FOUND") {
       return NextResponse.json({ error: "Return not found." }, { status: 404 });
     }
     if (error instanceof Error && error.message === "RETURN_LOCKED") {
-      return NextResponse.json({ error: "Cannot edit items when return is completed/cancelled." }, { status: 409 });
+      return NextResponse.json(
+        { error: "Cannot edit items when return is completed/cancelled." },
+        { status: 409 },
+      );
     }
     if (error instanceof Error && error.message === "RETURN_ITEM_ID_REQUIRED") {
-      return NextResponse.json({ error: "Return item id is required." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Return item id is required." },
+        { status: 400 },
+      );
     }
     if (error instanceof Error && error.message === "RETURN_ITEM_QTY_INVALID") {
-      return NextResponse.json({ error: "Return item qty must be >= 0." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Return item qty must be >= 0." },
+        { status: 400 },
+      );
     }
-    if (error instanceof Error && error.message === "RETURN_ITEM_QTY_EXCEED_PURCHASED") {
-      return NextResponse.json({ error: "Return qty cannot exceed purchased qty." }, { status: 400 });
+    if (
+      error instanceof Error &&
+      error.message === "RETURN_ITEM_QTY_EXCEED_PURCHASED"
+    ) {
+      return NextResponse.json(
+        { error: "Return qty cannot exceed purchased qty." },
+        { status: 400 },
+      );
     }
-    if (error instanceof Error && error.message === "AFTER_SALES_RETURN_NOT_FOUND") {
-      return NextResponse.json({ error: "After-sales return not found." }, { status: 404 });
+    if (
+      error instanceof Error &&
+      error.message === "AFTER_SALES_RETURN_NOT_FOUND"
+    ) {
+      return NextResponse.json(
+        { error: "After-sales return not found." },
+        { status: 404 },
+      );
     }
-    if (error instanceof Error && error.message === "AFTER_SALES_STATUS_INVALID") {
-      return NextResponse.json({ error: "Invalid after-sales return status." }, { status: 400 });
+    if (
+      error instanceof Error &&
+      error.message === "AFTER_SALES_STATUS_INVALID"
+    ) {
+      return NextResponse.json(
+        { error: "Invalid after-sales return status." },
+        { status: 400 },
+      );
     }
-    if (error instanceof Error && error.message === "AFTER_SALES_STATUS_FLOW_INVALID") {
-      return NextResponse.json({ error: "Invalid status transition." }, { status: 400 });
+    if (
+      error instanceof Error &&
+      error.message === "AFTER_SALES_STATUS_FLOW_INVALID"
+    ) {
+      return NextResponse.json(
+        { error: "Invalid status transition." },
+        { status: 400 },
+      );
+    }
+    if (
+      error instanceof Error &&
+      error.message === "AFTER_SALES_STATUS_PERMISSION"
+    ) {
+      return NextResponse.json(
+        { error: "This return transition requires an authorized role." },
+        { status: 403 },
+      );
+    }
+    if (
+      error instanceof Error &&
+      error.message === "RETURN_RECEIVE_PERMISSION"
+    ) {
+      return NextResponse.json(
+        { error: "Receiving a return requires Warehouse or Owner/Manager." },
+        { status: 403 },
+      );
+    }
+    if (
+      error instanceof Error &&
+      error.message === "RETURN_REFUND_EVIDENCE_REQUIRED"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "A posted refund linked to this approved return is required before marking it refunded or closed.",
+        },
+        { status: 409 },
+      );
     }
     console.error("PATCH /api/returns/[id] error:", error);
-    return NextResponse.json({ error: "Failed to update return." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update return." },
+      { status: 500 },
+    );
   }
 }

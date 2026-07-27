@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, SalesPaymentMethod } from "@prisma/client";
 import { withSalesOrderDepositSummary } from "@/lib/deposit-summary";
-import { computeInvoicePaidAndBalance, deriveInvoiceStatus } from "@/lib/invoices";
+import {
+  computeInvoicePaidAndBalance,
+  deriveInvoiceStatus,
+} from "@/lib/invoices";
 import { remainingRefundableCents } from "@/lib/payment-ledger";
 import {
   buildPaymentIdempotencyFingerprint,
@@ -16,15 +19,31 @@ import {
 } from "@/lib/payment-creation-integrity";
 import { prisma } from "@/lib/prisma";
 import { recalculateSalesOrder } from "@/lib/sales-orders";
-import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import {
+  deny,
+  getRequestRole,
+  getRequestUser,
+  hasOneOf,
+} from "@/lib/server-role";
 
 type Params = {
   params: Promise<{ id: string; paymentId: string }>;
 };
 
-const SALES_PAYMENT_METHOD_VALUES = ["CASH", "CHECK", "CARD", "BANK", "OTHER"] as const;
+const SALES_PAYMENT_METHOD_VALUES = [
+  "CASH",
+  "CHECK",
+  "CARD",
+  "BANK",
+  "OTHER",
+] as const;
 
-async function loadOrderResponse(id: string, status: number, idempotent = false, refundId?: string | null) {
+async function loadOrderResponse(
+  id: string,
+  status: number,
+  idempotent = false,
+  refundId?: string | null,
+) {
   const data = await prisma.salesOrder.findUnique({
     where: { id },
     include: {
@@ -48,28 +67,50 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   try {
     const role = getRequestRole(request);
-    if (!hasOneOf(role, ["ADMIN", "SALES"])) return deny();
+    if (!hasOneOf(role, ["ADMIN"])) {
+      return NextResponse.json(
+        {
+          error:
+            "Refund posting requires Owner/Manager approval and accounting review.",
+        },
+        { status: 403 },
+      );
+    }
+    const requestUser = getRequestUser(request);
+    if (!requestUser) return deny();
+    const approvalActor = `${requestUser.name} (${requestUser.userId})`;
 
     const { id, paymentId } = await params;
     orderId = id;
     if (!id || !paymentId) {
-      return NextResponse.json({ error: "Missing order id or payment id." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing order id or payment id." },
+        { status: 400 },
+      );
     }
 
     const payload = await request.json();
     const amount = parsePositivePaymentAmount(payload?.amount);
-    const parsedKey = parseIdempotencyKey(request.headers.get("idempotency-key"));
+    const parsedKey = parseIdempotencyKey(
+      request.headers.get("idempotency-key"),
+    );
     const requiredKey = requirePaymentIdempotencyKey(parsedKey);
     const receivedAt = parseOptionalReceivedAt(payload?.receivedAt);
     const requestedMethod =
       payload?.method == null || payload?.method === ""
         ? null
         : String(payload.method).trim().toUpperCase();
-    const referenceNumber = normalizeOptionalText(payload?.referenceNumber, { trim: false });
+    const referenceNumber = normalizeOptionalText(payload?.referenceNumber, {
+      trim: false,
+    });
     const notes = normalizeOptionalText(payload?.notes, { trim: false });
+    let approvedReturnId = normalizeOptionalText(payload?.approvedReturnId);
 
     if (!amount) {
-      return NextResponse.json({ error: "Refund amount must be greater than 0." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Refund amount must be greater than 0." },
+        { status: 400 },
+      );
     }
     if (!parsedKey.ok) {
       return NextResponse.json({ error: parsedKey.error }, { status: 400 });
@@ -86,7 +127,10 @@ export async function POST(request: NextRequest, { params }: Params) {
         requestedMethod as (typeof SALES_PAYMENT_METHOD_VALUES)[number],
       )
     ) {
-      return NextResponse.json({ error: "Invalid refund method." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid refund method." },
+        { status: 400 },
+      );
     }
 
     idempotencyKey = requiredKey.key;
@@ -96,7 +140,10 @@ export async function POST(request: NextRequest, { params }: Params) {
         const orderLocked = await lockSalesOrderForPayment(tx, id);
         if (!orderLocked) throw new Error("ORDER_NOT_FOUND");
 
-        const originalLocked = await lockSalesOrderPaymentForRefund(tx, paymentId);
+        const originalLocked = await lockSalesOrderPaymentForRefund(
+          tx,
+          paymentId,
+        );
         if (!originalLocked) throw new Error("PAYMENT_NOT_FOUND");
 
         const original = await tx.salesOrderPayment.findUnique({
@@ -113,10 +160,111 @@ export async function POST(request: NextRequest, { params }: Params) {
           },
         });
         if (!original) throw new Error("PAYMENT_NOT_FOUND");
-        if (original.salesOrderId !== id) throw new Error("PAYMENT_WRONG_ORDER");
+        if (original.salesOrderId !== id)
+          throw new Error("PAYMENT_WRONG_ORDER");
         if (original.status !== "POSTED") throw new Error("PAYMENT_NOT_POSTED");
         if (original.paymentType === "REFUND" || original.refundOfPaymentId) {
           throw new Error("REFUND_OF_REFUND");
+        }
+
+        let commercialReductionSnapshot = new Prisma.Decimal(0);
+        if (original.invoiceId) {
+          const invoice = await tx.invoice.findUnique({
+            where: { id: original.invoiceId },
+            select: { discountAmount: true },
+          });
+          commercialReductionSnapshot = new Prisma.Decimal(
+            invoice?.discountAmount ?? 0,
+          );
+        }
+
+        if (!approvedReturnId) {
+          const candidates = await tx.afterSalesReturn.findMany({
+            where: {
+              salesOrderId: id,
+              refundMethod: "REFUND_PAYMENT",
+              status: { in: ["APPROVED", "RECEIVED", "REFUNDED"] },
+              ...(original.invoiceId
+                ? {
+                    OR: [
+                      { invoiceId: original.invoiceId },
+                      { invoiceId: null },
+                    ],
+                  }
+                : {}),
+            },
+            orderBy: { updatedAt: "desc" },
+            select: { id: true, refundTotal: true },
+          });
+          for (const candidate of candidates) {
+            const posted = await tx.salesOrderPayment.aggregate({
+              where: {
+                approvedReturnId: candidate.id,
+                paymentType: "REFUND",
+                status: "POSTED",
+              },
+              _sum: { amount: true },
+            });
+            const remainingCents = Math.max(
+              Math.round(Number(candidate.refundTotal) * 100) -
+                Math.round(Number(posted._sum.amount ?? 0) * 100),
+              0,
+            );
+            if (!isPaymentOverBalance(amount.cents, remainingCents)) {
+              approvedReturnId = candidate.id;
+              break;
+            }
+          }
+        }
+
+        if (approvedReturnId) {
+          const approvedReturn = await tx.afterSalesReturn.findUnique({
+            where: { id: approvedReturnId },
+            select: {
+              id: true,
+              invoiceId: true,
+              refundMethod: true,
+              refundTotal: true,
+              salesOrderId: true,
+              status: true,
+            },
+          });
+          if (!approvedReturn) throw new Error("APPROVED_RETURN_NOT_FOUND");
+          if (
+            approvedReturn.salesOrderId !== id ||
+            (approvedReturn.invoiceId &&
+              original.invoiceId &&
+              approvedReturn.invoiceId !== original.invoiceId)
+          ) {
+            throw new Error("APPROVED_RETURN_WRONG_SCOPE");
+          }
+          if (
+            !["APPROVED", "RECEIVED", "REFUNDED", "CLOSED"].includes(
+              approvedReturn.status,
+            ) ||
+            approvedReturn.refundMethod !== "REFUND_PAYMENT"
+          ) {
+            throw new Error("RETURN_NOT_APPROVED_FOR_REFUND");
+          }
+          const priorAuthorizedRefunds = await tx.salesOrderPayment.aggregate({
+            where: {
+              approvedReturnId,
+              paymentType: "REFUND",
+              status: "POSTED",
+            },
+            _sum: { amount: true },
+          });
+          const authorizedRemainingCents = Math.max(
+            Math.round(Number(approvedReturn.refundTotal) * 100) -
+              Math.round(Number(priorAuthorizedRefunds._sum.amount ?? 0) * 100),
+            0,
+          );
+          if (
+            authorizedRemainingCents <= 0 ||
+            isPaymentOverBalance(amount.cents, authorizedRemainingCents)
+          ) {
+            throw new Error("RETURN_REFUND_AUTHORITY_EXCEEDED");
+          }
         }
 
         const method = requestedMethod ?? original.method;
@@ -125,6 +273,8 @@ export async function POST(request: NextRequest, { params }: Params) {
           method,
           notes,
           originalPaymentId: original.id,
+          approvedReturnId,
+          approvalActor,
           receivedAt: receivedAt.fingerprintValue,
           referenceNumber,
           salesOrderId: id,
@@ -164,8 +314,14 @@ export async function POST(request: NextRequest, { params }: Params) {
             status: true,
           },
         });
-        const remainingCents = remainingRefundableCents(original, orderPayments);
-        if (remainingCents <= 0 || isPaymentOverBalance(amount.cents, remainingCents)) {
+        const remainingCents = remainingRefundableCents(
+          original,
+          orderPayments,
+        );
+        if (
+          remainingCents <= 0 ||
+          isPaymentOverBalance(amount.cents, remainingCents)
+        ) {
           throw new Error("OVER_REFUND");
         }
 
@@ -174,6 +330,10 @@ export async function POST(request: NextRequest, { params }: Params) {
             salesOrderId: id,
             invoiceId: original.invoiceId,
             refundOfPaymentId: original.id,
+            approvedReturnId,
+            refundApprovalActor: approvalActor,
+            refundReviewActor: approvalActor,
+            commercialReductionSnapshot,
             amount: amount.amount,
             method: method as SalesPaymentMethod,
             paymentType: "REFUND",
@@ -193,8 +353,16 @@ export async function POST(request: NextRequest, { params }: Params) {
             select: { id: true, status: true, total: true },
           });
           if (invoice) {
-            const totals = await computeInvoicePaidAndBalance(tx, invoice.id, Number(invoice.total));
-            const nextStatus = deriveInvoiceStatus(invoice.status, totals.paidTotal, Number(invoice.total));
+            const totals = await computeInvoicePaidAndBalance(
+              tx,
+              invoice.id,
+              Number(invoice.total),
+            );
+            const nextStatus = deriveInvoiceStatus(
+              invoice.status,
+              totals.paidTotal,
+              Number(invoice.total),
+            );
             await tx.invoice.update({
               where: { id: invoice.id },
               data: { status: nextStatus },
@@ -208,7 +376,12 @@ export async function POST(request: NextRequest, { params }: Params) {
       { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
     );
 
-    return loadOrderResponse(id, result.idempotent ? 200 : 201, result.idempotent, result.refundId);
+    return loadOrderResponse(
+      id,
+      result.idempotent ? 200 : 201,
+      result.idempotent,
+      result.refundId,
+    );
   } catch (error) {
     if (
       idempotencyKey &&
@@ -234,7 +407,10 @@ export async function POST(request: NextRequest, { params }: Params) {
         return loadOrderResponse(orderId, 200, true, existingPayment.id);
       }
       return NextResponse.json(
-        { error: "Idempotency key was already used for a different refund request." },
+        {
+          error:
+            "Idempotency key was already used for a different refund request.",
+        },
         { status: 409 },
       );
     }
@@ -243,7 +419,10 @@ export async function POST(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
     }
     if (error instanceof Error && error.message === "PAYMENT_NOT_FOUND") {
-      return NextResponse.json({ error: "Original payment not found." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Original payment not found." },
+        { status: 404 },
+      );
     }
     if (error instanceof Error && error.message === "PAYMENT_WRONG_ORDER") {
       return NextResponse.json(
@@ -258,21 +437,72 @@ export async function POST(request: NextRequest, { params }: Params) {
       );
     }
     if (error instanceof Error && error.message === "REFUND_OF_REFUND") {
-      return NextResponse.json({ error: "Refund payments cannot be refunded." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Refund payments cannot be refunded." },
+        { status: 400 },
+      );
     }
     if (error instanceof Error && error.message === "OVER_REFUND") {
       return NextResponse.json(
-        { error: "Refund exceeds the remaining refundable amount for this payment." },
+        {
+          error:
+            "Refund exceeds the remaining refundable amount for this payment.",
+        },
+        { status: 400 },
+      );
+    }
+    if (
+      error instanceof Error &&
+      error.message === "APPROVED_RETURN_NOT_FOUND"
+    ) {
+      return NextResponse.json(
+        { error: "Approved return not found." },
+        { status: 404 },
+      );
+    }
+    if (
+      error instanceof Error &&
+      error.message === "APPROVED_RETURN_WRONG_SCOPE"
+    ) {
+      return NextResponse.json(
+        { error: "Approved return belongs to a different order or invoice." },
+        { status: 400 },
+      );
+    }
+    if (
+      error instanceof Error &&
+      error.message === "RETURN_NOT_APPROVED_FOR_REFUND"
+    ) {
+      return NextResponse.json(
+        { error: "Return is not approved for a payment refund." },
+        { status: 409 },
+      );
+    }
+    if (
+      error instanceof Error &&
+      error.message === "RETURN_REFUND_AUTHORITY_EXCEEDED"
+    ) {
+      return NextResponse.json(
+        { error: "Refund exceeds the approved return amount." },
         { status: 400 },
       );
     }
     if (error instanceof Error && error.message === "IDEMPOTENCY_CONFLICT") {
       return NextResponse.json(
-        { error: "Idempotency key was already used for a different refund request." },
+        {
+          error:
+            "Idempotency key was already used for a different refund request.",
+        },
         { status: 409 },
       );
     }
-    console.error("POST /api/sales-orders/[id]/payments/[paymentId]/refunds error:", error);
-    return NextResponse.json({ error: "Failed to create refund." }, { status: 500 });
+    console.error(
+      "POST /api/sales-orders/[id]/payments/[paymentId]/refunds error:",
+      error,
+    );
+    return NextResponse.json(
+      { error: "Failed to create refund." },
+      { status: 500 },
+    );
   }
 }

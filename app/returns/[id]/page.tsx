@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useRole } from "@/components/layout/role-provider";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type ReturnDetail = {
   id: string;
@@ -61,9 +68,17 @@ export default function ReturnDetailPage() {
       currentReturnQty: number;
     }>
   >([]);
-  const [pickerQtyDrafts, setPickerQtyDrafts] = useState<Record<string, string>>({});
+  const [pickerQtyDrafts, setPickerQtyDrafts] = useState<
+    Record<string, string>
+  >({});
   const [pickerFulfillments, setPickerFulfillments] = useState<
-    Array<{ id: string; type: string; status: string; scheduledAt: string | null; scheduledDate: string | null }>
+    Array<{
+      id: string;
+      type: string;
+      status: string;
+      scheduledAt: string | null;
+      scheduledDate: string | null;
+    }>
   >([]);
 
   const load = async () => {
@@ -80,7 +95,9 @@ export default function ReturnDetailPage() {
       setData(next);
       setReason(next.reason ?? "");
       setQtyDrafts(
-        Object.fromEntries(next.items.map((item) => [item.id, String(item.qty ?? "0")])),
+        Object.fromEntries(
+          next.items.map((item) => [item.id, String(item.qty ?? "0")]),
+        ),
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load return");
@@ -92,10 +109,12 @@ export default function ReturnDetailPage() {
   useEffect(() => {
     if (!id) return;
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, role]);
 
-  const isLocked = useMemo(() => data?.status === "COMPLETED" || data?.status === "CANCELLED", [data?.status]);
+  const isLocked = useMemo(
+    () => data?.status === "COMPLETED" || data?.status === "CANCELLED",
+    [data?.status],
+  );
 
   const loadPicker = async (targetFulfillmentId?: string) => {
     if (!data) return;
@@ -103,25 +122,38 @@ export default function ReturnDetailPage() {
       setPickerLoading(true);
       setPickerError(null);
       const params = new URLSearchParams();
-      const chosen = targetFulfillmentId ?? pickerFulfillmentId ?? data.fulfillment?.id ?? "";
+      const chosen =
+        targetFulfillmentId ??
+        pickerFulfillmentId ??
+        data.fulfillment?.id ??
+        "";
       if (chosen) params.set("fulfillmentId", chosen);
-      const res = await fetch(`/api/returns/${data.id}/picker-items?${params.toString()}`, {
-        cache: "no-store",
-        headers: { "x-user-role": role },
-      });
+      const res = await fetch(
+        `/api/returns/${data.id}/picker-items?${params.toString()}`,
+        {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        },
+      );
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to load fulfillment items");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to load fulfillment items");
       const nextItems = payload.data?.items ?? [];
       setPickerItems(nextItems);
       setPickerFulfillments(payload.data?.availableFulfillments ?? []);
       setPickerFulfillmentId(payload.data?.fulfillmentId ?? chosen ?? "");
       setPickerQtyDrafts(
         Object.fromEntries(
-          nextItems.map((item: { fulfillmentItemId: string }) => [item.fulfillmentItemId, "0"]),
+          nextItems.map((item: { fulfillmentItemId: string }) => [
+            item.fulfillmentItemId,
+            "0",
+          ]),
         ),
       );
     } catch (err) {
-      setPickerError(err instanceof Error ? err.message : "Failed to load fulfillment items");
+      setPickerError(
+        err instanceof Error ? err.message : "Failed to load fulfillment items",
+      );
     } finally {
       setPickerLoading(false);
     }
@@ -144,10 +176,15 @@ export default function ReturnDetailPage() {
           max: Number(item.maxReturnable ?? 0),
         }))
         .filter((row) => row.qty > 0);
-      if (rows.length === 0) throw new Error("Enter return qty for at least one item.");
+      if (rows.length === 0)
+        throw new Error("Enter return qty for at least one item.");
       for (const row of rows) {
-        if (!Number.isFinite(row.qty) || row.qty <= 0) throw new Error("Return qty must be > 0.");
-        if (row.qty > row.max + 0.0001) throw new Error(`Return qty exceeds max returnable (${row.max.toFixed(2)}).`);
+        if (!Number.isFinite(row.qty) || row.qty <= 0)
+          throw new Error("Return qty must be > 0.");
+        if (row.qty > row.max + 0.0001)
+          throw new Error(
+            `Return qty exceeds max returnable (${row.max.toFixed(2)}).`,
+          );
       }
       const res = await fetch(`/api/returns/${data.id}/picker-items`, {
         method: "POST",
@@ -158,12 +195,15 @@ export default function ReturnDetailPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to add return items.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to add return items.");
       setSuccess("Return items added.");
       setOpenAddItems(false);
       await load();
     } catch (err) {
-      setPickerError(err instanceof Error ? err.message : "Failed to add return items");
+      setPickerError(
+        err instanceof Error ? err.message : "Failed to add return items",
+      );
     } finally {
       setPickerSaving(false);
     }
@@ -218,37 +258,68 @@ export default function ReturnDetailPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to update return status");
-      setSuccess(status === "completed" ? "Return completed and inventory restored." : "Return cancelled.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to update return status");
+      setSuccess(
+        status === "completed"
+          ? "Return received to Hold. Inventory disposition is still required."
+          : "Return cancelled.",
+      );
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update return status");
+      setError(
+        err instanceof Error ? err.message : "Failed to update return status",
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) return <div className="linear-card p-8 text-sm text-slate-500">Loading return...</div>;
-  if (!data) return <div className="linear-card p-8 text-sm text-slate-500">Return not found.</div>;
+  if (loading)
+    return (
+      <div className="linear-card p-8 text-sm text-slate-500">
+        Loading return...
+      </div>
+    );
+  if (!data)
+    return (
+      <div className="linear-card p-8 text-sm text-slate-500">
+        Return not found.
+      </div>
+    );
 
   return (
     <section className="space-y-6">
-      {error ? <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div> : null}
-      {success ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
+      {error ? (
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
+      ) : null}
+      {success ? (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+          {success}
+        </div>
+      ) : null}
 
       <div className="linear-card p-8">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Return · {data.id}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+              Return · {data.id}
+            </h1>
             <p className="mt-2 text-sm text-slate-500">
-              SO: {data.salesOrder.orderNumber} · Customer: {data.salesOrder.customer?.name ?? "-"}
+              SO: {data.salesOrder.orderNumber} · Customer:{" "}
+              {data.salesOrder.customer?.name ?? "-"}
             </p>
             <p className="mt-1 text-xs text-slate-500">
               Fulfillment: {data.fulfillment?.id ?? "-"} · Status: {data.status}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Link href={`/sales-orders/${data.salesOrder.id}`} className="ios-secondary-btn h-9 px-3 text-xs">
+            <Link
+              href={`/sales-orders/${data.salesOrder.id}`}
+              className="ios-secondary-btn h-9 px-3 text-xs"
+            >
               View Sales Order
             </Link>
             <button
@@ -273,7 +344,7 @@ export default function ReturnDetailPage() {
               disabled={saving || isLocked}
               className="ios-primary-btn h-9 px-3 text-xs disabled:opacity-60"
             >
-              Complete Return
+              Receive to Hold
             </button>
             <button
               type="button"
@@ -298,14 +369,16 @@ export default function ReturnDetailPage() {
           />
         </label>
         <p className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-          Refunds are issued from the original payment on the Sales Order. Completing this return
-          restores inventory only.
+          Refunds are issued from the original payment on the Sales Order.
+          Completing this return restores inventory only.
         </p>
       </div>
 
       <div className="linear-card overflow-hidden p-0">
         <div className="border-b border-slate-100 px-6 py-4">
-          <h2 className="text-base font-semibold text-slate-900">Return Items</h2>
+          <h2 className="text-base font-semibold text-slate-900">
+            Return Items
+          </h2>
         </div>
         <Table>
           <TableHeader>
@@ -325,20 +398,34 @@ export default function ReturnDetailPage() {
               </TableRow>
             ) : (
               data.items.map((item) => (
-                <TableRow key={item.id} className="odd:bg-white even:bg-slate-50/40">
+                <TableRow
+                  key={item.id}
+                  className="odd:bg-white even:bg-slate-50/40"
+                >
                   <TableCell className="font-medium text-slate-900">
                     {item.fulfillmentItem.title}
-                    <span className="ml-1 text-xs text-slate-500">({item.fulfillmentItem.unit})</span>
+                    <span className="ml-1 text-xs text-slate-500">
+                      ({item.fulfillmentItem.unit})
+                    </span>
                   </TableCell>
-                  <TableCell className="text-xs text-slate-500">{item.fulfillmentItem.sku || item.variant.sku || "-"}</TableCell>
-                  <TableCell className="text-right">{Number(item.fulfillmentItem.fulfilledQty ?? 0).toFixed(2)}</TableCell>
+                  <TableCell className="text-xs text-slate-500">
+                    {item.fulfillmentItem.sku || item.variant.sku || "-"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {Number(item.fulfillmentItem.fulfilledQty ?? 0).toFixed(2)}
+                  </TableCell>
                   <TableCell className="text-right">
                     <input
                       type="number"
                       min="0"
                       step="0.01"
                       value={qtyDrafts[item.id] ?? item.qty}
-                      onChange={(e) => setQtyDrafts((prev) => ({ ...prev, [item.id]: e.target.value }))}
+                      onChange={(e) =>
+                        setQtyDrafts((prev) => ({
+                          ...prev,
+                          [item.id]: e.target.value,
+                        }))
+                      }
                       disabled={isLocked}
                       className="ios-input ml-auto h-9 w-24 px-2 text-right text-xs"
                     />
@@ -354,7 +441,9 @@ export default function ReturnDetailPage() {
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/25 p-4">
           <div className="linear-card w-full max-w-5xl p-6">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-base font-semibold text-slate-900">Add Items from Fulfillment</h3>
+              <h3 className="text-base font-semibold text-slate-900">
+                Add Items from Fulfillment
+              </h3>
               <button
                 type="button"
                 onClick={() => setOpenAddItems(false)}
@@ -390,7 +479,9 @@ export default function ReturnDetailPage() {
                     <option key={item.id} value={item.id}>
                       {item.type} · {item.status} ·{" "}
                       {item.scheduledAt || item.scheduledDate
-                        ? new Date(item.scheduledAt ?? item.scheduledDate ?? "").toLocaleDateString("en-US", { timeZone: "UTC" })
+                        ? new Date(
+                            item.scheduledAt ?? item.scheduledDate ?? "",
+                          ).toLocaleDateString("en-US", { timeZone: "UTC" })
                         : "-"}
                     </option>
                   ))}
@@ -405,7 +496,9 @@ export default function ReturnDetailPage() {
                     <TableHead>Item</TableHead>
                     <TableHead>SKU</TableHead>
                     <TableHead className="text-right">Fulfilled Qty</TableHead>
-                    <TableHead className="text-right">Already Returned</TableHead>
+                    <TableHead className="text-right">
+                      Already Returned
+                    </TableHead>
                     <TableHead className="text-right">Max Returnable</TableHead>
                     <TableHead className="text-right">Return Qty</TableHead>
                   </TableRow>
@@ -413,31 +506,52 @@ export default function ReturnDetailPage() {
                 <TableBody>
                   {pickerLoading ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-slate-500">
+                      <TableCell
+                        colSpan={6}
+                        className="text-center text-slate-500"
+                      >
                         Loading fulfillment items...
                       </TableCell>
                     </TableRow>
                   ) : pickerItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center text-slate-500">
+                      <TableCell
+                        colSpan={6}
+                        className="text-center text-slate-500"
+                      >
                         No fulfillment items available.
                       </TableCell>
                     </TableRow>
                   ) : (
                     pickerItems.map((item) => (
-                      <TableRow key={item.fulfillmentItemId} className="odd:bg-white even:bg-slate-50/40">
-                        <TableCell className="font-medium text-slate-900">{item.title}</TableCell>
-                        <TableCell className="text-xs text-slate-500">{item.sku || "-"}</TableCell>
-                        <TableCell className="text-right">{item.fulfilledQty.toFixed(2)}</TableCell>
-                        <TableCell className="text-right">{item.alreadyReturnedQty.toFixed(2)}</TableCell>
-                        <TableCell className="text-right">{item.maxReturnable.toFixed(2)}</TableCell>
+                      <TableRow
+                        key={item.fulfillmentItemId}
+                        className="odd:bg-white even:bg-slate-50/40"
+                      >
+                        <TableCell className="font-medium text-slate-900">
+                          {item.title}
+                        </TableCell>
+                        <TableCell className="text-xs text-slate-500">
+                          {item.sku || "-"}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {item.fulfilledQty.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {item.alreadyReturnedQty.toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {item.maxReturnable.toFixed(2)}
+                        </TableCell>
                         <TableCell className="text-right">
                           <input
                             type="number"
                             min="0"
                             step="0.01"
                             max={item.maxReturnable}
-                            value={pickerQtyDrafts[item.fulfillmentItemId] ?? "0"}
+                            value={
+                              pickerQtyDrafts[item.fulfillmentItemId] ?? "0"
+                            }
                             onChange={(e) =>
                               setPickerQtyDrafts((prev) => ({
                                 ...prev,

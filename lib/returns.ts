@@ -34,15 +34,19 @@ export async function applyCompletedReturnInventory(
   });
   if (!salesReturn) throw new ReturnError("Return not found.", 404);
   if (salesReturn.status !== "COMPLETED") {
-    throw new ReturnError("Return status must be completed before applying inventory.");
+    throw new ReturnError(
+      "Return status must be completed before applying inventory.",
+    );
   }
-  if (salesReturn.completedAt) return { applied: false, reason: "already_applied" as const };
+  if (salesReturn.completedAt)
+    return { applied: false, reason: "already_applied" as const };
 
   const claim = await tx.salesReturn.updateMany({
     where: { id: salesReturn.id, completedAt: null },
     data: { completedAt: new Date() },
   });
-  if (claim.count === 0) return { applied: false, reason: "already_applied" as const };
+  if (claim.count === 0)
+    return { applied: false, reason: "already_applied" as const };
 
   for (const item of salesReturn.items) {
     const qty = new Prisma.Decimal(item.qty ?? 0);
@@ -50,17 +54,25 @@ export async function applyCompletedReturnInventory(
 
     await tx.inventoryStock.upsert({
       where: { variantId: item.variantId },
-      create: { variantId: item.variantId, onHand: qty, reserved: new Prisma.Decimal(0) },
-      update: { onHand: { increment: qty } },
+      create: {
+        variantId: item.variantId,
+        onHand: qty,
+        reserved: new Prisma.Decimal(0),
+        hold: qty,
+      },
+      update: {
+        onHand: { increment: qty },
+        hold: { increment: qty },
+      },
     });
 
     await tx.inventoryMovement.create({
       data: {
         variantId: item.variantId,
-        type: "RETURN_ADD",
+        type: "RETURN_HOLD",
         qty,
         unit: item.fulfillmentItem.unit ?? "unit",
-        note: `Return ${salesReturn.id}: Return completed - ${item.fulfillmentItem.sku || item.fulfillmentItem.title || item.id}`,
+        note: `Return ${salesReturn.id}: Received to Hold - ${item.fulfillmentItem.sku || item.fulfillmentItem.title || item.id}`,
       },
     });
   }

@@ -25,12 +25,17 @@ function loadLocalEnv() {
 
 function assertSafeDatabase() {
   const rawUrl = process.env.DATABASE_URL;
-  if (!rawUrl) throw new Error("DATABASE_URL is required for refund schema authority tests.");
+  if (!rawUrl)
+    throw new Error(
+      "DATABASE_URL is required for refund schema authority tests.",
+    );
   const url = new URL(rawUrl);
   const isLocal = ["localhost", "127.0.0.1", "::1"].includes(url.hostname);
   const isExplicitTestDb = /test/i.test(url.pathname);
   if (!isLocal && !isExplicitTestDb) {
-    throw new Error("Refusing to run refund schema tests against a non-local, non-test database.");
+    throw new Error(
+      "Refusing to run refund schema tests against a non-local, non-test database.",
+    );
   }
 }
 
@@ -55,9 +60,14 @@ function createSessionCookie() {
     name: "Phase 4A-5A Test Admin",
     exp: Math.floor(Date.now() / 1000) + 60 * 60,
   };
-  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-  const secret = process.env.AUTH_SESSION_SECRET || "solidcore-dev-session-secret-change-me";
-  const signature = createHmac("sha256", secret).update(encoded).digest("base64url");
+  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString(
+    "base64url",
+  );
+  const secret =
+    process.env.AUTH_SESSION_SECRET || "solidcore-dev-session-secret-change-me";
+  const signature = createHmac("sha256", secret)
+    .update(encoded)
+    .digest("base64url");
   return `solidcore_session=${encoded}.${signature}`;
 }
 
@@ -115,28 +125,38 @@ async function cleanupTaggedFixtures() {
   const paymentIds = payments.map((payment) => payment.id);
 
   await prisma.salesOrderPayment.deleteMany({
-    where: paymentIds.length ? { id: { in: paymentIds }, paymentType: "REFUND" } : { id: "__none__" },
+    where: paymentIds.length
+      ? { id: { in: paymentIds }, paymentType: "REFUND" }
+      : { id: "__none__" },
   });
   await prisma.salesOrderPayment.deleteMany({
     where: paymentIds.length ? { id: { in: paymentIds } } : { id: "__none__" },
   });
   await prisma.invoiceItem.deleteMany({
-    where: invoiceIds.length ? { invoiceId: { in: invoiceIds } } : { invoiceId: "__none__" },
+    where: invoiceIds.length
+      ? { invoiceId: { in: invoiceIds } }
+      : { invoiceId: "__none__" },
   });
   await prisma.invoice.deleteMany({
     where: invoiceIds.length ? { id: { in: invoiceIds } } : { id: "__none__" },
   });
   await prisma.salesOrderItem.deleteMany({
-    where: orderIds.length ? { salesOrderId: { in: orderIds } } : { salesOrderId: "__none__" },
+    where: orderIds.length
+      ? { salesOrderId: { in: orderIds } }
+      : { salesOrderId: "__none__" },
   });
   await prisma.salesOrder.deleteMany({
     where: orderIds.length ? { id: { in: orderIds } } : { id: "__none__" },
   });
   await prisma.customerNote.deleteMany({
-    where: customerIds.length ? { customerId: { in: customerIds } } : { customerId: "__none__" },
+    where: customerIds.length
+      ? { customerId: { in: customerIds } }
+      : { customerId: "__none__" },
   });
   await prisma.salesCustomer.deleteMany({
-    where: customerIds.length ? { id: { in: customerIds } } : { id: "__none__" },
+    where: customerIds.length
+      ? { id: { in: customerIds } }
+      : { id: "__none__" },
   });
 }
 
@@ -181,7 +201,9 @@ async function taggedCounts() {
   });
   const paymentIds = payments.map((payment) => payment.id);
   const fulfillments = await prisma.salesOrderFulfillment.findMany({
-    where: orderIds.length ? { salesOrderId: { in: orderIds } } : { id: "__none__" },
+    where: orderIds.length
+      ? { salesOrderId: { in: orderIds } }
+      : { id: "__none__" },
     select: { id: true },
   });
   const fulfillmentIds = fulfillments.map((fulfillment) => fulfillment.id);
@@ -190,34 +212,50 @@ async function taggedCounts() {
     customers: customers.length,
     salesOrders: orders.length,
     salesOrderItems: await prisma.salesOrderItem.count({
-      where: orderIds.length ? { salesOrderId: { in: orderIds } } : { salesOrderId: "__none__" },
+      where: orderIds.length
+        ? { salesOrderId: { in: orderIds } }
+        : { salesOrderId: "__none__" },
     }),
     invoices: invoices.length,
     invoiceItems: await prisma.invoiceItem.count({
-      where: invoiceIds.length ? { invoiceId: { in: invoiceIds } } : { invoiceId: "__none__" },
+      where: invoiceIds.length
+        ? { invoiceId: { in: invoiceIds } }
+        : { invoiceId: "__none__" },
     }),
     payments: payments.length,
     salesReturns: await prisma.salesReturn.count({
-      where: orderIds.length ? { salesOrderId: { in: orderIds } } : { id: "__none__" },
+      where: orderIds.length
+        ? { salesOrderId: { in: orderIds } }
+        : { id: "__none__" },
     }),
     afterSalesReturns: await prisma.afterSalesReturn.count({
       where:
         customerIds.length || orderIds.length || invoiceIds.length
           ? {
               OR: [
-                ...(customerIds.length ? [{ customerId: { in: customerIds } }] : []),
-                ...(orderIds.length ? [{ salesOrderId: { in: orderIds } }] : []),
-                ...(invoiceIds.length ? [{ invoiceId: { in: invoiceIds } }] : []),
+                ...(customerIds.length
+                  ? [{ customerId: { in: customerIds } }]
+                  : []),
+                ...(orderIds.length
+                  ? [{ salesOrderId: { in: orderIds } }]
+                  : []),
+                ...(invoiceIds.length
+                  ? [{ invoiceId: { in: invoiceIds } }]
+                  : []),
               ],
             }
           : { id: "__none__" },
     }),
     fulfillments: fulfillments.length,
     fulfillmentItems: await prisma.salesOrderFulfillmentItem.count({
-      where: fulfillmentIds.length ? { fulfillmentId: { in: fulfillmentIds } } : { id: "__none__" },
+      where: fulfillmentIds.length
+        ? { fulfillmentId: { in: fulfillmentIds } }
+        : { id: "__none__" },
     }),
     inventoryMovements: await prisma.inventoryMovement.count({
-      where: fulfillmentIds.length ? { fulfillmentId: { in: fulfillmentIds } } : { id: "__none__" },
+      where: fulfillmentIds.length
+        ? { fulfillmentId: { in: fulfillmentIds } }
+        : { id: "__none__" },
     }),
   };
 }
@@ -297,12 +335,21 @@ async function createFixture(label: string, total = 120): Promise<Fixture> {
       },
     },
   });
-  return { customerId: customer.id, invoiceId: invoice.id, salesOrderId: order.id, total };
+  return {
+    customerId: customer.id,
+    invoiceId: invoice.id,
+    salesOrderId: order.id,
+    total,
+  };
 }
 
 async function createPostedPayment(
   fixture: Fixture,
-  args: { amount?: number; invoiceId?: string | null; paymentType?: "DEPOSIT" | "FINAL" },
+  args: {
+    amount?: number;
+    invoiceId?: string | null;
+    paymentType?: "DEPOSIT" | "FINAL";
+  },
 ) {
   return prisma.salesOrderPayment.create({
     data: {
@@ -318,7 +365,11 @@ async function createPostedPayment(
   });
 }
 
-async function createRefundPayment(fixture: Fixture, originalPaymentId: string, amount: number) {
+async function createRefundPayment(
+  fixture: Fixture,
+  originalPaymentId: string,
+  amount: number,
+) {
   return prisma.salesOrderPayment.create({
     data: {
       salesOrderId: fixture.salesOrderId,
@@ -327,6 +378,9 @@ async function createRefundPayment(fixture: Fixture, originalPaymentId: string, 
       method: "CARD",
       paymentType: "REFUND",
       refundOfPaymentId: originalPaymentId,
+      refundApprovalActor: "Phase 4A-5A Test Admin",
+      refundReviewActor: "Phase 4A-5A Test Admin",
+      commercialReductionSnapshot: 0,
       status: "POSTED",
       referenceNumber: `REF-PH4A5A-${runId}`,
       notes: runMarker,
@@ -430,16 +484,19 @@ async function postOrderPayment(
   type: "DEPOSIT" | "FINAL" | "REFUND",
   amount = 25,
 ) {
-  const response = await request.post(`/api/sales-orders/${fixture.salesOrderId}/payments`, {
-    headers: authHeaders(),
-    data: {
-      amount,
-      method: "CASH",
-      type,
-      referenceNumber: `ORDER-${runId}`,
-      notes: runMarker,
+  const response = await request.post(
+    `/api/sales-orders/${fixture.salesOrderId}/payments`,
+    {
+      headers: authHeaders(),
+      data: {
+        amount,
+        method: "CASH",
+        type,
+        referenceNumber: `ORDER-${runId}`,
+        notes: runMarker,
+      },
     },
-  });
+  );
   const body = await response.json().catch(() => ({}));
   return { response, body };
 }
@@ -450,24 +507,34 @@ async function postInvoicePayment(
   type: "DEPOSIT" | "FINAL" | "REFUND",
   amount = 30,
 ) {
-  const response = await request.post(`/api/invoices/${fixture.invoiceId}/payments`, {
-    headers: authHeaders(),
-    data: {
-      amount,
-      method: "CARD",
-      type,
-      referenceNumber: `INV-${runId}`,
-      notes: runMarker,
+  const response = await request.post(
+    `/api/invoices/${fixture.invoiceId}/payments`,
+    {
+      headers: authHeaders(),
+      data: {
+        amount,
+        method: "CARD",
+        type,
+        referenceNumber: `INV-${runId}`,
+        notes: runMarker,
+      },
     },
-  });
+  );
   const body = await response.json().catch(() => ({}));
   return { response, body };
 }
 
-async function allocatePayment(request: APIRequestContext, fixture: Fixture, paymentId: string) {
-  const response = await request.patch(`/api/invoices/${fixture.invoiceId}/payments/${paymentId}/allocate`, {
-    headers: authHeaders(),
-  });
+async function allocatePayment(
+  request: APIRequestContext,
+  fixture: Fixture,
+  paymentId: string,
+) {
+  const response = await request.patch(
+    `/api/invoices/${fixture.invoiceId}/payments/${paymentId}/allocate`,
+    {
+      headers: authHeaders(),
+    },
+  );
   const body = await response.json().catch(() => ({}));
   return { response, body };
 }
@@ -566,7 +633,10 @@ test("a payment cannot refund itself", async () => {
 
 test("multiple partial REFUND rows can reference the same original payment", async () => {
   const fixture = await createFixture("MULTIPLE-PARTIAL");
-  const original = await createPostedPayment(fixture, { amount: 80, paymentType: "FINAL" });
+  const original = await createPostedPayment(fixture, {
+    amount: 80,
+    paymentType: "FINAL",
+  });
 
   const firstRefund = await createRefundPayment(fixture, original.id, 15);
   const secondRefund = await createRefundPayment(fixture, original.id, 20);
@@ -577,11 +647,18 @@ test("multiple partial REFUND rows can reference the same original payment", asy
     select: { amount: true, refundOfPaymentId: true, paymentType: true },
   });
   expect([firstRefund.id, secondRefund.id].every(Boolean)).toBe(true);
-  expect(refunds.map((refund) => money(refund.amount))).toEqual(["15.00", "20.00"]);
-  expect(refunds.every((refund) => refund.refundOfPaymentId === original.id)).toBe(true);
+  expect(refunds.map((refund) => money(refund.amount))).toEqual([
+    "15.00",
+    "20.00",
+  ]);
+  expect(
+    refunds.every((refund) => refund.refundOfPaymentId === original.id),
+  ).toBe(true);
 });
 
-test("generic sales order payment route rejects REFUND without mutation", async ({ request }) => {
+test("generic sales order payment route rejects REFUND without mutation", async ({
+  request,
+}) => {
   const fixture = await createFixture("ORDER-ROUTE-REFUND");
   const before = await captureState(fixture);
 
@@ -591,7 +668,9 @@ test("generic sales order payment route rejects REFUND without mutation", async 
   expect(await captureState(fixture)).toEqual(before);
 });
 
-test("generic invoice payment route rejects REFUND without mutation", async ({ request }) => {
+test("generic invoice payment route rejects REFUND without mutation", async ({
+  request,
+}) => {
   const fixture = await createFixture("INVOICE-ROUTE-REFUND");
   const before = await captureState(fixture);
 
@@ -601,9 +680,14 @@ test("generic invoice payment route rejects REFUND without mutation", async ({ r
   expect(await captureState(fixture)).toEqual(before);
 });
 
-test("payment allocation route rejects REFUND rows without mutation", async ({ request }) => {
+test("payment allocation route rejects REFUND rows without mutation", async ({
+  request,
+}) => {
   const fixture = await createFixture("ALLOCATE-REFUND");
-  const original = await createPostedPayment(fixture, { amount: 80, paymentType: "FINAL" });
+  const original = await createPostedPayment(fixture, {
+    amount: 80,
+    paymentType: "FINAL",
+  });
   const refund = await createRefundPayment(fixture, original.id, 10);
   const before = await captureState(fixture);
 
@@ -625,15 +709,30 @@ test("DEPOSIT and FINAL routes remain valid and do not create refund rows", asyn
   const fixture = await createFixture("VALID-DEPOSIT-FINAL", 120);
 
   const orderPayment = await postOrderPayment(request, fixture, "DEPOSIT", 25);
-  expect(orderPayment.response.status(), JSON.stringify(orderPayment.body)).toBe(201);
+  expect(
+    orderPayment.response.status(),
+    JSON.stringify(orderPayment.body),
+  ).toBe(201);
 
-  const invoicePayment = await postInvoicePayment(request, fixture, "FINAL", 30);
-  expect(invoicePayment.response.status(), JSON.stringify(invoicePayment.body)).toBe(201);
+  const invoicePayment = await postInvoicePayment(
+    request,
+    fixture,
+    "FINAL",
+    30,
+  );
+  expect(
+    invoicePayment.response.status(),
+    JSON.stringify(invoicePayment.body),
+  ).toBe(201);
 
   const state = await captureState(fixture);
   expect(state.payments).toHaveLength(2);
-  expect(state.payments.every((payment) => payment.refundOfPaymentId === null)).toBe(true);
-  expect(state.payments.some((payment) => payment.paymentType === "REFUND")).toBe(false);
+  expect(
+    state.payments.every((payment) => payment.refundOfPaymentId === null),
+  ).toBe(true);
+  expect(
+    state.payments.some((payment) => payment.paymentType === "REFUND"),
+  ).toBe(false);
   expect(state.fulfillments).toEqual([]);
   expect(state.fulfillmentItems).toEqual([]);
   expect(state.movements).toEqual([]);
