@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import { getWritableCustomer } from "@/lib/customers/customer-lifecycle";
 
 type Params = {
   params: Promise<{ id: string }>;
@@ -24,7 +25,10 @@ export async function GET(request: NextRequest, { params }: Params) {
     return NextResponse.json({ data: notes }, { status: 200 });
   } catch (error) {
     console.error("GET /api/customers/[id]/notes error:", error);
-    return NextResponse.json({ error: "Failed to fetch customer notes." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch customer notes." },
+      { status: 500 },
+    );
   }
 }
 
@@ -37,6 +41,10 @@ export async function POST(request: NextRequest, { params }: Params) {
     const note = String(body?.note ?? "").trim();
     if (!note) {
       return NextResponse.json({ error: "Note is required." }, { status: 400 });
+    }
+    const writable = await getWritableCustomer(prisma, id);
+    if (!writable.ok) {
+      return NextResponse.json(writable, { status: writable.status });
     }
 
     const created = await prisma.customerNote.create({
@@ -56,6 +64,9 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ data: created }, { status: 201 });
   } catch (error) {
     console.error("POST /api/customers/[id]/notes error:", error);
-    return NextResponse.json({ error: "Failed to create note." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create note." },
+      { status: 500 },
+    );
   }
 }

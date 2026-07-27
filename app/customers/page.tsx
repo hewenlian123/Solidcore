@@ -1,645 +1,354 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ChevronRight, Plus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Building2, ChevronRight, MapPin, Plus, UserRound } from "lucide-react";
+import { NewCustomerDialog } from "@/components/sales/new-customer-dialog";
 import { useRole } from "@/components/layout/role-provider";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TableSkeletonRows } from "@/components/ui/table-skeleton";
-import { Spinner } from "@/components/ui/spinner";
+import { Button } from "@/components/ui/button";
+import { SearchField } from "@/components/ui/search-field";
+import { EmptyState, ErrorState, LoadingState } from "@/components/ui/states";
+import { StatusLabel } from "@/components/ui/status-label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import type { SaleCustomer } from "@/app/sales-orders/create-sale-types";
 
-type Customer = {
-  id: string;
-  name: string;
-  phone: string | null;
-  email: string | null;
-  installAddress: string | null;
-  billingAddress: string | null;
-  city: string | null;
-  state: string | null;
-  zipCode: string | null;
-  companyName: string | null;
-  customerType: "RESIDENTIAL" | "COMMERCIAL" | "CONTRACTOR" | null;
-  taxExempt: boolean;
-  taxRate: number | null;
-  referredBy: string | null;
-  notes: string | null;
+type CustomerRow = SaleCustomer & {
+  createdAt: string;
+  primaryContact: {
+    id: string;
+    name: string;
+    role: string | null;
+    phone: string | null;
+    email: string | null;
+  } | null;
+  primaryJobSite: {
+    id: string;
+    name: string;
+    address1: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  } | null;
+  nextFollowUp: {
+    id: string;
+    owner: string;
+    dueAt: string;
+    nextAction: string;
+  } | null;
+  contactCount: number;
+  jobSiteCount: number;
+  archivedAt: string | null;
 };
 
-type BlockingRelations = {
-  salesOrders: Array<{ id: string; orderNumber: string; status: string }>;
-  afterSalesReturns: Array<{ id: string; returnNumber: string; status: string }>;
-} | null;
+type CustomerView = "ALL" | "BUSINESS" | "INDIVIDUAL" | "ARCHIVED";
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "Pacific/Honolulu",
+  }).format(new Date(value));
+}
+
+function displayName(customer: CustomerRow) {
+  return customer.companyName || customer.name;
+}
 
 export default function CustomersPage() {
   const router = useRouter();
   const { role } = useRole();
-  const [rows, setRows] = useState<Customer[]>([]);
-  const [loadingRows, setLoadingRows] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-  const [openCreateModal, setOpenCreateModal] = useState(false);
-  const [submittingCreate, setSubmittingCreate] = useState(false);
-  const [deletingCustomerId, setDeletingCustomerId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [blockingRelations, setBlockingRelations] = useState<BlockingRelations>(null);
-  const [defaultTaxRate, setDefaultTaxRate] = useState("0");
-  const [newCustomerForm, setNewCustomerForm] = useState({
-    name: "",
-    phone: "",
-    email: "",
-    installAddress: "",
-    billingAddress: "",
-    city: "",
-    state: "",
-    zipCode: "",
-    companyName: "",
-    customerType: "RESIDENTIAL" as "RESIDENTIAL" | "COMMERCIAL" | "CONTRACTOR",
-    taxExempt: false,
-    taxRate: "0",
-    referredBy: "",
-    notes: "",
-  });
+  const [rows, setRows] = useState<CustomerRow[]>([]);
   const [query, setQuery] = useState("");
-  const [detailFilter, setDetailFilter] = useState<"ALL" | "PHONE_MISSING" | "EMAIL_MISSING">("ALL");
-
-  const loadRows = async (search = query) => {
-    try {
-      setLoadingRows(true);
-      setError(null);
-      const params = new URLSearchParams();
-      if (search.trim()) params.set("q", search.trim());
-      const qs = params.toString();
-      const res = await fetch(`/api/customers${qs ? `?${qs}` : ""}`, {
-        cache: "no-store",
-        headers: { "x-user-role": role },
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to fetch customers");
-      setRows(payload.data ?? []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch customers");
-    } finally {
-      setLoadingRows(false);
-    }
-  };
+  const [view, setView] = useState<CustomerView>("ALL");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [newCustomerOpen, setNewCustomerOpen] = useState(false);
 
   useEffect(() => {
-    loadRows();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [role]);
-
-  useEffect(() => {
-    const loadDefaultTaxRate = async () => {
-      try {
-        const res = await fetch("/api/settings/company", {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        });
-        const payload = await res.json();
-        if (!res.ok) throw new Error(payload.error ?? "Failed to load default tax rate");
-        const nextRate = String(Number(payload.data?.defaultTaxRate ?? 0));
-        setDefaultTaxRate(nextRate);
-        setNewCustomerForm((prev) => ({ ...prev, taxRate: nextRate }));
-      } catch {
-        // Keep form usable with fallback zero.
-      }
+    const controller = new AbortController();
+    const timer = window.setTimeout(
+      async () => {
+        setLoading(true);
+        setError("");
+        try {
+          const response = await fetch(
+            `/api/customers?q=${encodeURIComponent(query.trim())}&status=${
+              view === "ARCHIVED" ? "ARCHIVED" : "ACTIVE"
+            }`,
+            {
+              cache: "no-store",
+              headers: { "x-user-role": role },
+              signal: controller.signal,
+            },
+          );
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || "Could not load customers.");
+          }
+          setRows(Array.isArray(payload.data) ? payload.data : []);
+        } catch (caught) {
+          if (caught instanceof DOMException && caught.name === "AbortError")
+            return;
+          setError(
+            caught instanceof Error
+              ? caught.message
+              : "Could not load customers.",
+          );
+        } finally {
+          if (!controller.signal.aborted) setLoading(false);
+        }
+      },
+      query ? 180 : 0,
+    );
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
     };
-    void loadDefaultTaxRate();
-  }, [role]);
+  }, [query, role, view]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadRows(query);
-    }, 250);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query]);
-
-  const handleCreateCustomer = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setSubmittingCreate(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/customers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-role": role },
-        body: JSON.stringify(newCustomerForm),
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to create customer");
-      setToast("Customer created successfully.");
-      setTimeout(() => setToast(null), 2200);
-      setOpenCreateModal(false);
-      setNewCustomerForm({
-        name: "",
-        phone: "",
-        email: "",
-        installAddress: "",
-        billingAddress: "",
-        city: "",
-        state: "",
-        zipCode: "",
-        companyName: "",
-        customerType: "RESIDENTIAL",
-        taxExempt: false,
-        taxRate: defaultTaxRate,
-        referredBy: "",
-        notes: "",
-      });
-      await loadRows();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create customer");
-    } finally {
-      setSubmittingCreate(false);
+  const visibleRows = useMemo(() => {
+    if (view === "BUSINESS") {
+      return rows.filter(
+        (customer) =>
+          customer.customerType === "COMMERCIAL" ||
+          customer.customerType === "CONTRACTOR" ||
+          Boolean(customer.companyName),
+      );
     }
-  };
-
-  const handleDeleteCustomer = async (id: string) => {
-    setDeletingCustomerId(id);
-    setBlockingRelations(null);
-    try {
-      const res = await fetch(`/api/customers/${id}`, {
-        method: "DELETE",
-        headers: { "x-user-role": role },
-      });
-      const payload = await res.json();
-      if (res.status === 409 && payload.blocking) {
-        setBlockingRelations(payload.blocking);
-        return;
-      }
-      if (!res.ok) throw new Error(payload.error ?? "Failed to delete customer");
-      setToast("Customer deleted.");
-      setTimeout(() => setToast(null), 2200);
-      setConfirmDeleteId(null);
-      await loadRows();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete customer");
-    } finally {
-      setDeletingCustomerId(null);
+    if (view === "INDIVIDUAL") {
+      return rows.filter(
+        (customer) =>
+          customer.customerType === "RESIDENTIAL" && !customer.companyName,
+      );
     }
-  };
-
-  const displayRows = rows.filter((item) => {
-    if (detailFilter === "PHONE_MISSING") return !item.phone;
-    if (detailFilter === "EMAIL_MISSING") return !item.email;
-    return true;
-  });
+    if (view === "ARCHIVED") return rows;
+    return rows;
+  }, [rows, view]);
 
   return (
-    <section className="space-y-6">
-      <div className="glass-card p-4">
-        <div className="glass-card-content flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white">Customer Management</h1>
-            <p className="mt-2 text-sm text-slate-400">View customer records and open warranty/statement pages.</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setOpenCreateModal(true)}
-            className="ios-primary-btn inline-flex h-10 items-center gap-2 px-4 text-sm"
-          >
-            <Plus className="h-4 w-4" />
-            Add Customer
-          </button>
+    <main className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
+      <header className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-[28px] font-bold leading-9 text-foreground">
+            Customers
+          </h1>
+          <p className="mt-1 text-sm text-foreground-secondary">
+            Businesses, people, Job Sites, and the work connected to them.
+          </p>
         </div>
-      </div>
+        <Button onClick={() => setNewCustomerOpen(true)}>
+          <Plus aria-hidden="true" className="h-4 w-4" />
+          Add customer
+        </Button>
+      </header>
 
-      {error ? (
-        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
-      ) : null}
-      {toast ? (
-        <div className="fixed right-6 top-20 z-50 rounded-xl border border-emerald-400/30 bg-emerald-500/20 px-4 py-2 text-sm text-emerald-200 shadow-lg backdrop-blur-xl">
-          {toast}
-        </div>
-      ) : null}
-
-      <div className="glass-card p-4">
-        <div className="glass-card-content flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-          <input
+      <section className="py-5">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <SearchField
+            label="Search customers"
+            placeholder="Business, contact, phone, email, or Job Site"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search name / phone / email / address"
-            className="ios-input h-10 w-full md:max-w-md px-3 text-sm"
+            onClear={() => setQuery("")}
+            className="md:max-w-xl"
           />
-          <div className="inline-flex gap-2">
+          <div
+            aria-label="Customer view"
+            className="grid grid-cols-4 gap-1 rounded-sc border border-border bg-surface-secondary p-1"
+          >
             {(
               [
                 ["ALL", "All"],
-                ["PHONE_MISSING", "Missing Phone"],
-                ["EMAIL_MISSING", "Missing Email"],
+                ["BUSINESS", "Business"],
+                ["INDIVIDUAL", "Individual"],
+                ["ARCHIVED", "Archived"],
               ] as const
             ).map(([key, label]) => (
-              <button
+              <Button
                 key={key}
-                type="button"
-                onClick={() => setDetailFilter(key)}
-                className={detailFilter === key ? "so-chip-active" : "so-chip"}
+                variant={view === key ? "outline" : "ghost"}
+                size="sm"
+                aria-pressed={view === key}
+                onClick={() => setView(key)}
               >
                 {label}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="glass-card overflow-hidden p-0">
-        <Table>
-          <TableHeader>
-            <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
-              <TableHead className="text-slate-400">Customer</TableHead>
-              <TableHead className="text-slate-400">Phone</TableHead>
-              <TableHead className="text-slate-400">Email</TableHead>
-              <TableHead className="text-slate-400">Install Address</TableHead>
-              <TableHead className="text-right text-slate-400">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loadingRows && rows.length === 0 ? (
-              <TableSkeletonRows columns={5} rows={8} rowClassName="border-white/10" />
-            ) : displayRows.length === 0 ? (
-              <TableRow className="border-white/10">
-                <TableCell colSpan={5} className="py-10 text-center">
-                  <p className="text-sm text-slate-500">
-                    {rows.length === 0 ? "No customers yet" : "No customers match current filter"}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setOpenCreateModal(true)}
-                    className="ios-primary-btn mt-3 inline-flex h-9 items-center px-3 text-sm"
-                  >
-                    Add Customer
-                  </button>
-                </TableCell>
-              </TableRow>
-            ) : (
-              displayRows.map((item) => (
-                <TableRow
-                  key={item.id}
-                  role="button"
-                  tabIndex={0}
-                  className="group cursor-pointer border-white/10 text-slate-300 transition-colors duration-200 hover:bg-white/[0.06]"
-                  onClick={() => router.push(`/customers/${item.id}`)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      router.push(`/customers/${item.id}`);
-                    }
-                  }}
-                >
-                  <TableCell className="font-semibold text-white group-hover:rounded-l-lg">
-                    {item.name}
-                  </TableCell>
-                  <TableCell className="text-slate-400">{item.phone || "-"}</TableCell>
-                  <TableCell className="text-slate-400">{item.email || "-"}</TableCell>
-                  <TableCell className="text-slate-400">{item.installAddress || "-"}</TableCell>
-                  <TableCell className="text-right group-hover:rounded-r-lg">
-                    <div className="inline-flex w-full items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        className="ios-secondary-btn h-9 px-3 py-2 text-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/customers/${item.id}`);
-                        }}
-                      >
-                        View
-                      </button>
-                      <button
-                        type="button"
-                        className="ios-secondary-btn h-9 px-3 py-2 text-sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          router.push(`/sales-orders/new?customerId=${item.id}`);
-                        }}
-                      >
-                        New Order
-                      </button>
-                      <button
-                        type="button"
-                        className="ios-secondary-btn h-9 px-3 py-2 text-sm text-rose-400 hover:bg-rose-500/20 hover:text-rose-300"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setConfirmDeleteId(item.id);
-                        }}
-                      >
-                        Delete
-                      </button>
-                      <span
-                        className="ml-1 inline-flex items-center text-slate-500 opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
-                        aria-hidden="true"
-                      >
-                        <ChevronRight className="h-4 w-4" />
-                      </span>
-                    </div>
-                  </TableCell>
+      {error ? (
+        <ErrorState
+          title="Customers could not be loaded"
+          description={error}
+          actionLabel="Try again"
+          onAction={() => setQuery((current) => `${current} `)}
+        />
+      ) : loading && rows.length === 0 ? (
+        <LoadingState title="Loading customers" description="One moment." />
+      ) : visibleRows.length === 0 ? (
+        <EmptyState
+          title={query ? "No customers found" : "No customers yet"}
+          description={
+            query
+              ? "Try a broader name, phone, address, or Job Site search."
+              : "Create the first customer when the next sale begins."
+          }
+        />
+      ) : (
+        <>
+          <div className="hidden overflow-hidden border-y border-border md:block">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Primary contact</TableHead>
+                  <TableHead>Job Sites</TableHead>
+                  <TableHead>Next Follow-Up</TableHead>
+                  <TableHead aria-label="Open" />
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {openCreateModal ? (
-        <Modal title="Add Customer" onClose={() => setOpenCreateModal(false)}>
-          <form className="flex max-h-[80vh] flex-col" onSubmit={handleCreateCustomer}>
-            <div className="space-y-3 overflow-y-auto pr-1">
-              <InputField
-                label="Name"
-                value={newCustomerForm.name}
-                onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, name: value }))}
-                required
-              />
-              <InputField
-                label="Phone"
-                value={newCustomerForm.phone}
-                onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, phone: value }))}
-              />
-              <InputField
-                label="Email"
-                value={newCustomerForm.email}
-                onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, email: value }))}
-              />
-              <InputField
-                label="Install Address"
-                value={newCustomerForm.installAddress}
-                onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, installAddress: value }))}
-              />
-              <InputField
-                label="Billing Address"
-                value={newCustomerForm.billingAddress}
-                onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, billingAddress: value }))}
-              />
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <InputField
-                  label="City"
-                  value={newCustomerForm.city}
-                  onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, city: value }))}
-                />
-                <InputField
-                  label="State"
-                  value={newCustomerForm.state}
-                  onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, state: value }))}
-                />
-                <InputField
-                  label="Zip Code"
-                  value={newCustomerForm.zipCode}
-                  onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, zipCode: value }))}
-                />
-              </div>
-              <InputField
-                label="Company Name"
-                value={newCustomerForm.companyName}
-                onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, companyName: value }))}
-              />
-              <label className="block space-y-1">
-                <span className="text-sm text-slate-400">Customer Type</span>
-                <select
-                  value={newCustomerForm.customerType}
-                  onChange={(event) =>
-                    setNewCustomerForm((prev) => ({
-                      ...prev,
-                      customerType: event.target.value as "RESIDENTIAL" | "COMMERCIAL" | "CONTRACTOR",
-                    }))
-                  }
-                  className="ios-input h-11 w-full px-3 text-sm"
-                >
-                  <option value="RESIDENTIAL">Residential</option>
-                  <option value="COMMERCIAL">Commercial</option>
-                  <option value="CONTRACTOR">Contractor</option>
-                </select>
-              </label>
-              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-xl">
-                <input
-                  type="checkbox"
-                  checked={newCustomerForm.taxExempt}
-                  onChange={(event) =>
-                    setNewCustomerForm((prev) => ({
-                      ...prev,
-                      taxExempt: event.target.checked,
-                      taxRate: event.target.checked ? "" : prev.taxRate || defaultTaxRate,
-                    }))
-                  }
-                  className="h-4 w-4"
-                />
-                <span className="text-sm text-slate-300">Tax Exempt</span>
-              </label>
-              <label className="block space-y-1">
-                <span className="text-sm text-slate-400">Tax Rate</span>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.001"
-                    value={newCustomerForm.taxRate}
-                    disabled={newCustomerForm.taxExempt}
-                    onChange={(event) =>
-                      setNewCustomerForm((prev) => ({ ...prev, taxRate: event.target.value }))
-                    }
-                    className="ios-input h-11 w-full px-3 pr-8 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-                  />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500">
-                    %
-                  </span>
-                </div>
-              </label>
-              <InputField
-                label="Referred By"
-                value={newCustomerForm.referredBy}
-                onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, referredBy: value }))}
-              />
-              <TextareaField
-                label="Notes"
-                value={newCustomerForm.notes}
-                onChange={(value) => setNewCustomerForm((prev) => ({ ...prev, notes: value }))}
-              />
-            </div>
-            <div className="sticky bottom-0 mt-3 flex gap-2 border-t border-white/10 bg-white/5 pt-3 backdrop-blur-xl">
-              <button
-                type="button"
-                onClick={() => setOpenCreateModal(false)}
-                className="ios-secondary-btn h-10 flex-1 text-sm"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submittingCreate}
-                className="ios-primary-btn h-10 flex-1 text-sm disabled:opacity-60"
-              >
-                <span className="inline-flex items-center justify-center gap-2">
-                  {submittingCreate ? <Spinner className="text-white/80" /> : null}
-                  {submittingCreate ? "Creating..." : "Create Customer"}
-                </span>
-              </button>
-            </div>
-          </form>
-        </Modal>
-      ) : null}
-      {confirmDeleteId ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-          <div className="so-modal-shell w-full max-w-sm p-6">
-            <h3 className="mb-2 text-base font-semibold text-white">Delete Customer</h3>
-            {blockingRelations ? (
-              <>
-                <p className="mb-3 text-sm text-slate-400">
-                  This customer has linked records and cannot be deleted.
-                </p>
-                <div className="mb-5 max-h-72 space-y-3 overflow-y-auto rounded-lg border border-white/10 bg-white/5 p-3">
-                  <div>
-                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Sales Orders</p>
-                    {blockingRelations.salesOrders.length === 0 ? (
-                      <p className="text-xs text-slate-500">None</p>
-                    ) : (
-                      <div className="space-y-1">
-                        {blockingRelations.salesOrders.map((order) => (
-                          <button
-                            key={order.id}
-                            type="button"
-                            onClick={() => {
-                              setConfirmDeleteId(null);
-                              setBlockingRelations(null);
-                              router.push(`/sales-orders/${order.id}`);
-                            }}
-                            className="w-full rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-left text-xs text-white/90 hover:bg-white/10"
-                          >
-                            {order.orderNumber} · {order.status}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">After-Sales Returns</p>
-                    {blockingRelations.afterSalesReturns.length === 0 ? (
-                      <p className="text-xs text-slate-500">None</p>
-                    ) : (
-                      <div className="space-y-1">
-                        {blockingRelations.afterSalesReturns.map((ret) => (
-                          <div key={ret.id} className="rounded-md border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white/80">
-                            {ret.returnNumber} · {ret.status}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setConfirmDeleteId(null);
-                    setBlockingRelations(null);
-                  }}
-                  className="ios-secondary-btn h-10 w-full text-sm"
-                >
-                  Close
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="mb-6 text-sm text-slate-400">
-                  Are you sure you want to delete{" "}
-                  <span className="font-medium text-white">
-                    {rows.find((r) => r.id === confirmDeleteId)?.name}
-                  </span>
-                  ? This action cannot be undone.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDeleteId(null)}
-                    className="ios-secondary-btn h-10 flex-1 text-sm"
+              </TableHeader>
+              <TableBody>
+                {visibleRows.map((customer) => (
+                  <TableRow
+                    key={customer.id}
+                    className="cursor-pointer"
+                    tabIndex={0}
+                    onClick={() => router.push(`/customers/${customer.id}`)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        router.push(`/customers/${customer.id}`);
+                      }
+                    }}
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={deletingCustomerId === confirmDeleteId}
-                    onClick={() => handleDeleteCustomer(confirmDeleteId)}
-                    className="ios-primary-btn h-10 flex-1 bg-rose-600 text-sm hover:bg-rose-500 disabled:opacity-60"
-                  >
-                    {deletingCustomerId === confirmDeleteId ? "Deleting..." : "Delete"}
-                  </button>
-                </div>
-              </>
-            )}
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 items-center justify-center rounded-sc bg-surface-secondary text-foreground-secondary">
+                          {customer.companyName ? (
+                            <Building2 aria-hidden="true" className="h-4 w-4" />
+                          ) : (
+                            <UserRound aria-hidden="true" className="h-4 w-4" />
+                          )}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate font-semibold text-foreground">
+                            {displayName(customer)}
+                          </span>
+                          {customer.archivedAt ? (
+                            <StatusLabel tone="warning">Archived</StatusLabel>
+                          ) : null}
+                          <span className="block truncate text-xs text-foreground-secondary">
+                            {customer.companyName
+                              ? customer.name
+                              : customer.email || "Individual"}
+                          </span>
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium text-foreground">
+                        {customer.primaryContact?.name || customer.name}
+                      </p>
+                      <p className="text-xs text-foreground-secondary">
+                        {customer.primaryContact?.phone ||
+                          customer.phone ||
+                          customer.primaryContact?.email ||
+                          customer.email ||
+                          "No contact method"}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      <p className="font-medium text-foreground">
+                        {customer.jobSiteCount}
+                      </p>
+                      <p className="max-w-56 truncate text-xs text-foreground-secondary">
+                        {customer.primaryJobSite?.name || "No Job Site"}
+                      </p>
+                    </TableCell>
+                    <TableCell>
+                      {customer.nextFollowUp ? (
+                        <>
+                          <p className="font-medium text-foreground">
+                            {formatDate(customer.nextFollowUp.dueAt)}
+                          </p>
+                          <p className="max-w-56 truncate text-xs text-foreground-secondary">
+                            {customer.nextFollowUp.nextAction}
+                          </p>
+                        </>
+                      ) : (
+                        <span className="text-foreground-muted">None due</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <ChevronRight
+                        aria-hidden="true"
+                        className="ml-auto h-4 w-4 text-foreground-secondary"
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
-        </div>
-      ) : null}
-    </section>
-  );
-}
 
-function Modal({
-  title,
-  children,
-  onClose,
-}: {
-  title: string;
-  children: React.ReactNode;
-  onClose: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="so-modal-shell w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold tracking-tight text-white">{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-10 rounded-xl px-3 text-sm text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
-          >
-            Close
-          </button>
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
+          <div className="divide-y divide-border border-y border-border md:hidden">
+            {visibleRows.map((customer) => (
+              <button
+                key={customer.id}
+                type="button"
+                onClick={() => router.push(`/customers/${customer.id}`)}
+                className="flex min-h-[88px] w-full items-center gap-3 py-3 text-left"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-sc bg-surface-secondary text-foreground-secondary">
+                  {customer.companyName ? (
+                    <Building2 aria-hidden="true" className="h-5 w-5" />
+                  ) : (
+                    <UserRound aria-hidden="true" className="h-5 w-5" />
+                  )}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-foreground">
+                    {displayName(customer)}
+                  </span>
+                  <span className="mt-1 flex items-center gap-1 truncate text-xs text-foreground-secondary">
+                    <MapPin
+                      aria-hidden="true"
+                      className="h-3.5 w-3.5 shrink-0"
+                    />
+                    {customer.primaryJobSite?.name ||
+                      `${customer.jobSiteCount} Job Sites`}
+                  </span>
+                  {customer.nextFollowUp ? (
+                    <span className="mt-1 block truncate text-xs font-medium text-warning">
+                      Follow-Up {formatDate(customer.nextFollowUp.dueAt)}
+                    </span>
+                  ) : null}
+                </span>
+                <ChevronRight
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0 text-foreground-secondary"
+                />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
-function InputField({
-  label,
-  value,
-  onChange,
-  required,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  required?: boolean;
-}) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-sm text-slate-400">{label}</span>
-      <input
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        required={required}
-        className="ios-input h-11 w-full px-3 text-sm"
+      <NewCustomerDialog
+        open={newCustomerOpen}
+        onOpenChange={setNewCustomerOpen}
+        onCustomerSelected={(customer) =>
+          router.push(`/customers/${customer.id}`)
+        }
       />
-    </label>
-  );
-}
-
-function TextareaField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-sm text-slate-400">{label}</span>
-      <textarea
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        rows={3}
-        className="ios-input min-h-[80px] w-full resize-y rounded-xl px-3 py-3 text-sm"
-      />
-    </label>
+    </main>
   );
 }

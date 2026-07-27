@@ -2,11 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { sumSignedPaymentAmount } from "@/lib/payment-ledger";
 
 export type CustomerOrderFilter =
-  | "ALL"
-  | "OPEN"
-  | "UNPAID"
-  | "PENDING_DELIVERY"
-  | "SPECIAL_ORDER";
+  "ALL" | "OPEN" | "UNPAID" | "PENDING_DELIVERY" | "SPECIAL_ORDER";
 
 export type CustomerOrderRow = {
   id: string;
@@ -41,11 +37,23 @@ function isOpenStatus(status: string) {
 }
 
 function computeDeliveryMeta(
-  fulfillments: Array<{ type: string; status: string; scheduledDate: Date | null }>,
-): { deliveryRequired: boolean; deliveryDate: Date | null; deliveryStatus: string | null } {
+  fulfillments: Array<{
+    type: string;
+    status: string;
+    scheduledDate: Date | null;
+  }>,
+): {
+  deliveryRequired: boolean;
+  deliveryDate: Date | null;
+  deliveryStatus: string | null;
+} {
   const deliveries = fulfillments.filter((item) => item.type === "DELIVERY");
   if (deliveries.length === 0) {
-    return { deliveryRequired: false, deliveryDate: null, deliveryStatus: null };
+    return {
+      deliveryRequired: false,
+      deliveryDate: null,
+      deliveryStatus: null,
+    };
   }
   const scheduled = deliveries
     .map((item) => item.scheduledDate)
@@ -55,7 +63,9 @@ function computeDeliveryMeta(
       ? scheduled.reduce((acc, cur) => (cur < acc ? cur : acc), scheduled[0])
       : null;
   const allCompleted = deliveries.every((item) => item.status === "COMPLETED");
-  const hasInProgress = deliveries.some((item) => item.status === "IN_PROGRESS");
+  const hasInProgress = deliveries.some(
+    (item) => item.status === "IN_PROGRESS",
+  );
   const hasScheduled = deliveries.some((item) => item.status === "SCHEDULED");
   let deliveryStatus: string = "PENDING";
   if (allCompleted) deliveryStatus = "DELIVERED";
@@ -68,9 +78,14 @@ function computeDeliveryMeta(
   };
 }
 
-export async function buildCustomerOrderMetrics(customerId: string) {
+export async function buildCustomerOrderMetrics(
+  customerIds: string | string[],
+) {
+  const resolvedCustomerIds = Array.isArray(customerIds)
+    ? customerIds
+    : [customerIds];
   const orders = await prisma.salesOrder.findMany({
-    where: { customerId },
+    where: { customerId: { in: resolvedCustomerIds } },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,
@@ -90,19 +105,35 @@ export async function buildCustomerOrderMetrics(customerId: string) {
   });
 
   const orderIds = orders.map((item) => item.id);
-  const invoiceIds = orders.flatMap((item) => item.invoices.map((invoice) => invoice.id));
+  const invoiceIds = orders.flatMap((item) =>
+    item.invoices.map((invoice) => invoice.id),
+  );
 
   const [invoicePayments, unallocatedOrderPayments] = await Promise.all([
     invoiceIds.length
       ? prisma.salesOrderPayment.findMany({
           where: { status: "POSTED", invoiceId: { in: invoiceIds } },
-          select: { invoiceId: true, amount: true, paymentType: true, status: true },
+          select: {
+            invoiceId: true,
+            amount: true,
+            paymentType: true,
+            status: true,
+          },
         })
       : Promise.resolve([]),
     orderIds.length
       ? prisma.salesOrderPayment.findMany({
-          where: { status: "POSTED", invoiceId: null, salesOrderId: { in: orderIds } },
-          select: { salesOrderId: true, amount: true, paymentType: true, status: true },
+          where: {
+            status: "POSTED",
+            invoiceId: null,
+            salesOrderId: { in: orderIds },
+          },
+          select: {
+            salesOrderId: true,
+            amount: true,
+            paymentType: true,
+            status: true,
+          },
         })
       : Promise.resolve([]),
   ]);
@@ -114,7 +145,10 @@ export async function buildCustomerOrderMetrics(customerId: string) {
     current.push(row);
     paymentsByInvoiceId.set(row.invoiceId, current);
   }
-  const unallocatedByOrderId = new Map<string, typeof unallocatedOrderPayments>();
+  const unallocatedByOrderId = new Map<
+    string,
+    typeof unallocatedOrderPayments
+  >();
   for (const row of unallocatedOrderPayments) {
     const current = unallocatedByOrderId.get(row.salesOrderId) ?? [];
     current.push(row);
@@ -123,10 +157,13 @@ export async function buildCustomerOrderMetrics(customerId: string) {
 
   const rows: CustomerOrderRow[] = orders.map((order) => {
     const paidByInvoice = order.invoices.reduce(
-      (sum, invoice) => sum + sumSignedPaymentAmount(paymentsByInvoiceId.get(invoice.id) ?? []),
+      (sum, invoice) =>
+        sum + sumSignedPaymentAmount(paymentsByInvoiceId.get(invoice.id) ?? []),
       0,
     );
-    const unallocatedOrderPaid = sumSignedPaymentAmount(unallocatedByOrderId.get(order.id) ?? []);
+    const unallocatedOrderPaid = sumSignedPaymentAmount(
+      unallocatedByOrderId.get(order.id) ?? [],
+    );
     const paidTotal = round2(paidByInvoice + unallocatedOrderPaid);
     const total = round2(Number(order.total));
     const balance = round2(Math.max(total - paidTotal, 0));
@@ -161,12 +198,18 @@ export async function buildCustomerOrderMetrics(customerId: string) {
   return { rows, summary };
 }
 
-export function filterCustomerOrders(rows: CustomerOrderRow[], filter: CustomerOrderFilter) {
+export function filterCustomerOrders(
+  rows: CustomerOrderRow[],
+  filter: CustomerOrderFilter,
+) {
   if (filter === "OPEN") return rows.filter((row) => isOpenStatus(row.status));
   if (filter === "UNPAID") return rows.filter((row) => row.balance > 0);
   if (filter === "PENDING_DELIVERY") {
-    return rows.filter((row) => row.deliveryRequired && row.deliveryStatus !== "DELIVERED");
+    return rows.filter(
+      (row) => row.deliveryRequired && row.deliveryStatus !== "DELIVERED",
+    );
   }
-  if (filter === "SPECIAL_ORDER") return rows.filter((row) => row.isSpecialOrder);
+  if (filter === "SPECIAL_ORDER")
+    return rows.filter((row) => row.isSpecialOrder);
   return rows;
 }

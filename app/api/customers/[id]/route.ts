@@ -3,15 +3,26 @@ import { SalesCustomerType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { getDefaultTaxRate } from "@/lib/settings";
+import {
+  normalizeIdentityText,
+  normalizePhoneDigits,
+} from "@/lib/customer-identity";
+import { getWritableCustomer } from "@/lib/customers/customer-lifecycle";
 
 type Params = {
   params: Promise<{ id: string }>;
 };
 
 function normalizeCustomerType(value: unknown): SalesCustomerType | null {
-  const normalized = String(value ?? "").trim().toUpperCase();
+  const normalized = String(value ?? "")
+    .trim()
+    .toUpperCase();
   if (!normalized) return null;
-  if (normalized === "RESIDENTIAL" || normalized === "COMMERCIAL" || normalized === "CONTRACTOR") {
+  if (
+    normalized === "RESIDENTIAL" ||
+    normalized === "COMMERCIAL" ||
+    normalized === "CONTRACTOR"
+  ) {
     return normalized as SalesCustomerType;
   }
   return null;
@@ -41,11 +52,19 @@ export async function GET(request: NextRequest, { params }: Params) {
         taxRate: true,
         referredBy: true,
         notes: true,
+        archivedAt: true,
+        mergedIntoId: true,
+        mergedInto: {
+          select: { id: true, name: true, companyName: true },
+        },
         createdAt: true,
       },
     });
     if (!customer) {
-      return NextResponse.json({ error: "Customer not found." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Customer not found." },
+        { status: 404 },
+      );
     }
 
     return NextResponse.json(
@@ -66,6 +85,9 @@ export async function GET(request: NextRequest, { params }: Params) {
           taxRate: customer.taxRate != null ? Number(customer.taxRate) : null,
           referredBy: customer.referredBy,
           notes: customer.notes,
+          archivedAt: customer.archivedAt,
+          mergedIntoId: customer.mergedIntoId,
+          mergedInto: customer.mergedInto,
           createdAt: customer.createdAt,
         },
       },
@@ -73,7 +95,10 @@ export async function GET(request: NextRequest, { params }: Params) {
     );
   } catch (error) {
     console.error("GET /api/customers/[id] error:", error);
-    return NextResponse.json({ error: "Failed to fetch customer." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch customer." },
+      { status: 500 },
+    );
   }
 }
 
@@ -96,23 +121,122 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const customerType = normalizeCustomerType(body?.customerType);
     const taxExempt = Boolean(body?.taxExempt ?? false);
     const parsedTaxRate =
-      body?.taxRate === null || body?.taxRate === undefined || body?.taxRate === ""
+      body?.taxRate === null ||
+      body?.taxRate === undefined ||
+      body?.taxRate === ""
         ? null
         : Number(body?.taxRate);
     const referredBy = String(body?.referredBy ?? "").trim();
     const notes = String(body?.notes ?? "").trim();
 
     if (!name) {
-      return NextResponse.json({ error: "Customer name is required." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Customer name is required." },
+        { status: 400 },
+      );
     }
-    if (body?.customerType !== undefined && body?.customerType !== null && !customerType) {
-      return NextResponse.json({ error: "Invalid customer type." }, { status: 400 });
+    if (
+      body?.customerType !== undefined &&
+      body?.customerType !== null &&
+      !customerType
+    ) {
+      return NextResponse.json(
+        { error: "Invalid customer type." },
+        { status: 400 },
+      );
     }
-    if (parsedTaxRate !== null && (!Number.isFinite(parsedTaxRate) || parsedTaxRate < 0)) {
-      return NextResponse.json({ error: "Tax rate must be a non-negative number." }, { status: 400 });
+    if (
+      parsedTaxRate !== null &&
+      (!Number.isFinite(parsedTaxRate) || parsedTaxRate < 0)
+    ) {
+      return NextResponse.json(
+        { error: "Tax rate must be a non-negative number." },
+        { status: 400 },
+      );
     }
+
+    const writable = await getWritableCustomer(prisma, id);
+    if (!writable.ok) {
+      return NextResponse.json(writable, { status: writable.status });
+    }
+
+    const emailKey = normalizeIdentityText(email);
+    const phoneKey = normalizePhoneDigits(phone);
+    const phoneSuffix = phoneKey.length >= 7 ? phoneKey.slice(-7) : "";
+    if (emailKey || phoneSuffix) {
+      const candidates = await prisma.salesCustomer.findMany({
+        where: {
+          id: { not: id },
+          OR: [
+            ...(emailKey
+              ? [
+                  { email: { equals: email, mode: "insensitive" as const } },
+                  {
+                    contacts: {
+                      some: {
+                        email: { equals: email, mode: "insensitive" as const },
+                      },
+                    },
+                  },
+                ]
+              : []),
+            ...(phoneSuffix
+              ? [
+                  { phone: { contains: phoneSuffix } },
+                  {
+                    contacts: {
+                      some: { phone: { contains: phoneSuffix } },
+                    },
+                  },
+                ]
+              : []),
+          ],
+        },
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+          email: true,
+          contacts: {
+            select: { phone: true, email: true },
+            take: 20,
+          },
+        },
+        take: 20,
+      });
+      const strongMatches = candidates.filter((candidate) => {
+        const identities = [
+          { phone: candidate.phone, email: candidate.email },
+          ...candidate.contacts,
+        ];
+        return identities.some((identity) => {
+          const candidateEmail = normalizeIdentityText(identity.email);
+          const candidatePhone = normalizePhoneDigits(identity.phone);
+          return (
+            (emailKey && emailKey === candidateEmail) ||
+            (phoneKey.length >= 7 && phoneKey === candidatePhone)
+          );
+        });
+      });
+      if (strongMatches.length > 0) {
+        return NextResponse.json(
+          {
+            code: "CUSTOMER_STRONG_MATCH",
+            error:
+              "Another customer has the same phone or email. Review that customer before updating this record.",
+            matches: strongMatches.map(
+              ({ contacts: _contacts, ...match }) => match,
+            ),
+          },
+          { status: 409 },
+        );
+      }
+    }
+
     const defaultTaxRate = await getDefaultTaxRate(prisma);
-    const resolvedTaxRate = taxExempt ? null : parsedTaxRate ?? defaultTaxRate;
+    const resolvedTaxRate = taxExempt
+      ? null
+      : (parsedTaxRate ?? defaultTaxRate);
 
     const updated = await prisma.salesCustomer.update({
       where: { id },
@@ -177,43 +301,22 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     );
   } catch (error) {
     console.error("PATCH /api/customers/[id] error:", error);
-    return NextResponse.json({ error: "Failed to update customer." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update customer." },
+      { status: 500 },
+    );
   }
 }
 
 export async function DELETE(request: NextRequest, { params }: Params) {
-  try {
-    const role = getRequestRole(request);
-    if (!hasOneOf(role, ["ADMIN"])) return deny();
-    const { id } = await params;
-    const existing = await prisma.salesCustomer.findUnique({
-      where: { id },
-      select: {
-        id: true,
-        salesOrders: { select: { id: true, orderNumber: true, status: true }, take: 20 },
-        afterSalesReturns: { select: { id: true, returnNumber: true, status: true }, take: 10 },
-      },
-    });
-    if (!existing) return NextResponse.json({ error: "Customer not found." }, { status: 404 });
-    const hasBlocking =
-      existing.salesOrders.length > 0 ||
-      existing.afterSalesReturns.length > 0;
-    if (hasBlocking) {
-      return NextResponse.json(
-        {
-          error: "Cannot delete customer with linked records.",
-          blocking: {
-            salesOrders: existing.salesOrders,
-            afterSalesReturns: existing.afterSalesReturns,
-          },
-        },
-        { status: 409 },
-      );
-    }
-    await prisma.salesCustomer.delete({ where: { id } });
-    return NextResponse.json({ success: true }, { status: 200 });
-  } catch (error) {
-    console.error("DELETE /api/customers/[id] error:", error);
-    return NextResponse.json({ error: "Failed to delete customer." }, { status: 500 });
-  }
+  const role = getRequestRole(request);
+  if (!hasOneOf(role, ["ADMIN"])) return deny();
+  await params;
+  return NextResponse.json(
+    {
+      error:
+        "Customer deletion is disabled. Archive the customer to preserve operational history.",
+    },
+    { status: 405, headers: { Allow: "GET, PATCH" } },
+  );
 }
