@@ -2,9 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, PackageCheck, Search, Truck } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  PackageCheck,
+  Search,
+  Truck,
+} from "lucide-react";
 import { useRole } from "@/components/layout/role-provider";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   WAREHOUSE_METHOD_FILTERS,
   WAREHOUSE_SECTION_DEFINITIONS,
@@ -67,15 +80,24 @@ const methodIds = WAREHOUSE_METHOD_FILTERS.map((method) => method.id);
 const sectionIds = WAREHOUSE_SECTION_DEFINITIONS.map((section) => section.id);
 
 function visibleSections(method: WarehouseMethodFilter) {
-  return WAREHOUSE_SECTION_DEFINITIONS.filter((section) => method === "delivery" || section.id !== "inDelivery");
+  return WAREHOUSE_SECTION_DEFINITIONS.filter(
+    (section) => method === "delivery" || section.id !== "inDelivery",
+  );
 }
 
 function validMethodFilter(value: string | null): WarehouseMethodFilter {
-  const normalized = String(value ?? "").trim().toLowerCase();
-  return methodIds.includes(normalized as WarehouseMethodFilter) ? (normalized as WarehouseMethodFilter) : "pickup";
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return methodIds.includes(normalized as WarehouseMethodFilter)
+    ? (normalized as WarehouseMethodFilter)
+    : "pickup";
 }
 
-function validSectionId(value: string | null, method: WarehouseMethodFilter): WarehouseSectionId {
+function validSectionId(
+  value: string | null,
+  method: WarehouseMethodFilter,
+): WarehouseSectionId {
   const normalized = String(value ?? "").trim();
   const fallback: WarehouseSectionId = "needsReady";
   if (!sectionIds.includes(normalized as WarehouseSectionId)) return fallback;
@@ -83,7 +105,11 @@ function validSectionId(value: string | null, method: WarehouseMethodFilter): Wa
   return normalized as WarehouseSectionId;
 }
 
-function warehousePath(args: { methodFilter: WarehouseMethodFilter; sectionId: WarehouseSectionId; search: string }) {
+function warehousePath(args: {
+  methodFilter: WarehouseMethodFilter;
+  sectionId: WarehouseSectionId;
+  search: string;
+}) {
   const params = new URLSearchParams();
   params.set("method", args.methodFilter);
   params.set("section", args.sectionId);
@@ -123,7 +149,8 @@ function statusBadgeClass(status: string) {
     return "border-sky-400/20 bg-sky-500/15 text-sky-200";
   }
   if (key === "READY") return "border-cyan-400/20 bg-cyan-500/15 text-cyan-200";
-  if (key === "PARTIAL") return "border-amber-400/20 bg-amber-500/15 text-amber-200";
+  if (key === "PARTIAL")
+    return "border-amber-400/20 bg-amber-500/15 text-amber-200";
   return "border-slate-400/20 bg-white/[0.06] text-slate-200";
 }
 
@@ -177,14 +204,21 @@ function itemPreview(row: WarehouseRow) {
 function specialLabel(row: WarehouseRow) {
   const summary = row.specialOrderSummary;
   if (!summary) return null;
-  const status = summary.status ? summary.status.replaceAll("_", " ") : "Special Order";
+  const status = summary.status
+    ? summary.status.replaceAll("_", " ")
+    : "Special Order";
   const supplier = summary.supplierName ? ` - ${summary.supplierName}` : "";
   const eta = summary.eta ? ` - ETA ${formatDate(summary.eta)}` : "";
   return `${status}${supplier}${eta}`;
 }
 
-function sectionLabel(sectionId: WarehouseSectionId, method: WarehouseMethodFilter) {
-  const section = WAREHOUSE_SECTION_DEFINITIONS.find((item) => item.id === sectionId)!;
+function sectionLabel(
+  sectionId: WarehouseSectionId,
+  method: WarehouseMethodFilter,
+) {
+  const section = WAREHOUSE_SECTION_DEFINITIONS.find(
+    (item) => item.id === sectionId,
+  )!;
   return method === "delivery" ? section.deliveryLabel : section.pickupLabel;
 }
 
@@ -202,8 +236,10 @@ function SpecialOrderNotice({ row }: { row: WarehouseRow }) {
 export default function WarehouseOperationsPage() {
   const { role } = useRole();
   const [rows, setRows] = useState<WarehouseRow[]>([]);
-  const [selectedSection, setSelectedSection] = useState<WarehouseSectionId>("needsReady");
-  const [methodFilter, setMethodFilter] = useState<WarehouseMethodFilter>("pickup");
+  const [selectedSection, setSelectedSection] =
+    useState<WarehouseSectionId>("needsReady");
+  const [methodFilter, setMethodFilter] =
+    useState<WarehouseMethodFilter>("pickup");
   const [search, setSearch] = useState("");
   const [specialFilter, setSpecialFilter] = useState<SpecialFilter>("ALL");
   const [error, setError] = useState<string | null>(null);
@@ -221,10 +257,13 @@ export default function WarehouseOperationsPage() {
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to load Warehouse queue.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to load Warehouse queue.");
       setRows((payload.data ?? []) as WarehouseRow[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load Warehouse queue.");
+      setError(
+        err instanceof Error ? err.message : "Failed to load Warehouse queue.",
+      );
     } finally {
       setLoading(false);
     }
@@ -232,12 +271,16 @@ export default function WarehouseOperationsPage() {
 
   useEffect(() => {
     const applyUrlState = () => {
-      const next = parseWarehouseParams(new URLSearchParams(window.location.search));
+      const next = parseWarehouseParams(
+        new URLSearchParams(window.location.search),
+      );
       setMethodFilter(next.methodFilter);
       setSelectedSection(next.sectionId);
       setSearch(next.search);
       const canonicalPath = warehousePath(next);
-      if (`${window.location.pathname}${window.location.search}` !== canonicalPath) {
+      if (
+        `${window.location.pathname}${window.location.search}` !== canonicalPath
+      ) {
         window.history.replaceState(null, "", canonicalPath);
       }
     };
@@ -248,7 +291,6 @@ export default function WarehouseOperationsPage() {
 
   useEffect(() => {
     void loadQueue();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
   const searchableRows = useMemo(() => {
@@ -261,19 +303,28 @@ export default function WarehouseOperationsPage() {
   }, [rows, search, specialFilter]);
 
   const methodRows = useMemo(
-    () => searchableRows.filter((row) => rowMatchesWarehouseMethod(row, methodFilter)),
+    () =>
+      searchableRows.filter((row) =>
+        rowMatchesWarehouseMethod(row, methodFilter),
+      ),
     [searchableRows, methodFilter],
   );
   const sectionCounts = useMemo(
     () => countWarehouseSections(searchableRows, methodFilter),
     [searchableRows, methodFilter],
   );
-  const methodSnapshot = useMemo(() => countWarehouseMethodSnapshot(searchableRows), [searchableRows]);
+  const methodSnapshot = useMemo(
+    () => countWarehouseMethodSnapshot(searchableRows),
+    [searchableRows],
+  );
   const visibleRows = useMemo(
-    () => methodRows.filter((row) => isRowInWarehouseSection(row, selectedSection)),
+    () =>
+      methodRows.filter((row) => isRowInWarehouseSection(row, selectedSection)),
     [methodRows, selectedSection],
   );
-  const selectedDefinition = WAREHOUSE_SECTION_DEFINITIONS.find((section) => section.id === selectedSection)!;
+  const selectedDefinition = WAREHOUSE_SECTION_DEFINITIONS.find(
+    (section) => section.id === selectedSection,
+  )!;
   const sectionOptions = visibleSections(methodFilter);
 
   const pushWarehouseState = (next: {
@@ -282,12 +333,19 @@ export default function WarehouseOperationsPage() {
     search?: string;
   }) => {
     const nextMethodFilter = next.methodFilter ?? methodFilter;
-    const nextSectionId = validSectionId(next.sectionId ?? selectedSection, nextMethodFilter);
+    const nextSectionId = validSectionId(
+      next.sectionId ?? selectedSection,
+      nextMethodFilter,
+    );
     const nextSearch = next.search ?? search;
     window.history.pushState(
       null,
       "",
-      warehousePath({ methodFilter: nextMethodFilter, sectionId: nextSectionId, search: nextSearch }),
+      warehousePath({
+        methodFilter: nextMethodFilter,
+        sectionId: nextSectionId,
+        search: nextSearch,
+      }),
     );
   };
 
@@ -297,12 +355,19 @@ export default function WarehouseOperationsPage() {
     search?: string;
   }) => {
     const nextMethodFilter = next.methodFilter ?? methodFilter;
-    const nextSectionId = validSectionId(next.sectionId ?? selectedSection, nextMethodFilter);
+    const nextSectionId = validSectionId(
+      next.sectionId ?? selectedSection,
+      nextMethodFilter,
+    );
     const nextSearch = next.search ?? search;
     window.history.replaceState(
       null,
       "",
-      warehousePath({ methodFilter: nextMethodFilter, sectionId: nextSectionId, search: nextSearch }),
+      warehousePath({
+        methodFilter: nextMethodFilter,
+        sectionId: nextSectionId,
+        search: nextSearch,
+      }),
     );
   };
 
@@ -310,7 +375,10 @@ export default function WarehouseOperationsPage() {
     const nextSectionId = validSectionId(selectedSection, nextMethodFilter);
     setMethodFilter(nextMethodFilter);
     setSelectedSection(nextSectionId);
-    pushWarehouseState({ methodFilter: nextMethodFilter, sectionId: nextSectionId });
+    pushWarehouseState({
+      methodFilter: nextMethodFilter,
+      sectionId: nextSectionId,
+    });
   };
 
   const selectSection = (sectionId: WarehouseSectionId) => {
@@ -336,7 +404,8 @@ export default function WarehouseOperationsPage() {
         body: JSON.stringify({ status: "ready" }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to mark fulfillment Ready.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to mark fulfillment Ready.");
       if (String(payload.data?.status ?? "").toUpperCase() !== "READY") {
         throw new Error("Ready update did not return a READY fulfillment.");
       }
@@ -353,19 +422,24 @@ export default function WarehouseOperationsPage() {
       await loadQueue();
       setNotice(`${row.salesOrderNumber} marked Ready.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to mark fulfillment Ready.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to mark fulfillment Ready.",
+      );
     } finally {
       busyRef.current.delete(row.id);
       setBusyId(null);
     }
   };
 
-  const renderPrimaryAction = (row: WarehouseRow) => {
+  const renderPrimaryAction = (row: WarehouseRow, emphasized: boolean) => {
     const action = getWarehousePrimaryAction({
       id: row.id,
       type: row.type,
       status: row.status,
     });
+    const actionClass = emphasized ? "ios-primary-btn" : "ios-secondary-btn";
     if (action.kind === "markReady") {
       return (
         <button
@@ -374,7 +448,7 @@ export default function WarehouseOperationsPage() {
           onClick={() => markReady(row)}
           disabled={busyId === row.id}
           aria-busy={busyId === row.id}
-          className="ios-primary-btn inline-flex min-h-11 items-center justify-center px-3 text-xs disabled:opacity-60"
+          className={`${actionClass} inline-flex min-h-11 items-center justify-center px-3 text-xs disabled:opacity-60`}
         >
           {busyId === row.id ? "Marking Ready..." : action.label}
         </button>
@@ -384,7 +458,7 @@ export default function WarehouseOperationsPage() {
       <Link
         data-testid={`warehouse-primary-action-${row.id}`}
         href={action.href}
-        className="ios-primary-btn inline-flex min-h-11 items-center justify-center px-3 text-xs"
+        className={`${actionClass} inline-flex min-h-11 items-center justify-center px-3 text-xs`}
       >
         {action.label}
       </Link>
@@ -396,15 +470,22 @@ export default function WarehouseOperationsPage() {
       <header className="glass-card p-5 sm:p-6">
         <div className="glass-card-content flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase text-slate-400">Warehouse</p>
-            <h1 className="mt-1 text-2xl font-semibold text-white">Operations Workspace</h1>
+            <p className="text-xs font-semibold uppercase text-slate-400">
+              Warehouse
+            </p>
+            <h1 className="mt-1 text-2xl font-semibold text-white">
+              Operations Workspace
+            </h1>
             <p className="mt-2 max-w-3xl text-sm text-slate-400">
-              Pickup and Delivery worklists for orders that need an explicit Ready check before
-              customer handoff.
+              Pickup and Delivery worklists for orders that need an explicit
+              Ready check before customer handoff.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href="/fulfillment/outbound" className="ios-secondary-btn inline-flex min-h-11 items-center px-3 text-sm">
+            <Link
+              href="/fulfillment/outbound"
+              className="ios-secondary-btn inline-flex min-h-11 items-center px-3 text-sm"
+            >
               Fulfillment Queue
             </Link>
           </div>
@@ -415,7 +496,11 @@ export default function WarehouseOperationsPage() {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
             <p className="text-sm font-medium text-slate-300">Workflow</p>
-            <div className="mt-2 flex flex-wrap gap-2" role="tablist" aria-label="Warehouse workflow">
+            <div
+              className="mt-2 flex flex-wrap gap-2"
+              role="tablist"
+              aria-label="Warehouse workflow"
+            >
               {WAREHOUSE_METHOD_FILTERS.map((method) => {
                 const active = methodFilter === method.id;
                 return (
@@ -433,31 +518,66 @@ export default function WarehouseOperationsPage() {
                         : "border-white/10 bg-white/[0.05] text-slate-300 hover:bg-white/[0.08]"
                     }`}
                   >
-                    {method.id === "delivery" ? <Truck className="h-4 w-4" /> : <PackageCheck className="h-4 w-4" />}
+                    {method.id === "delivery" ? (
+                      <Truck className="h-4 w-4" />
+                    ) : (
+                      <PackageCheck className="h-4 w-4" />
+                    )}
                     {method.label}
                   </button>
                 );
               })}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2" aria-label="Warehouse snapshot counts">
+          <div
+            className="flex flex-wrap gap-2"
+            aria-label="Warehouse snapshot counts"
+          >
             <span className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-slate-300">
-              Pickup Needs Ready <span className="text-white" data-testid="warehouse-summary-pickup-needs-ready">{methodSnapshot.pickupNeedsReady}</span>
+              Pickup Needs Ready{" "}
+              <span
+                className="text-white"
+                data-testid="warehouse-summary-pickup-needs-ready"
+              >
+                {methodSnapshot.pickupNeedsReady}
+              </span>
             </span>
             <span className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-slate-300">
-              Pickup Ready <span className="text-white" data-testid="warehouse-summary-pickup-ready">{methodSnapshot.pickupReady}</span>
+              Pickup Ready{" "}
+              <span
+                className="text-white"
+                data-testid="warehouse-summary-pickup-ready"
+              >
+                {methodSnapshot.pickupReady}
+              </span>
             </span>
             <span className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-slate-300">
-              Delivery Needs Ready <span className="text-white" data-testid="warehouse-summary-delivery-needs-ready">{methodSnapshot.deliveryNeedsReady}</span>
+              Delivery Needs Ready{" "}
+              <span
+                className="text-white"
+                data-testid="warehouse-summary-delivery-needs-ready"
+              >
+                {methodSnapshot.deliveryNeedsReady}
+              </span>
             </span>
             <span className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-slate-300">
-              Delivery Ready <span className="text-white" data-testid="warehouse-summary-delivery-ready">{methodSnapshot.deliveryReady}</span>
+              Delivery Ready{" "}
+              <span
+                className="text-white"
+                data-testid="warehouse-summary-delivery-ready"
+              >
+                {methodSnapshot.deliveryReady}
+              </span>
             </span>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-3 md:grid-cols-3" role="tablist" aria-label={`${methodFilter} sections`}>
+      <div
+        className="grid gap-3 md:grid-cols-3"
+        role="tablist"
+        aria-label={`${methodFilter} sections`}
+      >
         {sectionOptions.map((section) => {
           const active = selectedSection === section.id;
           const count = sectionCounts[section.id];
@@ -477,7 +597,9 @@ export default function WarehouseOperationsPage() {
             >
               <span className="glass-card-content flex h-full flex-col justify-between gap-3">
                 <span className="flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-white">{sectionLabel(section.id, methodFilter)}</span>
+                  <span className="text-sm font-semibold text-white">
+                    {sectionLabel(section.id, methodFilter)}
+                  </span>
                   {section.id === "inDelivery" ? (
                     <Truck className="h-4 w-4 text-slate-300" />
                   ) : (
@@ -485,8 +607,12 @@ export default function WarehouseOperationsPage() {
                   )}
                 </span>
                 <span className="flex items-end justify-between gap-3">
-                  <span className="text-3xl font-semibold text-white">{count}</span>
-                  <span className="text-right text-xs text-slate-400">{section.description}</span>
+                  <span className="text-3xl font-semibold text-white">
+                    {count}
+                  </span>
+                  <span className="text-right text-xs text-slate-400">
+                    {section.description}
+                  </span>
                 </span>
               </span>
             </button>
@@ -512,7 +638,9 @@ export default function WarehouseOperationsPage() {
             Special Order
             <select
               value={specialFilter}
-              onChange={(event) => setSpecialFilter(event.target.value as SpecialFilter)}
+              onChange={(event) =>
+                setSpecialFilter(event.target.value as SpecialFilter)
+              }
               className="ios-input mt-2 min-w-[170px] text-sm"
               aria-label="Special Order filter"
             >
@@ -542,66 +670,112 @@ export default function WarehouseOperationsPage() {
         </div>
       ) : null}
 
-      <section className="glass-card overflow-hidden p-0" id="warehouse-section-panel">
+      <section
+        className="glass-card overflow-hidden p-0"
+        id="warehouse-section-panel"
+      >
         <div className="glass-card-content">
           <div className="flex flex-col gap-1 border-b border-white/10 px-4 py-4 sm:px-6">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-base font-semibold text-white">
                 {sectionLabel(selectedDefinition.id, methodFilter)}
               </h2>
-              <p className="text-sm text-slate-400" data-testid="warehouse-visible-count">
+              <p
+                className="text-sm text-slate-400"
+                data-testid="warehouse-visible-count"
+              >
                 {visibleRows.length} visible
               </p>
             </div>
-            <p className="text-sm text-slate-400">{selectedDefinition.description}</p>
+            <p className="text-sm text-slate-400">
+              {selectedDefinition.description}
+            </p>
           </div>
 
           <div className="hidden overflow-x-auto lg:block">
             <Table>
               <TableHeader>
                 <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
-                  <TableHead className="min-w-[120px] text-slate-400">Scheduled</TableHead>
-                  <TableHead className="min-w-[120px] text-slate-400">Order</TableHead>
-                  <TableHead className="min-w-[180px] text-slate-400">Customer</TableHead>
-                  <TableHead className="min-w-[120px] text-slate-400">Type</TableHead>
-                  <TableHead className="min-w-[220px] text-slate-400">Items</TableHead>
-                  <TableHead className="min-w-[180px] text-slate-400">Progress</TableHead>
-                  <TableHead className="min-w-[140px] text-slate-400">Status</TableHead>
-                  <TableHead className="min-w-[220px] text-right text-slate-400">Action</TableHead>
+                  <TableHead className="min-w-[120px] text-slate-400">
+                    Scheduled
+                  </TableHead>
+                  <TableHead className="min-w-[120px] text-slate-400">
+                    Order
+                  </TableHead>
+                  <TableHead className="min-w-[180px] text-slate-400">
+                    Customer
+                  </TableHead>
+                  <TableHead className="min-w-[120px] text-slate-400">
+                    Type
+                  </TableHead>
+                  <TableHead className="min-w-[220px] text-slate-400">
+                    Items
+                  </TableHead>
+                  <TableHead className="min-w-[180px] text-slate-400">
+                    Progress
+                  </TableHead>
+                  <TableHead className="min-w-[140px] text-slate-400">
+                    Status
+                  </TableHead>
+                  <TableHead className="min-w-[220px] text-right text-slate-400">
+                    Action
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow className="border-white/10">
-                    <TableCell colSpan={8} className="py-10 text-center text-slate-400">
+                    <TableCell
+                      colSpan={8}
+                      className="py-10 text-center text-slate-400"
+                    >
                       Loading Warehouse queue...
                     </TableCell>
                   </TableRow>
                 ) : visibleRows.length === 0 ? (
                   <TableRow className="border-white/10">
-                    <TableCell colSpan={8} className="py-10 text-center text-slate-400">
+                    <TableCell
+                      colSpan={8}
+                      className="py-10 text-center text-slate-400"
+                    >
                       {searchableRows.length === 0
                         ? "No Warehouse tasks match the current search or filters."
                         : `No ${sectionLabel(selectedDefinition.id, methodFilter).toLowerCase()} tasks.`}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  visibleRows.map((row) => (
-                    <TableRow key={row.id} className="border-white/10 text-slate-300 hover:bg-white/[0.04]">
+                  visibleRows.map((row, index) => (
+                    <TableRow
+                      key={row.id}
+                      className="border-white/10 text-slate-300 hover:bg-white/[0.04]"
+                    >
                       <TableCell>
                         <div className="space-y-0.5">
-                          <div className="font-medium text-white">{formatDate(row.scheduledAt)}</div>
-                          <div className="text-xs text-slate-400">{row.timeWindow || "No time window"}</div>
+                          <div className="font-medium text-white">
+                            {formatDate(row.scheduledAt)}
+                          </div>
+                          <div className="text-xs text-slate-400">
+                            {row.timeWindow || "No time window"}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Link href={`/orders/${row.salesOrderId}`} className="font-semibold text-white underline-offset-4 hover:underline">
+                        <Link
+                          href={`/orders/${row.salesOrderId}`}
+                          className="font-semibold text-white underline-offset-4 hover:underline"
+                        >
                           {row.salesOrderNumber}
                         </Link>
                       </TableCell>
                       <TableCell className="max-w-[220px]">
-                        <div className="truncate font-medium text-white">{row.customerName || "Customer missing"}</div>
-                        <div className="truncate text-xs text-slate-400">{row.type === "DELIVERY" ? row.address || "-" : "Counter pickup"}</div>
+                        <div className="truncate font-medium text-white">
+                          {row.customerName || "Customer missing"}
+                        </div>
+                        <div className="truncate text-xs text-slate-400">
+                          {row.type === "DELIVERY"
+                            ? row.address || "-"
+                            : "Counter pickup"}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <span className="inline-flex rounded-lg border border-white/10 bg-white/[0.06] px-2 py-1 text-xs font-semibold text-white">
@@ -609,7 +783,9 @@ export default function WarehouseOperationsPage() {
                         </span>
                       </TableCell>
                       <TableCell className="max-w-[300px]">
-                        <div className="truncate font-medium text-white">{itemPreview(row)}</div>
+                        <div className="truncate font-medium text-white">
+                          {itemPreview(row)}
+                        </div>
                         <div className="mt-1 flex flex-wrap gap-1">
                           <SpecialOrderNotice row={row} />
                         </div>
@@ -617,24 +793,39 @@ export default function WarehouseOperationsPage() {
                       <TableCell>
                         <div className="space-y-1 text-xs">
                           <div className="text-slate-300">
-                            Ordered <span className="font-semibold text-white">{formatQty(row.orderedQty)}</span> /
-                            Fulfilled <span className="font-semibold text-white">{formatQty(row.fulfilledQty)}</span>
+                            Ordered{" "}
+                            <span className="font-semibold text-white">
+                              {formatQty(row.orderedQty)}
+                            </span>{" "}
+                            / Fulfilled{" "}
+                            <span className="font-semibold text-white">
+                              {formatQty(row.fulfilledQty)}
+                            </span>
                           </div>
                           <div className="text-slate-400">
-                            Remaining <span className="font-semibold text-white">{formatQty(row.remainingQty)}</span> -{" "}
-                            {row.itemsCompleted}/{row.itemCount} lines complete
+                            Remaining{" "}
+                            <span className="font-semibold text-white">
+                              {formatQty(row.remainingQty)}
+                            </span>{" "}
+                            - {row.itemsCompleted}/{row.itemCount} lines
+                            complete
                           </div>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <span className={`inline-flex rounded-lg border px-2 py-1 text-xs font-semibold ${statusBadgeClass(row.status)}`}>
+                        <span
+                          className={`inline-flex rounded-lg border px-2 py-1 text-xs font-semibold ${statusBadgeClass(row.status)}`}
+                        >
                           {formatWarehouseStatus(row.status)}
                         </span>
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap justify-end gap-2">
-                          {renderPrimaryAction(row)}
-                          <Link href={`/fulfillment/${row.id}`} className="ios-secondary-btn inline-flex min-h-11 items-center px-3 text-xs">
+                          {renderPrimaryAction(row, index === 0)}
+                          <Link
+                            href={`/fulfillment/${row.id}`}
+                            className="ios-secondary-btn inline-flex min-h-11 items-center px-3 text-xs"
+                          >
                             Fulfillment
                           </Link>
                           <a
@@ -667,14 +858,22 @@ export default function WarehouseOperationsPage() {
                   : `No ${sectionLabel(selectedDefinition.id, methodFilter).toLowerCase()} tasks.`}
               </div>
             ) : (
-              visibleRows.map((row) => (
-                <article key={row.id} className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+              visibleRows.map((row, index) => (
+                <article
+                  key={row.id}
+                  className="rounded-xl border border-white/10 bg-white/[0.04] p-4"
+                >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <Link href={`/orders/${row.salesOrderId}`} className="font-semibold text-white underline-offset-4 hover:underline">
+                      <Link
+                        href={`/orders/${row.salesOrderId}`}
+                        className="inline-flex min-h-11 items-center font-semibold text-white underline-offset-4 hover:underline"
+                      >
                         {row.salesOrderNumber}
                       </Link>
-                      <p className="mt-1 truncate text-sm text-slate-300">{row.customerName || "Customer missing"}</p>
+                      <p className="mt-1 truncate text-sm text-slate-300">
+                        {row.customerName || "Customer missing"}
+                      </p>
                     </div>
                     <span className="shrink-0 rounded-lg border border-white/10 bg-white/[0.06] px-2 py-1 text-xs font-semibold text-white">
                       {row.type === "DELIVERY" ? "Delivery" : "Pickup"}
@@ -684,38 +883,53 @@ export default function WarehouseOperationsPage() {
                   <div className="mt-3 grid gap-2 text-sm text-slate-300">
                     <div className="flex justify-between gap-3">
                       <span className="text-slate-400">Scheduled</span>
-                      <span className="text-right text-white">{formatDate(row.scheduledAt)}</span>
+                      <span className="text-right text-white">
+                        {formatDate(row.scheduledAt)}
+                      </span>
                     </div>
                     <div className="flex justify-between gap-3">
                       <span className="text-slate-400">Status</span>
-                      <span className={`rounded-lg border px-2 py-1 text-xs font-semibold ${statusBadgeClass(row.status)}`}>
+                      <span
+                        className={`rounded-lg border px-2 py-1 text-xs font-semibold ${statusBadgeClass(row.status)}`}
+                      >
                         {formatWarehouseStatus(row.status)}
                       </span>
                     </div>
                     <div className="min-w-0">
                       <span className="text-slate-400">Items</span>
-                      <p className="mt-1 truncate font-medium text-white">{itemPreview(row)}</p>
+                      <p className="mt-1 truncate font-medium text-white">
+                        {itemPreview(row)}
+                      </p>
                     </div>
                     <SpecialOrderNotice row={row} />
                     <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/10 bg-white/[0.04] p-3 text-center">
                       <div>
                         <p className="text-xs text-slate-400">Ordered</p>
-                        <p className="mt-1 font-semibold text-white">{formatQty(row.orderedQty)}</p>
+                        <p className="mt-1 font-semibold text-white">
+                          {formatQty(row.orderedQty)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-slate-400">Fulfilled</p>
-                        <p className="mt-1 font-semibold text-white">{formatQty(row.fulfilledQty)}</p>
+                        <p className="mt-1 font-semibold text-white">
+                          {formatQty(row.fulfilledQty)}
+                        </p>
                       </div>
                       <div>
                         <p className="text-xs text-slate-400">Remaining</p>
-                        <p className="mt-1 font-semibold text-white">{formatQty(row.remainingQty)}</p>
+                        <p className="mt-1 font-semibold text-white">
+                          {formatQty(row.remainingQty)}
+                        </p>
                       </div>
                     </div>
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {renderPrimaryAction(row)}
-                    <Link href={`/fulfillment/${row.id}`} className="ios-secondary-btn inline-flex min-h-11 items-center px-3 text-xs">
+                    {renderPrimaryAction(row, index === 0)}
+                    <Link
+                      href={`/fulfillment/${row.id}`}
+                      className="ios-secondary-btn inline-flex min-h-11 items-center px-3 text-xs"
+                    >
                       Fulfillment
                     </Link>
                     <a

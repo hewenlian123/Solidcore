@@ -31,6 +31,30 @@ type FulfillmentDetail = {
   shiptoNotes: string | null;
   address: string | null;
   notes: string | null;
+  events: Array<{
+    id: string;
+    method: "PICKUP" | "DELIVERY";
+    actor: string;
+    jobSiteName: string | null;
+    contactName: string | null;
+    contactPhone: string | null;
+    address1: string | null;
+    address2: string | null;
+    city: string | null;
+    state: string | null;
+    zip: string | null;
+    occurredAt: string;
+    items: Array<{
+      id: string;
+      title: string;
+      sku: string;
+      unit: string;
+      quantity: string;
+      priorFulfilledQty: string;
+      newFulfilledQty: string;
+      remainingQty: string;
+    }>;
+  }>;
   customer: { id: string; name: string; phone: string | null; address: string | null } | null;
   items: Array<{
     id: string;
@@ -248,25 +272,6 @@ export default function FulfillmentDetailPage() {
       .filter(Boolean)
       .join(", ");
   }, [data]);
-
-  const timeline = useMemo(() => {
-    const status = String(data?.status ?? "").toUpperCase();
-    const isReadyOrBeyond = ["READY", "OUT_FOR_DELIVERY", "DELIVERED", "PICKED_UP", "COMPLETED"].includes(status);
-    const isOutOrPicked = ["OUT_FOR_DELIVERY", "OUT", "IN_PROGRESS"].includes(status) || Boolean(data?.markedOutAt);
-    const isDone = ["DELIVERED", "PICKED_UP", "COMPLETED"].includes(status) || Boolean(data?.markedDoneAt);
-
-    return [
-      { key: "created", label: "Created", done: true, when: fmtDateTime(data?.createdAt) },
-      { key: "ready", label: "Ready", done: isReadyOrBeyond, when: isReadyOrBeyond ? "— (not tracked)" : "—" },
-      {
-        key: "out",
-        label: data?.type === "DELIVERY" ? "Out for delivery" : "Picked up",
-        done: isOutOrPicked,
-        when: data?.markedOutAt ? fmtDateTime(data.markedOutAt) : "—",
-      },
-      { key: "done", label: "Completed", done: isDone, when: data?.markedDoneAt ? fmtDateTime(data.markedDoneAt) : "—" },
-    ];
-  }, [data?.createdAt, data?.markedDoneAt, data?.markedOutAt, data?.status, data?.type]);
 
   const canEditShipto = useMemo(() => {
     const key = String(data?.status ?? "").toUpperCase();
@@ -579,7 +584,7 @@ export default function FulfillmentDetailPage() {
             ) : null}
             {data.type === "DELIVERY" ? (
               <p className="mt-3 max-w-2xl text-sm text-slate-400" data-testid="delivery-workflow-guidance">
-                Complete Delivery records the customer handoff through the canonical fulfillment path. Partial Delivery uses cumulative fulfilled quantity on this fulfillment record.
+                Complete Delivery records an immutable customer handoff event and deducts only the newly delivered quantity.
               </p>
             ) : null}
             {specialOrderSummary ? (
@@ -595,9 +600,9 @@ export default function FulfillmentDetailPage() {
                 Delivery address is missing on this fulfillment record. Confirm jobsite details before dispatch.
               </div>
             ) : null}
-            <div className="mt-2 h-2 w-full max-w-[360px] overflow-hidden rounded-full bg-white/10">
+            <div className="mt-2 h-2 w-full max-w-[360px] overflow-hidden rounded bg-[var(--sc-color-surface-secondary)]">
               <div
-                className="h-2 rounded-full bg-gradient-to-r from-indigo-500 to-cyan-500"
+                className="h-2 rounded bg-[var(--sc-color-accent)]"
                 style={{ width: `${Math.min(Math.max(itemProgress.percent, 0), 100)}%` }}
               />
             </div>
@@ -703,30 +708,52 @@ export default function FulfillmentDetailPage() {
 
       <div className="glass-card p-8">
         <div className="glass-card-content">
-          <h2 className="text-base font-semibold text-white">Timeline</h2>
+          <h2 className="text-base font-semibold text-white">Fulfillment history</h2>
           <p className="mt-1 text-xs text-slate-400">
-            Best-effort history based on stored timestamps; some events are not timestamped in the current data model.
+            Each Pickup or Delivery is recorded as a separate event.
           </p>
-          <div className="mt-4 grid gap-2">
-            {timeline.map((step) => (
+          {data.events.length === 0 ? (
+            <p className="mt-4 border-t border-[var(--sc-color-divider)] py-4 text-sm text-slate-400">
+              No Pickup or Delivery events recorded yet.
+            </p>
+          ) : (
+            <div className="mt-4 divide-y divide-[var(--sc-color-divider)] border-y border-[var(--sc-color-divider)]">
+              {data.events.map((event) => (
               <div
-                key={step.key}
-                className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 px-4 py-3 ${
-                  step.done ? "bg-white/[0.04]" : "bg-transparent"
-                }`}
+                key={event.id}
+                className="py-4"
               >
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`h-2.5 w-2.5 rounded-full ${
-                      step.done ? "bg-emerald-400" : "bg-slate-600"
-                    }`}
-                  />
-                  <span className="text-sm font-semibold text-white">{step.label}</span>
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <p className="text-sm font-semibold text-white">
+                    {event.method === "PICKUP" ? "Pickup" : "Delivery"} by {event.actor}
+                  </p>
+                  <time className="text-xs text-slate-400">{fmtDateTime(event.occurredAt)}</time>
                 </div>
-                <span className="text-xs text-slate-400">{step.when}</span>
+                {event.method === "DELIVERY" ? (
+                  <p className="mt-1 text-xs text-slate-400">
+                    {[event.jobSiteName, event.contactName, event.address1, event.city, event.state, event.zip]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                ) : null}
+                <div className="mt-3 grid gap-2">
+                  {event.items.map((item) => (
+                    <div
+                      key={item.id}
+                      className="grid gap-1 text-xs text-slate-400 sm:grid-cols-[minmax(0,1fr)_repeat(4,auto)] sm:gap-4"
+                    >
+                      <span className="font-medium text-white">{item.title} · {item.sku}</span>
+                      <span>This event {fmtQty(item.quantity)} {item.unit}</span>
+                      <span>Prior {fmtQty(item.priorFulfilledQty)}</span>
+                      <span>New {fmtQty(item.newFulfilledQty)}</span>
+                      <span>Remaining {fmtQty(item.remainingQty)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -994,9 +1021,9 @@ export default function FulfillmentDetailPage() {
             </p>
           ) : data.type === "DELIVERY" ? (
             <p className="text-xs text-slate-400">
-              Adjust cumulative delivered quantities for partial delivery, then use{" "}
-              <span className="font-semibold">Complete Delivery</span> above. Partial Delivery is cumulative within
-              one fulfillment record, not a separate delivery-event ledger.
+              Enter the total delivered quantity after this handoff, then use{" "}
+              <span className="font-semibold">Complete Delivery</span>. SolidCore records only the new quantity as
+              a separate Delivery event.
             </p>
           ) : (
             <>

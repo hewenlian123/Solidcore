@@ -23,7 +23,9 @@ export class InventoryDeductionError extends Error {
   }
 }
 
-export function isInventoryDeductionError(error: unknown): error is InventoryDeductionError {
+export function isInventoryDeductionError(
+  error: unknown,
+): error is InventoryDeductionError {
   return (
     error instanceof InventoryDeductionError ||
     (typeof error === "object" &&
@@ -44,10 +46,13 @@ function toDecimal(value: unknown) {
 }
 
 function normalizeUnit(rawUnit: string | null | undefined) {
-  const unit = String(rawUnit ?? "").trim().toLowerCase();
+  const unit = String(rawUnit ?? "")
+    .trim()
+    .toLowerCase();
   if (unit.includes("box")) return "box";
   if (unit.includes("sqft") || unit === "sf" || unit === "ft2") return "sqft";
-  if (unit.includes("piece") || unit.includes("pcs") || unit === "pc") return "piece";
+  if (unit.includes("piece") || unit.includes("pcs") || unit === "pc")
+    return "piece";
   return unit || "unit";
 }
 
@@ -73,7 +78,10 @@ function toStockDeductQty(input: {
   };
 }
 
-async function lockFulfillmentRows(tx: Prisma.TransactionClient, fulfillmentId: string) {
+async function lockFulfillmentRows(
+  tx: Prisma.TransactionClient,
+  fulfillmentId: string,
+) {
   await tx.$queryRaw(
     Prisma.sql`SELECT id FROM sales_order_fulfillments WHERE id = ${fulfillmentId} FOR UPDATE`,
   );
@@ -119,27 +127,43 @@ function assertFulfillmentCanMutate(args: {
   const fulfillmentStatus = String(args.fulfillmentStatus ?? "").toUpperCase();
   const docType = String(args.docType ?? "").toUpperCase();
 
-  if (docType === "QUOTE" || orderStatus === "DRAFT" || orderStatus === "QUOTED") {
+  if (
+    docType === "QUOTE" ||
+    orderStatus === "DRAFT" ||
+    orderStatus === "QUOTED"
+  ) {
     throw new InventoryDeductionError(
       "Fulfillment is available only after a Sales Order is confirmed.",
       409,
     );
   }
   if (orderStatus === "CANCELLED") {
-    throw new InventoryDeductionError("Cancelled Sales Orders cannot be fulfilled.", 409);
+    throw new InventoryDeductionError(
+      "Cancelled Sales Orders cannot be fulfilled.",
+      409,
+    );
   }
   if (!ACTIVE_SALES_ORDER_STATUSES.has(orderStatus)) {
-    throw new InventoryDeductionError("Sales Order status does not allow fulfillment.", 409);
+    throw new InventoryDeductionError(
+      "Sales Order status does not allow fulfillment.",
+      409,
+    );
   }
   if (NON_MUTABLE_FULFILLMENT_STATUSES.has(fulfillmentStatus)) {
-    throw new InventoryDeductionError("Cancelled fulfillments cannot be updated.", 409);
+    throw new InventoryDeductionError(
+      "Cancelled fulfillments cannot be updated.",
+      409,
+    );
   }
 }
 
 async function syncFulfillmentState(
   tx: Prisma.TransactionClient,
   fulfillmentId: string,
-  options: { forceStatus?: SalesFulfillmentStatus; operator?: string | null } = {},
+  options: {
+    forceStatus?: SalesFulfillmentStatus;
+    operator?: string | null;
+  } = {},
 ) {
   const fulfillment = await tx.salesOrderFulfillment.findUnique({
     where: { id: fulfillmentId },
@@ -156,12 +180,17 @@ async function syncFulfillmentState(
       },
     },
   });
-  if (!fulfillment) throw new InventoryDeductionError("Fulfillment not found.", 404);
+  if (!fulfillment)
+    throw new InventoryDeductionError("Fulfillment not found.", 404);
 
   const allCompleted =
     fulfillment.items.length > 0 &&
-    fulfillment.items.every((item) => toDecimal(item.fulfilledQty).gte(toDecimal(item.orderedQty)));
-  const anyFulfilled = fulfillment.items.some((item) => toDecimal(item.fulfilledQty).gt(0));
+    fulfillment.items.every((item) =>
+      toDecimal(item.fulfilledQty).gte(toDecimal(item.orderedQty)),
+    );
+  const anyFulfilled = fulfillment.items.some((item) =>
+    toDecimal(item.fulfilledQty).gt(0),
+  );
   const now = new Date();
 
   let nextStatus = options.forceStatus;
@@ -181,7 +210,9 @@ async function syncFulfillmentState(
       markedDoneAt: finalStatus ? now : undefined,
       inventoryDeductedAt: finalStatus && allCompleted ? now : undefined,
       inventoryDeductedBy:
-        finalStatus && allCompleted && options.operator ? String(options.operator) : undefined,
+        finalStatus && allCompleted && options.operator
+          ? String(options.operator)
+          : undefined,
     },
   });
 
@@ -220,7 +251,8 @@ export async function setFulfillmentItemFulfilledQuantity(
     where: { id: args.fulfillmentItemId },
     select: { fulfillmentId: true },
   });
-  if (!itemForLock) throw new InventoryDeductionError("Fulfillment item not found.", 404);
+  if (!itemForLock)
+    throw new InventoryDeductionError("Fulfillment item not found.", 404);
   await lockFulfillmentRows(tx, itemForLock.fulfillmentId);
 
   const item = await tx.salesOrderFulfillmentItem.findUnique({
@@ -246,7 +278,8 @@ export async function setFulfillmentItemFulfilledQuantity(
       },
     },
   });
-  if (!item) throw new InventoryDeductionError("Fulfillment item not found.", 404);
+  if (!item)
+    throw new InventoryDeductionError("Fulfillment item not found.", 404);
   assertFulfillmentCanMutate({
     fulfillmentStatus: item.fulfillment.status,
     salesOrderStatus: item.fulfillment.salesOrder.status,
@@ -267,7 +300,10 @@ export async function setFulfillmentItemFulfilledQuantity(
     boxSqft: item.variant?.boxSqft ?? null,
   });
   const targetStockQty = targetDeduction?.qty ?? new Prisma.Decimal(0);
-  const alreadyDeducted = await getDeductedStockQtyForFulfillmentItem(tx, item.id);
+  const alreadyDeducted = await getDeductedStockQtyForFulfillmentItem(
+    tx,
+    item.id,
+  );
 
   if (targetStockQty.lt(alreadyDeducted)) {
     throw new InventoryDeductionError(
@@ -281,13 +317,17 @@ export async function setFulfillmentItemFulfilledQuantity(
     await lockInventoryRows(tx, [item.variantId]);
     const stock = await tx.inventoryStock.findUnique({
       where: { variantId: item.variantId },
-      select: { onHand: true },
+      select: { onHand: true, hold: true },
     });
     const onHand = toDecimal(stock?.onHand);
-    if (onHand.lt(delta)) {
+    const usableOnHand = onHand.minus(toDecimal(stock?.hold));
+    if (usableOnHand.lt(delta)) {
       const sku = item.sku || item.variant?.sku || item.variantId;
+      const available = usableOnHand.lt(0)
+        ? new Prisma.Decimal(0)
+        : usableOnHand;
       throw new InventoryDeductionError(
-        `Insufficient stock for SKU ${sku}. Available: ${onHand.toString()}, required: ${delta.toString()}`,
+        `Insufficient stock for SKU ${sku}. Available: ${available.toString()}, required: ${delta.toString()}`,
         400,
       );
     }
@@ -326,7 +366,9 @@ export async function setFulfillmentItemFulfilledQuantity(
   });
 
   if (args.syncAfter !== false) {
-    await syncFulfillmentState(tx, item.fulfillmentId, { operator: args.operator });
+    await syncFulfillmentState(tx, item.fulfillmentId, {
+      operator: args.operator,
+    });
   }
   return updated;
 }
@@ -355,7 +397,8 @@ export async function setFulfillmentStatus(
       },
     },
   });
-  if (!fulfillment) throw new InventoryDeductionError("Fulfillment not found.", 404);
+  if (!fulfillment)
+    throw new InventoryDeductionError("Fulfillment not found.", 404);
 
   const nextStatus = args.status;
   const finalStatus = isFinalFulfillmentStatus(nextStatus);
@@ -391,10 +434,13 @@ export async function setFulfillmentStatus(
     where: { id: fulfillment.id },
     data: {
       status: nextStatus,
-      markedOutAt: args.markedOutAt ?? (nextStatus === "OUT_FOR_DELIVERY" ? now : undefined),
+      markedOutAt:
+        args.markedOutAt ??
+        (nextStatus === "OUT_FOR_DELIVERY" ? now : undefined),
       markedDoneAt: args.markedDoneAt ?? (finalStatus ? now : undefined),
       inventoryDeductedAt: finalStatus ? now : undefined,
-      inventoryDeductedBy: finalStatus && args.operator ? String(args.operator) : undefined,
+      inventoryDeductedBy:
+        finalStatus && args.operator ? String(args.operator) : undefined,
     },
   });
 
@@ -420,7 +466,8 @@ export async function deductInventoryForFulfillment(
     where: { id: args.fulfillmentId },
     select: { id: true, status: true },
   });
-  if (!fulfillment) throw new InventoryDeductionError("Fulfillment not found.", 404);
+  if (!fulfillment)
+    throw new InventoryDeductionError("Fulfillment not found.", 404);
   if (!isFinalFulfillmentStatus(fulfillment.status)) {
     return { deducted: false, reason: "not_final" as const };
   }

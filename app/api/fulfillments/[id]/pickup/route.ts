@@ -7,6 +7,7 @@ import {
 import {
   isInventoryDeductionError,
 } from "@/lib/fulfillment-inventory";
+import { createFulfillmentEventRequest } from "@/lib/fulfillment-event-request";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 type Params = { params: Promise<{ id: string }> };
@@ -19,11 +20,19 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const { id } = await params;
     const payload = await request.json().catch(() => ({}));
     const requestedItems = Array.isArray(payload?.items) ? payload.items : null;
+    const eventRequest = createFulfillmentEventRequest({
+      fulfillmentId: id,
+      method: "PICKUP",
+      items: requestedItems,
+      providedKey:
+        request.headers.get("Idempotency-Key") ?? payload?.idempotencyKey,
+    });
 
     const updated = await prisma.$transaction((tx) =>
       completeFulfillmentHandoff({
         tx,
         fulfillmentId: id,
+        ...eventRequest,
         expectedType: "PICKUP",
         finalStatus: "PICKED_UP",
         operator: role,

@@ -754,6 +754,11 @@ test.describe("Warehouse Pickup workflow", () => {
     expect(after.stocks[0]).toMatchObject({ onHand: 4, reserved: 0 });
     expect(after.movements).toHaveLength(1);
     expect(movementQty(after, variant.variantId)).toBe(-1);
+    await expect(
+      prisma.salesFulfillmentEvent.count({
+        where: { fulfillmentId: order.fulfillmentId },
+      }),
+    ).resolves.toBe(1);
   });
 
   test("insufficient stock fails without mutation and retry can complete the draft", async ({

@@ -832,6 +832,20 @@ test.describe("Warehouse Delivery workflow", () => {
     expect(afterPartial.items[0].fulfillQty).toBe(2.5);
     expect(afterPartial.fulfillmentItems[0].fulfilledQty).toBe(2.5);
     expect(movementQty(afterPartial, variant.variantId)).toBe(-2.5);
+    const firstEvent = await prisma.salesFulfillmentEvent.findFirst({
+      where: { fulfillmentId: order.fulfillmentId },
+      include: { items: true },
+    });
+    expect(firstEvent).toMatchObject({
+      method: "DELIVERY",
+      actor: "ADMIN",
+      address1: "3400 Delivery Jobsite Dr",
+    });
+    expect(firstEvent?.items).toHaveLength(1);
+    expect(Number(firstEvent?.items[0].quantity)).toBe(2.5);
+    expect(Number(firstEvent?.items[0].priorFulfilledQty)).toBe(0);
+    expect(Number(firstEvent?.items[0].newFulfilledQty)).toBe(2.5);
+    expect(Number(firstEvent?.items[0].remainingQty)).toBe(2.5);
 
     await page.getByTestId("delivery-complete-action").click();
     await expect(page.getByTestId("fulfillment-success")).toContainText("Delivery completed.");
@@ -842,6 +856,19 @@ test.describe("Warehouse Delivery workflow", () => {
     expect(afterComplete.fulfillments[0].status).toBe("DELIVERED");
     expect(movementQty(afterComplete, variant.variantId)).toBe(-5);
     expect(afterComplete.movements).toHaveLength(2);
+    const deliveryEvents = await prisma.salesFulfillmentEvent.findMany({
+      where: { fulfillmentId: order.fulfillmentId },
+      orderBy: { createdAt: "asc" },
+      include: { items: true },
+    });
+    expect(deliveryEvents).toHaveLength(2);
+    expect(deliveryEvents.map((event) => Number(event.items[0].quantity))).toEqual([
+      2.5,
+      2.5,
+    ]);
+    expect(Number(deliveryEvents[1].items[0].priorFulfilledQty)).toBe(2.5);
+    expect(Number(deliveryEvents[1].items[0].newFulfilledQty)).toBe(5);
+    expect(Number(deliveryEvents[1].items[0].remainingQty)).toBe(0);
     expect(orderFinancial(afterComplete, order.orderId)).toEqual(orderFinancial(before, order.orderId));
   });
 
@@ -958,6 +985,11 @@ test.describe("Warehouse Delivery workflow", () => {
     expect(movementQty(after, variant.variantId)).toBe(-2);
     expect(after.fulfillmentItems[0].fulfilledQty).toBe(2);
     expect(after.orders[0].status).toBe("FULFILLED");
+    await expect(
+      prisma.salesFulfillmentEvent.count({
+        where: { fulfillmentId: order.fulfillmentId },
+      }),
+    ).resolves.toBe(1);
   });
 
   test("Delivery Slip response remains available through the existing PDF route", async ({ request }) => {

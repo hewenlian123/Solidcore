@@ -63,6 +63,8 @@ type RequestedHandoffItem = {
 type CompleteFulfillmentHandoffArgs = {
   tx: Prisma.TransactionClient;
   fulfillmentId: string;
+  idempotencyKey: string;
+  requestFingerprint: string;
   expectedType: SalesFulfillmentType;
   finalStatus: SalesFulfillmentStatus;
   operator?: string | null;
@@ -74,17 +76,79 @@ type CompleteFulfillmentHandoffArgs = {
 };
 
 export async function completeFulfillmentHandoff(args: CompleteFulfillmentHandoffArgs) {
+  await args.tx.$queryRaw(
+    Prisma.sql`SELECT id FROM sales_order_fulfillments WHERE id = ${args.fulfillmentId} FOR UPDATE`,
+  );
+  await args.tx.$queryRaw(
+    Prisma.sql`SELECT id FROM sales_order_fulfillment_items WHERE fulfillment_id = ${args.fulfillmentId} ORDER BY created_at FOR UPDATE`,
+  );
+
+  const existingEvent = await args.tx.salesFulfillmentEvent.findUnique({
+    where: { idempotencyKey: args.idempotencyKey },
+    select: {
+      fulfillmentId: true,
+      requestFingerprint: true,
+    },
+  });
+  if (existingEvent) {
+    if (
+      existingEvent.fulfillmentId !== args.fulfillmentId ||
+      existingEvent.requestFingerprint !== args.requestFingerprint
+    ) {
+      throw new FulfillmentHandoffError(
+        "This fulfillment request key was already used for different quantities.",
+        409,
+      );
+    }
+    return args.tx.salesOrderFulfillment.findUnique({
+      where: { id: args.fulfillmentId },
+      include: {
+        salesOrder: {
+          select: {
+            id: true,
+            orderNumber: true,
+            status: true,
+          },
+        },
+        items: { orderBy: { createdAt: "asc" } },
+        events: {
+          orderBy: { occurredAt: "desc" },
+          include: { items: { orderBy: { createdAt: "asc" } } },
+        },
+      },
+    });
+  }
+
   const fulfillment = await args.tx.salesOrderFulfillment.findUnique({
     where: { id: args.fulfillmentId },
     select: {
       id: true,
       type: true,
       status: true,
-      salesOrder: { select: { id: true, status: true, docType: true } },
+      shiptoName: true,
+      shiptoPhone: true,
+      shiptoAddress1: true,
+      shiptoAddress2: true,
+      shiptoCity: true,
+      shiptoState: true,
+      shiptoZip: true,
+      notes: true,
+      salesOrder: {
+        select: {
+          id: true,
+          status: true,
+          docType: true,
+          projectName: true,
+        },
+      },
       items: {
         orderBy: { createdAt: "asc" },
         select: {
           id: true,
+          salesOrderItemId: true,
+          title: true,
+          sku: true,
+          unit: true,
           orderedQty: true,
           fulfilledQty: true,
           notes: true,
@@ -203,6 +267,23 @@ export async function completeFulfillmentHandoff(args: CompleteFulfillmentHandof
   }
 
   const allCompleted = targets.every((target) => target.fulfilledQty.gte(target.orderedQty));
+  const eventItems = targets
+    .map((target) => {
+      const source = byId.get(target.id);
+      const quantity = target.fulfilledQty.minus(target.currentFulfilledQty);
+      return {
+        fulfillmentItemId: target.id,
+        salesOrderItemId: source?.salesOrderItemId ?? null,
+        title: source?.title ?? "Order item",
+        sku: source?.sku ?? "",
+        unit: source?.unit ?? "unit",
+        quantity,
+        priorFulfilledQty: target.currentFulfilledQty,
+        newFulfilledQty: target.fulfilledQty,
+        remainingQty: target.orderedQty.minus(target.fulfilledQty),
+      };
+    })
+    .filter((item) => item.quantity.gt(0));
 
   for (const target of targets) {
     await setFulfillmentItemFulfilledQuantity(args.tx, {
@@ -231,6 +312,29 @@ export async function completeFulfillmentHandoff(args: CompleteFulfillmentHandof
     });
   }
 
+  if (eventItems.length > 0) {
+    await args.tx.salesFulfillmentEvent.create({
+      data: {
+        fulfillmentId: fulfillment.id,
+        salesOrderId: fulfillment.salesOrder.id,
+        idempotencyKey: args.idempotencyKey,
+        requestFingerprint: args.requestFingerprint,
+        method: fulfillment.type,
+        actor: String(args.operator ?? "UNKNOWN"),
+        jobSiteName: fulfillment.salesOrder.projectName,
+        contactName: fulfillment.shiptoName,
+        contactPhone: fulfillment.shiptoPhone,
+        address1: fulfillment.shiptoAddress1,
+        address2: fulfillment.shiptoAddress2,
+        city: fulfillment.shiptoCity,
+        state: fulfillment.shiptoState,
+        zip: fulfillment.shiptoZip,
+        notes: fulfillment.notes,
+        items: { create: eventItems },
+      },
+    });
+  }
+
   return args.tx.salesOrderFulfillment.findUnique({
     where: { id: fulfillment.id },
     include: {
@@ -242,6 +346,10 @@ export async function completeFulfillmentHandoff(args: CompleteFulfillmentHandof
         },
       },
       items: { orderBy: { createdAt: "asc" } },
+      events: {
+        orderBy: { occurredAt: "desc" },
+        include: { items: { orderBy: { createdAt: "asc" } } },
+      },
     },
   });
 }

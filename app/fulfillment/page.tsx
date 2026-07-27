@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRole } from "@/components/layout/role-provider";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type FulfillmentStatus =
   | "DRAFT"
@@ -74,8 +81,14 @@ type DashboardPayload = {
 
 function statusBadge(status: FulfillmentStatus) {
   if (status === "COMPLETED") return "bg-emerald-100 text-emerald-700";
-  if (status === "OUT_FOR_DELIVERY" || status === "OUT" || status === "IN_PROGRESS") return "bg-blue-100 text-blue-700";
-  if (status === "DELIVERED" || status === "PICKED_UP") return "bg-emerald-100 text-emerald-700";
+  if (
+    status === "OUT_FOR_DELIVERY" ||
+    status === "OUT" ||
+    status === "IN_PROGRESS"
+  )
+    return "bg-blue-100 text-blue-700";
+  if (status === "DELIVERED" || status === "PICKED_UP")
+    return "bg-emerald-100 text-emerald-700";
   if (status === "READY") return "bg-cyan-100 text-cyan-700";
   if (status === "PARTIAL") return "bg-amber-100 text-amber-700";
   if (status === "CANCELLED") return "bg-slate-200 text-slate-600";
@@ -86,7 +99,12 @@ function statusLabel(status: FulfillmentStatus) {
   if (status === "SCHEDULED") return "Scheduled";
   if (status === "DRAFT") return "Draft";
   if (status === "READY") return "Ready";
-  if (status === "OUT_FOR_DELIVERY" || status === "OUT" || status === "IN_PROGRESS") return "Out for Delivery";
+  if (
+    status === "OUT_FOR_DELIVERY" ||
+    status === "OUT" ||
+    status === "IN_PROGRESS"
+  )
+    return "Out for Delivery";
   if (status === "DELIVERED") return "Delivered";
   if (status === "PICKED_UP") return "Picked Up";
   if (status === "PARTIAL") return "Partial";
@@ -96,7 +114,17 @@ function statusLabel(status: FulfillmentStatus) {
 
 function startOfTodayUtc() {
   const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+  return new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0,
+      0,
+      0,
+      0,
+    ),
+  );
 }
 
 function endOfTodayUtc() {
@@ -115,25 +143,36 @@ export default function FulfillmentDashboardPage() {
     try {
       setError(null);
       const [dashRes, outboundRes] = await Promise.all([
-        fetch("/api/fulfillment/dashboard", { cache: "no-store", headers: { "x-user-role": role } }),
-        fetch("/api/fulfillments/outbound", { cache: "no-store", headers: { "x-user-role": role } }),
+        fetch("/api/fulfillment/dashboard", {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        }),
+        fetch("/api/fulfillments/outbound", {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        }),
       ]);
 
       const dashPayload = await dashRes.json();
-      if (!dashRes.ok) throw new Error(dashPayload.error ?? "Failed to load pickup dashboard");
+      if (!dashRes.ok)
+        throw new Error(dashPayload.error ?? "Failed to load pickup dashboard");
       setData(dashPayload.data);
 
       const outboundPayload = await outboundRes.json();
-      if (!outboundRes.ok) throw new Error(outboundPayload.error ?? "Failed to load outbound queue");
+      if (!outboundRes.ok)
+        throw new Error(
+          outboundPayload.error ?? "Failed to load outbound queue",
+        );
       setOutbound((outboundPayload.data ?? []) as OutboundRow[]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load pickup queue");
+      setError(
+        err instanceof Error ? err.message : "Failed to load pickup queue",
+      );
     }
   };
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
   const kpis = useMemo(
@@ -148,7 +187,10 @@ export default function FulfillmentDashboardPage() {
     [data],
   );
 
-  const outboundById = useMemo(() => new Map(outbound.map((row) => [row.id, row])), [outbound]);
+  const outboundById = useMemo(
+    () => new Map(outbound.map((row) => [row.id, row])),
+    [outbound],
+  );
 
   const updateFulfillmentStatus = async (
     fulfillmentId: string,
@@ -163,10 +205,13 @@ export default function FulfillmentDashboardPage() {
         body: JSON.stringify({ status }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to update fulfillment");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to update fulfillment");
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update fulfillment");
+      setError(
+        err instanceof Error ? err.message : "Failed to update fulfillment",
+      );
     } finally {
       setBusyId(null);
     }
@@ -196,51 +241,85 @@ export default function FulfillmentDashboardPage() {
       <header className="glass-card p-8">
         <div className="glass-card-content flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white">Pickup Queue</h1>
-            <p className="mt-2 text-sm text-slate-400">Operational pickup workflow using existing fulfillments and items.</p>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
+              Pickup Queue
+            </h1>
+            <p className="mt-2 text-sm text-slate-400">
+              Operational pickup workflow using existing fulfillments and items.
+            </p>
           </div>
-          <Link href="/fulfillment/outbound" className="ios-secondary-btn h-10 px-3 text-sm">
+          <Link
+            href="/fulfillment/outbound"
+            className="ios-secondary-btn h-10 px-3 text-sm"
+          >
             Fulfillment Queue
           </Link>
         </div>
       </header>
 
       {error ? (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">{error}</div>
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+          {error}
+        </div>
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <article className="glass-card p-5">
           <div className="glass-card-content">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Today Pickup</p>
-            <p className="mt-2 text-3xl font-semibold text-white">{kpis.todayPickups}</p>
-          </div>
-        </article>
-        <article className="glass-card p-5">
-          <div className="glass-card-content">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Ready for Pickup</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Today Pickup
+            </p>
             <p className="mt-2 text-3xl font-semibold text-white">
-              {outbound.filter((row) => row.type === "PICKUP" && String(row.status).toUpperCase() === "READY").length}
+              {kpis.todayPickups}
             </p>
           </div>
         </article>
         <article className="glass-card p-5">
           <div className="glass-card-content">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Upcoming Pickup</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Ready for Pickup
+            </p>
             <p className="mt-2 text-3xl font-semibold text-white">
-              {outbound.filter((row) => {
-                if (row.type !== "PICKUP") return false;
-                if (!row.scheduledAt) return false;
-                return new Date(row.scheduledAt).getTime() >= endOfTodayUtc().getTime();
-              }).length}
+              {
+                outbound.filter(
+                  (row) =>
+                    row.type === "PICKUP" &&
+                    String(row.status).toUpperCase() === "READY",
+                ).length
+              }
             </p>
           </div>
         </article>
         <article className="glass-card p-5">
           <div className="glass-card-content">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Picked Up</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Upcoming Pickup
+            </p>
             <p className="mt-2 text-3xl font-semibold text-white">
-              {(data?.todayPickups ?? []).filter((row) => row.status === "PICKED_UP").length}
+              {
+                outbound.filter((row) => {
+                  if (row.type !== "PICKUP") return false;
+                  if (!row.scheduledAt) return false;
+                  return (
+                    new Date(row.scheduledAt).getTime() >=
+                    endOfTodayUtc().getTime()
+                  );
+                }).length
+              }
+            </p>
+          </div>
+        </article>
+        <article className="glass-card p-5">
+          <div className="glass-card-content">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Picked Up
+            </p>
+            <p className="mt-2 text-3xl font-semibold text-white">
+              {
+                (data?.todayPickups ?? []).filter(
+                  (row) => row.status === "PICKED_UP",
+                ).length
+              }
             </p>
           </div>
         </article>
@@ -262,11 +341,15 @@ export default function FulfillmentDashboardPage() {
                 <TableHead className="text-slate-400">Phone</TableHead>
                 <TableHead className="text-slate-400">Notes</TableHead>
                 <TableHead className="text-slate-400">Status</TableHead>
-                <TableHead className="text-right text-slate-400">Actions</TableHead>
+                <TableHead className="text-right text-slate-400">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {!data || data.todayPickups.filter((row) => row.status !== "PICKED_UP").length === 0 ? (
+              {!data ||
+              data.todayPickups.filter((row) => row.status !== "PICKED_UP")
+                .length === 0 ? (
                 <TableRow className="border-white/10">
                   <TableCell colSpan={9} className="text-center text-slate-400">
                     No pending pickups scheduled for today.
@@ -275,73 +358,95 @@ export default function FulfillmentDashboardPage() {
               ) : (
                 data.todayPickups
                   .filter((row) => row.status !== "PICKED_UP")
-                  .map((row) => (
+                  .map((row) =>
                     // Prefer operational info from outbound API when present.
                     // Dashboard payload may omit some fields depending on older deployments.
                     (() => {
                       const outboundRow = outboundById.get(row.id);
-                      const windowText = row.timeWindow ?? outboundRow?.timeWindow ?? "-";
-                      const contactText = row.pickupContact ?? outboundRow?.pickupContact ?? "-";
+                      const windowText =
+                        row.timeWindow ?? outboundRow?.timeWindow ?? "-";
+                      const contactText =
+                        row.pickupContact ?? outboundRow?.pickupContact ?? "-";
                       const phoneText = row.phone ?? outboundRow?.phone ?? "-";
                       const noteText = row.notes ?? outboundRow?.notes ?? "-";
                       return (
-                    <TableRow key={row.id} className="border-white/10 text-slate-300 transition-colors hover:bg-white/[0.06]">
-                      <TableCell>
-                        {new Date(row.startAt).toLocaleTimeString("en-US", {
-                          timeZone: "UTC",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </TableCell>
-                      <TableCell className="text-slate-300">{windowText}</TableCell>
-                      <TableCell className="font-semibold text-white">{row.orderNumber}</TableCell>
-                      <TableCell>{row.customer}</TableCell>
-                      <TableCell className="text-slate-300">{contactText}</TableCell>
-                      <TableCell className="text-slate-300">{phoneText}</TableCell>
-                      <TableCell className="max-w-[260px] truncate text-xs text-slate-300">{noteText || "-"}</TableCell>
-                      <TableCell>
-                        <span className={`inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${statusBadge(row.status)}`}>
-                          {statusLabel(row.status)}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <a
-                            href={`/api/fulfillments/${row.id}/pdf?type=slip&download=true`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ios-secondary-btn h-8 px-2 text-xs"
-                          >
-                            Print Slip
-                          </a>
-                          <Link href={`/fulfillment/${row.id}`} className="ios-secondary-btn h-8 px-2 text-xs">
-                            View
-                          </Link>
-                          {row.status !== "READY" ? (
-                            <button
-                              type="button"
-                              disabled={busyId === row.id}
-                              onClick={() => setReady(row.id)}
-                              className="ios-secondary-btn h-8 px-2 text-xs disabled:opacity-60"
+                        <TableRow
+                          key={row.id}
+                          className="border-white/10 text-slate-300 transition-colors hover:bg-white/[0.06]"
+                        >
+                          <TableCell>
+                            {new Date(row.startAt).toLocaleTimeString("en-US", {
+                              timeZone: "UTC",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </TableCell>
+                          <TableCell className="text-slate-300">
+                            {windowText}
+                          </TableCell>
+                          <TableCell className="font-semibold text-white">
+                            {row.orderNumber}
+                          </TableCell>
+                          <TableCell>{row.customer}</TableCell>
+                          <TableCell className="text-slate-300">
+                            {contactText}
+                          </TableCell>
+                          <TableCell className="text-slate-300">
+                            {phoneText}
+                          </TableCell>
+                          <TableCell className="max-w-[260px] truncate text-xs text-slate-300">
+                            {noteText || "-"}
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={`inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${statusBadge(row.status)}`}
                             >
-                              Mark Ready
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              disabled={busyId === row.id}
-                              onClick={() => updateFulfillmentStatus(row.id, "picked_up")}
-                              className="ios-primary-btn h-8 px-2 text-xs disabled:opacity-60"
-                            >
-                              Mark Picked Up
-                            </button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                              {statusLabel(row.status)}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <a
+                                href={`/api/fulfillments/${row.id}/pdf?type=slip&download=true`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ios-secondary-btn h-8 px-2 text-xs"
+                              >
+                                Print Slip
+                              </a>
+                              <Link
+                                href={`/fulfillment/${row.id}`}
+                                className="ios-secondary-btn h-8 px-2 text-xs"
+                              >
+                                View
+                              </Link>
+                              {row.status !== "READY" ? (
+                                <button
+                                  type="button"
+                                  disabled={busyId === row.id}
+                                  onClick={() => setReady(row.id)}
+                                  className="ios-secondary-btn h-8 px-2 text-xs disabled:opacity-60"
+                                >
+                                  Mark Ready
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={busyId === row.id}
+                                  onClick={() =>
+                                    updateFulfillmentStatus(row.id, "picked_up")
+                                  }
+                                  className="ios-primary-btn h-8 px-2 text-xs disabled:opacity-60"
+                                >
+                                  Mark Picked Up
+                                </button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       );
-                    })()
-                  ))
+                    })(),
+                  )
               )}
             </TableBody>
           </Table>
@@ -351,7 +456,9 @@ export default function FulfillmentDashboardPage() {
       <div className="glass-card overflow-hidden p-0">
         <div className="glass-card-content">
           <div className="border-b border-white/10 px-6 py-4">
-            <h2 className="text-base font-semibold text-white">Upcoming Pickup</h2>
+            <h2 className="text-base font-semibold text-white">
+              Upcoming Pickup
+            </h2>
           </div>
           <Table>
             <TableHeader>
@@ -365,17 +472,25 @@ export default function FulfillmentDashboardPage() {
                 <TableHead className="text-slate-400">Notes</TableHead>
                 <TableHead className="text-slate-400">Items</TableHead>
                 <TableHead className="text-slate-400">Status</TableHead>
-                <TableHead className="text-right text-slate-400">Actions</TableHead>
+                <TableHead className="text-right text-slate-400">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {outbound.filter((row) => {
                 if (row.type !== "PICKUP") return false;
                 if (!row.scheduledAt) return false;
-                return new Date(row.scheduledAt).getTime() >= endOfTodayUtc().getTime();
+                return (
+                  new Date(row.scheduledAt).getTime() >=
+                  endOfTodayUtc().getTime()
+                );
               }).length === 0 ? (
                 <TableRow className="border-white/10">
-                  <TableCell colSpan={10} className="text-center text-slate-400">
+                  <TableCell
+                    colSpan={10}
+                    className="text-center text-slate-400"
+                  >
                     No upcoming pickups scheduled.
                   </TableCell>
                 </TableRow>
@@ -384,10 +499,16 @@ export default function FulfillmentDashboardPage() {
                   .filter((row) => {
                     if (row.type !== "PICKUP") return false;
                     if (!row.scheduledAt) return false;
-                    return new Date(row.scheduledAt).getTime() >= endOfTodayUtc().getTime();
+                    return (
+                      new Date(row.scheduledAt).getTime() >=
+                      endOfTodayUtc().getTime()
+                    );
                   })
                   .map((row) => (
-                    <TableRow key={row.id} className="border-white/10 text-slate-300 transition-colors hover:bg-white/[0.06]">
+                    <TableRow
+                      key={row.id}
+                      className="border-white/10 text-slate-300 transition-colors hover:bg-white/[0.06]"
+                    >
                       <TableCell>
                         {row.scheduledAt
                           ? new Date(row.scheduledAt).toLocaleString("en-US", {
@@ -400,17 +521,32 @@ export default function FulfillmentDashboardPage() {
                             })
                           : "-"}
                       </TableCell>
-                      <TableCell className="text-slate-300">{row.timeWindow || "-"}</TableCell>
-                      <TableCell className="font-semibold text-white">{row.salesOrderNumber}</TableCell>
+                      <TableCell className="text-slate-300">
+                        {row.timeWindow || "-"}
+                      </TableCell>
+                      <TableCell className="font-semibold text-white">
+                        {row.salesOrderNumber}
+                      </TableCell>
                       <TableCell>{row.customerName}</TableCell>
-                      <TableCell className="text-slate-300">{row.pickupContact || "-"}</TableCell>
-                      <TableCell className="text-slate-300">{row.phone || "-"}</TableCell>
-                      <TableCell className="max-w-[260px] truncate text-xs text-slate-300">{row.notes || "-"}</TableCell>
+                      <TableCell className="text-slate-300">
+                        {row.pickupContact || "-"}
+                      </TableCell>
+                      <TableCell className="text-slate-300">
+                        {row.phone || "-"}
+                      </TableCell>
+                      <TableCell className="max-w-[260px] truncate text-xs text-slate-300">
+                        {row.notes || "-"}
+                      </TableCell>
                       <TableCell className="text-xs text-slate-300">
-                        {row.itemCount} <span className="text-slate-400">({row.itemsCompleted}/{row.itemCount})</span>
+                        {row.itemCount}{" "}
+                        <span className="text-slate-400">
+                          ({row.itemsCompleted}/{row.itemCount})
+                        </span>
                       </TableCell>
                       <TableCell>
-                        <span className={`inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${statusBadge(String(row.status).toUpperCase() as FulfillmentStatus)}`}>
+                        <span
+                          className={`inline-flex rounded-lg px-2 py-1 text-xs font-semibold ${statusBadge(String(row.status).toUpperCase() as FulfillmentStatus)}`}
+                        >
                           {String(row.status).replaceAll("_", " ")}
                         </span>
                       </TableCell>
@@ -424,7 +560,10 @@ export default function FulfillmentDashboardPage() {
                           >
                             Print Slip
                           </a>
-                          <Link href={`/fulfillment/${row.id}`} className="ios-secondary-btn h-8 px-2 text-xs">
+                          <Link
+                            href={`/fulfillment/${row.id}`}
+                            className="ios-secondary-btn h-8 px-2 text-xs"
+                          >
                             View
                           </Link>
                         </div>
@@ -440,7 +579,9 @@ export default function FulfillmentDashboardPage() {
       <div className="glass-card overflow-hidden p-0">
         <div className="glass-card-content">
           <div className="border-b border-white/10 px-6 py-4">
-            <h2 className="text-base font-semibold text-white">Ready for Pickup</h2>
+            <h2 className="text-base font-semibold text-white">
+              Ready for Pickup
+            </h2>
           </div>
           <Table>
             <TableHeader>
@@ -453,11 +594,17 @@ export default function FulfillmentDashboardPage() {
                 <TableHead className="text-slate-400">Phone</TableHead>
                 <TableHead className="text-slate-400">Notes</TableHead>
                 <TableHead className="text-slate-400">Items</TableHead>
-                <TableHead className="text-right text-slate-400">Actions</TableHead>
+                <TableHead className="text-right text-slate-400">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {outbound.filter((row) => row.type === "PICKUP" && String(row.status).toUpperCase() === "READY").length === 0 ? (
+              {outbound.filter(
+                (row) =>
+                  row.type === "PICKUP" &&
+                  String(row.status).toUpperCase() === "READY",
+              ).length === 0 ? (
                 <TableRow className="border-white/10">
                   <TableCell colSpan={9} className="text-center text-slate-400">
                     No pickups currently ready.
@@ -465,9 +612,16 @@ export default function FulfillmentDashboardPage() {
                 </TableRow>
               ) : (
                 outbound
-                  .filter((row) => row.type === "PICKUP" && String(row.status).toUpperCase() === "READY")
+                  .filter(
+                    (row) =>
+                      row.type === "PICKUP" &&
+                      String(row.status).toUpperCase() === "READY",
+                  )
                   .map((row) => (
-                    <TableRow key={row.id} className="border-white/10 text-slate-300 transition-colors hover:bg-white/[0.06]">
+                    <TableRow
+                      key={row.id}
+                      className="border-white/10 text-slate-300 transition-colors hover:bg-white/[0.06]"
+                    >
                       <TableCell>
                         {row.scheduledAt
                           ? new Date(row.scheduledAt).toLocaleString("en-US", {
@@ -480,14 +634,27 @@ export default function FulfillmentDashboardPage() {
                             })
                           : "-"}
                       </TableCell>
-                      <TableCell className="text-slate-300">{row.timeWindow || "-"}</TableCell>
-                      <TableCell className="font-semibold text-white">{row.salesOrderNumber}</TableCell>
+                      <TableCell className="text-slate-300">
+                        {row.timeWindow || "-"}
+                      </TableCell>
+                      <TableCell className="font-semibold text-white">
+                        {row.salesOrderNumber}
+                      </TableCell>
                       <TableCell>{row.customerName}</TableCell>
-                      <TableCell className="text-slate-300">{row.pickupContact || "-"}</TableCell>
-                      <TableCell className="text-slate-300">{row.phone || "-"}</TableCell>
-                      <TableCell className="max-w-[260px] truncate text-xs text-slate-300">{row.notes || "-"}</TableCell>
+                      <TableCell className="text-slate-300">
+                        {row.pickupContact || "-"}
+                      </TableCell>
+                      <TableCell className="text-slate-300">
+                        {row.phone || "-"}
+                      </TableCell>
+                      <TableCell className="max-w-[260px] truncate text-xs text-slate-300">
+                        {row.notes || "-"}
+                      </TableCell>
                       <TableCell className="text-xs text-slate-300">
-                        {row.itemCount} <span className="text-slate-400">({row.itemsCompleted}/{row.itemCount})</span>
+                        {row.itemCount}{" "}
+                        <span className="text-slate-400">
+                          ({row.itemsCompleted}/{row.itemCount})
+                        </span>
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
@@ -499,13 +666,18 @@ export default function FulfillmentDashboardPage() {
                           >
                             Print Slip
                           </a>
-                          <Link href={`/fulfillment/${row.id}`} className="ios-secondary-btn h-8 px-2 text-xs">
+                          <Link
+                            href={`/fulfillment/${row.id}`}
+                            className="ios-secondary-btn h-8 px-2 text-xs"
+                          >
                             View
                           </Link>
                           <button
                             type="button"
                             disabled={busyId === row.id}
-                            onClick={() => updateFulfillmentStatus(row.id, "picked_up")}
+                            onClick={() =>
+                              updateFulfillmentStatus(row.id, "picked_up")
+                            }
                             className="ios-primary-btn h-8 px-2 text-xs disabled:opacity-60"
                           >
                             Mark Picked Up
@@ -535,11 +707,15 @@ export default function FulfillmentDashboardPage() {
                 <TableHead className="text-slate-400">Contact</TableHead>
                 <TableHead className="text-slate-400">Phone</TableHead>
                 <TableHead className="text-slate-400">Notes</TableHead>
-                <TableHead className="text-right text-slate-400">Actions</TableHead>
+                <TableHead className="text-right text-slate-400">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {!data || data.todayPickups.filter((row) => row.status === "PICKED_UP").length === 0 ? (
+              {!data ||
+              data.todayPickups.filter((row) => row.status === "PICKED_UP")
+                .length === 0 ? (
                 <TableRow className="border-white/10">
                   <TableCell colSpan={8} className="text-center text-slate-400">
                     No pickups marked picked up today.
@@ -548,47 +724,65 @@ export default function FulfillmentDashboardPage() {
               ) : (
                 data.todayPickups
                   .filter((row) => row.status === "PICKED_UP")
-                  .map((row) => (
+                  .map((row) =>
                     (() => {
                       const outboundRow = outboundById.get(row.id);
-                      const windowText = row.timeWindow ?? outboundRow?.timeWindow ?? "-";
-                      const contactText = row.pickupContact ?? outboundRow?.pickupContact ?? "-";
+                      const windowText =
+                        row.timeWindow ?? outboundRow?.timeWindow ?? "-";
+                      const contactText =
+                        row.pickupContact ?? outboundRow?.pickupContact ?? "-";
                       const phoneText = row.phone ?? outboundRow?.phone ?? "-";
                       const noteText = row.notes ?? outboundRow?.notes ?? "-";
                       return (
-                    <TableRow key={row.id} className="border-white/10 text-slate-300 transition-colors hover:bg-white/[0.06]">
-                      <TableCell>
-                        {new Date(row.startAt).toLocaleTimeString("en-US", {
-                          timeZone: "UTC",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </TableCell>
-                      <TableCell className="text-slate-300">{windowText}</TableCell>
-                      <TableCell className="font-semibold text-white">{row.orderNumber}</TableCell>
-                      <TableCell>{row.customer}</TableCell>
-                      <TableCell className="text-slate-300">{contactText}</TableCell>
-                      <TableCell className="text-slate-300">{phoneText}</TableCell>
-                      <TableCell className="max-w-[260px] truncate text-xs text-slate-300">{noteText || "-"}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <a
-                            href={`/api/fulfillments/${row.id}/pdf?type=slip&download=true`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ios-secondary-btn h-8 px-2 text-xs"
-                          >
-                            Print Slip
-                          </a>
-                          <Link href={`/fulfillment/${row.id}`} className="ios-secondary-btn h-8 px-2 text-xs">
-                            View
-                          </Link>
-                        </div>
-                      </TableCell>
-                    </TableRow>
+                        <TableRow
+                          key={row.id}
+                          className="border-white/10 text-slate-300 transition-colors hover:bg-white/[0.06]"
+                        >
+                          <TableCell>
+                            {new Date(row.startAt).toLocaleTimeString("en-US", {
+                              timeZone: "UTC",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </TableCell>
+                          <TableCell className="text-slate-300">
+                            {windowText}
+                          </TableCell>
+                          <TableCell className="font-semibold text-white">
+                            {row.orderNumber}
+                          </TableCell>
+                          <TableCell>{row.customer}</TableCell>
+                          <TableCell className="text-slate-300">
+                            {contactText}
+                          </TableCell>
+                          <TableCell className="text-slate-300">
+                            {phoneText}
+                          </TableCell>
+                          <TableCell className="max-w-[260px] truncate text-xs text-slate-300">
+                            {noteText || "-"}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <a
+                                href={`/api/fulfillments/${row.id}/pdf?type=slip&download=true`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="ios-secondary-btn h-8 px-2 text-xs"
+                              >
+                                Print Slip
+                              </a>
+                              <Link
+                                href={`/fulfillment/${row.id}`}
+                                className="ios-secondary-btn h-8 px-2 text-xs"
+                              >
+                                View
+                              </Link>
+                            </div>
+                          </TableCell>
+                        </TableRow>
                       );
-                    })()
-                  ))
+                    })(),
+                  )
               )}
             </TableBody>
           </Table>

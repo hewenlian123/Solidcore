@@ -61,6 +61,12 @@ export async function GET(request: NextRequest, { params }: Params) {
             },
           },
         },
+        events: {
+          orderBy: { occurredAt: "desc" },
+          include: {
+            items: { orderBy: { createdAt: "asc" } },
+          },
+        },
       },
     });
     if (!data) return NextResponse.json({ error: "Fulfillment not found." }, { status: 404 });
