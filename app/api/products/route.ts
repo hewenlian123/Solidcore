@@ -16,6 +16,7 @@ import { ensureProductTemplateSeeds } from "@/lib/product-templates";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { normalizeNullableString } from "@/lib/normalize-nullable-string";
 import { generateVariantSku } from "@/lib/sku/generateVariantSku";
+import { calculateAvailable } from "@/lib/inventory-availability";
 
 function normalizeSkuValue(value: string) {
   return String(value ?? "").toUpperCase().replace(/\s+/g, "").trim();
@@ -298,6 +299,7 @@ export async function GET(request: NextRequest) {
               select: {
                 onHand: true,
                 reserved: true,
+                hold: true,
               },
             },
           },
@@ -321,12 +323,14 @@ export async function GET(request: NextRequest) {
           reorderQty: number;
           onHand: number;
           reserved: number;
+          hold: number;
           available: number;
         }>
       >
     >((acc, variant) => {
       const onHand = Number(variant.inventoryStock?.onHand ?? 0);
       const reserved = Number(variant.inventoryStock?.reserved ?? 0);
+      const hold = Number(variant.inventoryStock?.hold ?? 0);
       const row = {
         id: variant.id,
         sku: variant.sku,
@@ -342,7 +346,8 @@ export async function GET(request: NextRequest) {
         reorderQty: Number(variant.reorderQty ?? 0),
         onHand,
         reserved,
-        available: onHand - reserved,
+        hold,
+        available: calculateAvailable({ onHand, reserved, hold }),
       };
       if (!acc[variant.productId]) acc[variant.productId] = [];
       acc[variant.productId].push(row);
@@ -351,7 +356,11 @@ export async function GET(request: NextRequest) {
     const lowStockVariantCount = variants.filter((variant) => {
       const onHand = Number(variant.inventoryStock?.onHand ?? 0);
       const reserved = Number(variant.inventoryStock?.reserved ?? 0);
-      const available = onHand - reserved;
+      const available = calculateAvailable({
+        onHand,
+        reserved,
+        hold: variant.inventoryStock?.hold,
+      });
       return available <= Number(variant.reorderLevel ?? 0);
     }).length;
     const lowStockProductIdSet = new Set(
@@ -359,7 +368,11 @@ export async function GET(request: NextRequest) {
         .filter((variant) => {
           const onHand = Number(variant.inventoryStock?.onHand ?? 0);
           const reserved = Number(variant.inventoryStock?.reserved ?? 0);
-          const available = onHand - reserved;
+          const available = calculateAvailable({
+            onHand,
+            reserved,
+            hold: variant.inventoryStock?.hold,
+          });
           return available <= Number(variant.reorderLevel ?? 0);
         })
         .map((variant) => variant.productId),

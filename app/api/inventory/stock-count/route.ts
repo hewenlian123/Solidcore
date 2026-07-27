@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import { calculateAvailable } from "@/lib/inventory-availability";
 
 function normalizeMovementUnit(rawUnit: string | null | undefined, hasBoxCoverage: boolean) {
   if (hasBoxCoverage) return "box";
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
         id: true,
         product: { select: { unit: true } },
         boxSqft: true,
-        inventoryStock: { select: { onHand: true, reserved: true } },
+        inventoryStock: { select: { onHand: true, reserved: true, hold: true } },
       },
     });
     if (!variant) {
@@ -48,12 +49,13 @@ export async function POST(request: NextRequest) {
     const result = await prisma.$transaction(async (tx) => {
       const stock = await tx.inventoryStock.findUnique({
         where: { variantId },
-        select: { onHand: true, reserved: true },
+        select: { onHand: true, reserved: true, hold: true },
       });
       const currentOnHand = Number(stock?.onHand ?? 0);
       const reserved = Number(stock?.reserved ?? 0);
-      if (actualCount < reserved) {
-        throw new Error("COUNT_BELOW_RESERVED");
+      const hold = Number(stock?.hold ?? 0);
+      if (actualCount < reserved + hold) {
+        throw new Error("COUNT_BELOW_PROTECTED");
       }
 
       const delta = actualCount - currentOnHand;
@@ -64,7 +66,8 @@ export async function POST(request: NextRequest) {
           newOnHand: currentOnHand,
           onHand: currentOnHand,
           reserved,
-          available: currentOnHand - reserved,
+          hold,
+          available: calculateAvailable({ onHand: currentOnHand, reserved, hold }),
         };
       }
 
@@ -72,7 +75,7 @@ export async function POST(request: NextRequest) {
         where: { variantId },
         update: { onHand: actualCount },
         create: { variantId, onHand: actualCount, reserved },
-        select: { onHand: true, reserved: true },
+        select: { onHand: true, reserved: true, hold: true },
       });
 
       await tx.inventoryMovement.create({
@@ -91,15 +94,16 @@ export async function POST(request: NextRequest) {
         newOnHand: Number(updated.onHand),
         onHand: Number(updated.onHand),
         reserved: Number(updated.reserved),
-        available: Number(updated.onHand) - Number(updated.reserved),
+        hold: Number(updated.hold),
+        available: calculateAvailable(updated),
       };
     });
 
     return NextResponse.json({ ...result, data: result }, { status: 200 });
   } catch (error) {
-    if (error instanceof Error && error.message === "COUNT_BELOW_RESERVED") {
+    if (error instanceof Error && error.message === "COUNT_BELOW_PROTECTED") {
       return NextResponse.json(
-        { error: "Actual count cannot be less than reserved quantity." },
+        { error: "Actual count cannot be less than Reserved plus Hold without an approved disposition." },
         { status: 400 },
       );
     }

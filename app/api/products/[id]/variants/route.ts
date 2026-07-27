@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { generateVariantSku } from "@/lib/sku/generateVariantSku";
 import { getEffectiveSpecs } from "@/lib/specs/glass";
+import { calculateAvailable } from "@/lib/inventory-availability";
 
 type Params = {
   params: Promise<{ id: string }>;
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest, { params }: Params) {
       orderBy: { createdAt: "asc" },
       include: {
         inventoryStock: {
-          select: { onHand: true, reserved: true },
+          select: { onHand: true, reserved: true, hold: true },
         },
       },
     });
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest, { params }: Params) {
     const data = variants.map((variant) => {
       const onHand = Number(variant.inventoryStock?.onHand ?? 0);
       const reserved = Number(variant.inventoryStock?.reserved ?? 0);
+      const hold = Number(variant.inventoryStock?.hold ?? 0);
       return {
         id: variant.id,
         productId: variant.productId,
@@ -91,7 +93,8 @@ export async function GET(request: NextRequest, { params }: Params) {
         price: variant.price != null ? Number(variant.price) : null,
         onHand,
         reserved,
-        available: onHand - reserved,
+        hold,
+        available: calculateAvailable({ onHand, reserved, hold }),
       };
     });
 
@@ -287,7 +290,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
       const resultRows = await prisma.productVariant.findMany({
         where: { id: { in: createdRows.map((row) => row.id) } },
-        include: { inventoryStock: { select: { onHand: true, reserved: true } } },
+        include: { inventoryStock: { select: { onHand: true, reserved: true, hold: true } } },
         orderBy: { createdAt: "asc" },
       });
 
@@ -308,6 +311,7 @@ export async function POST(request: NextRequest, { params }: Params) {
           data: resultRows.map((variant) => {
             const onHand = Number(variant.inventoryStock?.onHand ?? 0);
             const reserved = Number(variant.inventoryStock?.reserved ?? 0);
+            const hold = Number(variant.inventoryStock?.hold ?? 0);
             return {
               id: variant.id,
               productId: variant.productId,
@@ -330,7 +334,8 @@ export async function POST(request: NextRequest, { params }: Params) {
               reorderQty: Number(variant.reorderQty ?? 0),
               onHand,
               reserved,
-              available: onHand - reserved,
+              hold,
+              available: calculateAvailable({ onHand, reserved, hold }),
             };
           }),
           meta: {
@@ -539,13 +544,14 @@ export async function POST(request: NextRequest, { params }: Params) {
       },
       include: {
         inventoryStock: {
-          select: { onHand: true, reserved: true },
+          select: { onHand: true, reserved: true, hold: true },
         },
       },
     });
 
     const onHand = Number(created.inventoryStock?.onHand ?? 0);
     const reserved = Number(created.inventoryStock?.reserved ?? 0);
+    const hold = Number(created.inventoryStock?.hold ?? 0);
     const validationWarnings = buildVariantValidationWarnings({ sku: created.sku, description: created.description });
     return NextResponse.json(
       {
@@ -580,7 +586,8 @@ export async function POST(request: NextRequest, { params }: Params) {
           archivedAt: created.archivedAt ?? null,
           onHand,
           reserved,
-          available: onHand - reserved,
+          hold,
+          available: calculateAvailable({ onHand, reserved, hold }),
         },
         meta: { validationWarnings },
       },
@@ -622,12 +629,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         },
         include: {
           inventoryStock: {
-            select: { onHand: true, reserved: true },
+            select: { onHand: true, reserved: true, hold: true },
           },
         },
       });
       const onHand = Number(updated.inventoryStock?.onHand ?? 0);
       const reserved = Number(updated.inventoryStock?.reserved ?? 0);
+      const hold = Number(updated.inventoryStock?.hold ?? 0);
       return NextResponse.json(
         {
           data: {
@@ -653,7 +661,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             archivedAt: updated.archivedAt ?? null,
             onHand,
             reserved,
-            available: onHand - reserved,
+            hold,
+            available: calculateAvailable({ onHand, reserved, hold }),
           },
         },
         { status: 200 },
@@ -825,13 +834,14 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       },
       include: {
         inventoryStock: {
-          select: { onHand: true, reserved: true },
+          select: { onHand: true, reserved: true, hold: true },
         },
       },
     });
 
     const onHand = Number(updated.inventoryStock?.onHand ?? 0);
     const reserved = Number(updated.inventoryStock?.reserved ?? 0);
+    const hold = Number(updated.inventoryStock?.hold ?? 0);
     const validationWarnings = buildVariantValidationWarnings({ sku: updated.sku, description: updated.description });
     return NextResponse.json(
       {
@@ -866,7 +876,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           archivedAt: updated.archivedAt ?? null,
           onHand,
           reserved,
-          available: onHand - reserved,
+          hold,
+          available: calculateAvailable({ onHand, reserved, hold }),
         },
         meta: { validationWarnings },
       },

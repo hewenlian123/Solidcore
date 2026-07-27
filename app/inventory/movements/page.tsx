@@ -3,9 +3,20 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRole } from "@/components/layout/role-provider";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { TableSkeletonRows } from "@/components/ui/table-skeleton";
-import { formatQuantity, formatQuantityWithUnit, normalizeUnitAbbr } from "@/lib/quantity-format";
+import {
+  formatQuantity,
+  formatQuantityWithUnit,
+  normalizeUnitAbbr,
+} from "@/lib/quantity-format";
 
 type MovementRow = {
   id: string;
@@ -60,7 +71,10 @@ export default function InventoryMovementsPage() {
   }, [items]);
   const showBalanceColumn = Boolean(variantId.trim());
 
-  const buildParams = (filters?: Partial<FilterValues>, cursor?: string | null) => {
+  const buildParams = (
+    filters?: Partial<FilterValues>,
+    cursor?: string | null,
+  ) => {
     const params = new URLSearchParams();
     const qValue = String(filters?.q ?? q).trim();
     const typeValue = String(filters?.type ?? type).trim();
@@ -77,14 +91,18 @@ export default function InventoryMovementsPage() {
     return params;
   };
 
-  const fetchMovements = async (cursor?: string | null, filters?: Partial<FilterValues>) => {
+  const fetchMovements = async (
+    cursor?: string | null,
+    filters?: Partial<FilterValues>,
+  ) => {
     const params = buildParams(filters, cursor);
     const res = await fetch(`/api/inventory/movements?${params.toString()}`, {
       cache: "no-store",
       headers: { "x-user-role": role },
     });
     const payload = (await res.json()) as ApiPayload & { error?: string };
-    if (!res.ok) throw new Error(payload.error ?? "Failed to load inventory movements");
+    if (!res.ok)
+      throw new Error(payload.error ?? "Failed to load inventory movements");
     return payload;
   };
 
@@ -96,7 +114,11 @@ export default function InventoryMovementsPage() {
       setItems(payload.items ?? []);
       setNextCursor(payload.nextCursor ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load inventory movements");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to load inventory movements",
+      );
     } finally {
       setLoading(false);
     }
@@ -110,7 +132,9 @@ export default function InventoryMovementsPage() {
       setItems((prev) => [...prev, ...(payload.items ?? [])]);
       setNextCursor(payload.nextCursor ?? null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load more movements");
+      setError(
+        err instanceof Error ? err.message : "Failed to load more movements",
+      );
     } finally {
       setLoadingMore(false);
     }
@@ -133,7 +157,6 @@ export default function InventoryMovementsPage() {
     setTo(initialFilters.to);
     setVariantId(initialFilters.variantId);
     void load(initialFilters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
   const onApplyFilters = () => {
@@ -147,19 +170,27 @@ export default function InventoryMovementsPage() {
   const onExportCsv = () => {
     const params = buildParams();
     const qs = params.toString();
-    const url = qs ? `/api/inventory/movements/export?${qs}` : "/api/inventory/movements/export";
+    const url = qs
+      ? `/api/inventory/movements/export?${qs}`
+      : "/api/inventory/movements/export";
     window.location.href = url;
   };
 
   return (
     <section className="space-y-6">
       <div className="linear-card p-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Inventory Movements</h1>
-        <p className="mt-2 text-sm text-slate-500">Operator history of stock changes (deduct, return add, adjust).</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Inventory Movements
+        </h1>
+        <p className="mt-2 text-sm text-slate-500">
+          Operator history of stock changes (deduct, return add, adjust).
+        </p>
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</div>
+        <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          {error}
+        </div>
       ) : null}
 
       <div className="linear-card flex flex-wrap items-end gap-3 p-4">
@@ -206,7 +237,9 @@ export default function InventoryMovementsPage() {
           />
         </label>
         <label className="block">
-          <span className="mb-1 block text-xs text-slate-500">Variant ID (optional)</span>
+          <span className="mb-1 block text-xs text-slate-500">
+            Variant ID (optional)
+          </span>
           <input
             value={variantId}
             onChange={(event) => setVariantId(event.target.value)}
@@ -214,10 +247,18 @@ export default function InventoryMovementsPage() {
             className="ios-input h-10 w-52 px-3 text-sm"
           />
         </label>
-        <button type="button" onClick={onApplyFilters} className="ios-secondary-btn h-10 px-4 text-sm">
+        <button
+          type="button"
+          onClick={onApplyFilters}
+          className="ios-secondary-btn h-10 px-4 text-sm"
+        >
           Apply
         </button>
-        <button type="button" onClick={onExportCsv} className="ios-secondary-btn h-10 px-4 text-sm">
+        <button
+          type="button"
+          onClick={onExportCsv}
+          className="ios-secondary-btn h-10 px-4 text-sm"
+        >
           Export CSV
         </button>
       </div>
@@ -231,17 +272,26 @@ export default function InventoryMovementsPage() {
               <TableHead>Item</TableHead>
               <TableHead>Type</TableHead>
               <TableHead className="text-right">Qty</TableHead>
-              {showBalanceColumn ? <TableHead className="text-right">Balance After</TableHead> : null}
+              {showBalanceColumn ? (
+                <TableHead className="text-right">Balance After</TableHead>
+              ) : null}
               <TableHead>Note</TableHead>
               <TableHead>Related</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableSkeletonRows columns={showBalanceColumn ? 8 : 7} rows={10} rowClassName="border-white/10" />
+              <TableSkeletonRows
+                columns={showBalanceColumn ? 8 : 7}
+                rows={10}
+                rowClassName="border-white/10"
+              />
             ) : items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={showBalanceColumn ? 8 : 7} className="text-center text-slate-500">
+                <TableCell
+                  colSpan={showBalanceColumn ? 8 : 7}
+                  className="text-center text-slate-500"
+                >
                   No movements found.
                 </TableCell>
               </TableRow>
@@ -251,14 +301,22 @@ export default function InventoryMovementsPage() {
                   normalizeUnitAbbr(row.unit) || row.unit
                 }`;
                 return (
-                  <TableRow key={row.id} className="border-white/10 transition-colors hover:bg-white/10">
+                  <TableRow
+                    key={row.id}
+                    className="border-white/10 transition-colors hover:bg-white/10"
+                  >
                     <TableCell>
-                      {new Date(row.createdAt).toLocaleString("en-US", { timeZone: "UTC" })}
+                      {new Date(row.createdAt).toLocaleString("en-US", {
+                        timeZone: "UTC",
+                      })}
                     </TableCell>
                     <TableCell>{row.sku ?? "-"}</TableCell>
                     <TableCell>
                       {row.productId ? (
-                        <Link href={`/products/${row.productId}`} className="font-medium text-slate-900 hover:underline">
+                        <Link
+                          href={`/products/${row.productId}`}
+                          className="font-medium text-slate-900 hover:underline"
+                        >
                           {row.displayName ?? "-"}
                         </Link>
                       ) : (
@@ -276,16 +334,24 @@ export default function InventoryMovementsPage() {
                     {showBalanceColumn ? (
                       <TableCell className="text-right">
                         <p className="font-semibold text-slate-900">
-                          {row.balanceAfter != null ? formatQuantityWithUnit(row.balanceAfter, row.unit) : "-"}
+                          {row.balanceAfter != null
+                            ? formatQuantityWithUnit(row.balanceAfter, row.unit)
+                            : "-"}
                         </p>
                         {row.balanceBefore != null ? (
                           <p className="text-[11px] text-slate-500">
-                            Before {formatQuantityWithUnit(row.balanceBefore, row.unit)}
+                            Before{" "}
+                            {formatQuantityWithUnit(
+                              row.balanceBefore,
+                              row.unit,
+                            )}
                           </p>
                         ) : null}
                       </TableCell>
                     ) : null}
-                    <TableCell className="max-w-[360px] truncate">{row.note ?? "-"}</TableCell>
+                    <TableCell className="max-w-[360px] truncate">
+                      {row.note ?? "-"}
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap items-center gap-2">
                         {row.related.fulfillmentId ? (

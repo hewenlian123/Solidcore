@@ -13,15 +13,45 @@ export async function GET(request: NextRequest, { params }: Params) {
     const data = await prisma.purchaseOrder.findUnique({
       where: { id },
       include: {
-        supplier: { select: { id: true, name: true, contactName: true, phone: true } },
+        supplier: {
+          select: { id: true, name: true, contactName: true, phone: true },
+        },
+        items: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            variant: {
+              select: {
+                inventoryStock: {
+                  select: {
+                    onHand: true,
+                    reserved: true,
+                    hold: true,
+                    incoming: true,
+                    inTransit: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        receipts: {
+          orderBy: { occurredAt: "desc" },
+          include: { items: { orderBy: { createdAt: "asc" } } },
+        },
       },
     });
 
-    if (!data) return NextResponse.json({ error: "Purchase order not found." }, { status: 404 });
+    if (!data)
+      return NextResponse.json(
+        { error: "Purchase order not found." },
+        { status: 404 },
+      );
     return NextResponse.json({ data }, { status: 200 });
   } catch (error) {
     console.error("GET /api/purchase-orders/[id] error:", error);
-    return NextResponse.json({ error: "Failed to fetch purchase order." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch purchase order." },
+      { status: 500 },
+    );
   }
 }
-

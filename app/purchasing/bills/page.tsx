@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRole } from "@/components/layout/role-provider";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { TableSkeletonRows } from "@/components/ui/table-skeleton";
 
 type BillRow = {
@@ -48,7 +55,6 @@ export default function VendorBillsPage() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, statusFilter]);
 
   const handleMarkPaid = async (row: BillRow, amount: number) => {
@@ -71,16 +77,26 @@ export default function VendorBillsPage() {
     }
   };
 
-  const statusLabel = (s: BillRow["status"]) => (s === "paid" ? "已付" : s === "partial" ? "部分付" : "未付");
+  const statusLabel = (s: BillRow["status"]) =>
+    s === "paid" ? "已付" : s === "partial" ? "部分付" : "未付";
   const statusClass = (s: BillRow["status"]) =>
-    s === "paid" ? "bg-emerald-500/20 text-emerald-300" : s === "partial" ? "bg-amber-500/20 text-amber-300" : "bg-slate-500/20 text-slate-300";
+    s === "paid"
+      ? "bg-emerald-500/20 text-emerald-300"
+      : s === "partial"
+        ? "bg-amber-500/20 text-amber-300"
+        : "bg-slate-500/20 text-slate-300";
 
   return (
     <section className="space-y-4">
       <div className="glass-card p-4">
         <div className="glass-card-content">
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Vendor Bills</h1>
-          <p className="mt-1 text-sm text-slate-400">Supplier bills linked to purchase orders. Track amount, paid, balance, and due date.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
+            Vendor Bills
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            Supplier bills linked to purchase orders. Track amount, paid,
+            balance, and due date.
+          </p>
         </div>
       </div>
 
@@ -93,7 +109,9 @@ export default function VendorBillsPage() {
               type="button"
               onClick={() => setStatusFilter(s)}
               className={`rounded-xl border px-3 py-1.5 text-xs font-medium transition ${
-                statusFilter === s ? "border-indigo-400 bg-indigo-500/20 text-indigo-200" : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
+                statusFilter === s
+                  ? "border-indigo-400 bg-indigo-500/20 text-indigo-200"
+                  : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
               }`}
             >
               {s === "ALL" ? "All" : statusLabel(s)}
@@ -103,7 +121,9 @@ export default function VendorBillsPage() {
       </div>
 
       {error && (
-        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div>
+        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+          {error}
+        </div>
       )}
 
       <div className="glass-card overflow-hidden p-0">
@@ -113,9 +133,13 @@ export default function VendorBillsPage() {
               <TableHead className="text-slate-400">Bill #</TableHead>
               <TableHead className="text-slate-400">PO #</TableHead>
               <TableHead className="text-slate-400">Supplier</TableHead>
-              <TableHead className="text-right text-slate-400">Amount</TableHead>
+              <TableHead className="text-right text-slate-400">
+                Amount
+              </TableHead>
               <TableHead className="text-right text-slate-400">Paid</TableHead>
-              <TableHead className="text-right text-slate-400">Balance</TableHead>
+              <TableHead className="text-right text-slate-400">
+                Balance
+              </TableHead>
               <TableHead className="text-slate-400">Status</TableHead>
               <TableHead className="text-slate-400">Due date</TableHead>
               <TableHead className="text-slate-400">Actions</TableHead>
@@ -126,26 +150,47 @@ export default function VendorBillsPage() {
               <TableSkeletonRows columns={9} rows={6} />
             ) : rows.length === 0 ? (
               <TableRow className="border-white/10">
-                <TableCell colSpan={9} className="py-12 text-center text-slate-500">
-                  No vendor bills found. Create purchase orders to see them here.
+                <TableCell
+                  colSpan={9}
+                  className="py-12 text-center text-slate-500"
+                >
+                  No vendor bills found. Create purchase orders to see them
+                  here.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.id} className="border-white/10 text-slate-300">
-                  <TableCell className="font-medium text-white">{row.billNumber}</TableCell>
-                  <TableCell className="text-slate-400">{row.poNumber}</TableCell>
+                <TableRow
+                  key={row.id}
+                  className="border-white/10 text-slate-300"
+                >
+                  <TableCell className="font-medium text-white">
+                    {row.billNumber}
+                  </TableCell>
+                  <TableCell className="text-slate-400">
+                    {row.poNumber}
+                  </TableCell>
                   <TableCell>{row.supplierName}</TableCell>
-                  <TableCell className="text-right text-white">${row.amount.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-slate-300">${row.paidAmount.toFixed(2)}</TableCell>
-                  <TableCell className="text-right text-white">${row.balance.toFixed(2)}</TableCell>
+                  <TableCell className="text-right text-white">
+                    ${row.amount.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-right text-slate-300">
+                    ${row.paidAmount.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-right text-white">
+                    ${row.balance.toFixed(2)}
+                  </TableCell>
                   <TableCell>
-                    <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${statusClass(row.status)}`}>
+                    <span
+                      className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${statusClass(row.status)}`}
+                    >
                       {statusLabel(row.status)}
                     </span>
                   </TableCell>
                   <TableCell className="text-slate-400">
-                    {row.dueDate ? new Date(row.dueDate).toLocaleDateString("en-US") : "—"}
+                    {row.dueDate
+                      ? new Date(row.dueDate).toLocaleDateString("en-US")
+                      : "—"}
                   </TableCell>
                   <TableCell>
                     {row.balance > 0 && (
@@ -156,14 +201,24 @@ export default function VendorBillsPage() {
                           step={0.01}
                           max={row.balance}
                           value={payAmount[row.id] ?? ""}
-                          onChange={(e) => setPayAmount((p) => ({ ...p, [row.id]: e.target.value }))}
+                          onChange={(e) =>
+                            setPayAmount((p) => ({
+                              ...p,
+                              [row.id]: e.target.value,
+                            }))
+                          }
                           placeholder="Amount"
                           className="ios-input h-8 w-24 rounded-lg px-2 text-sm"
                         />
                         <button
                           type="button"
-                          disabled={payingId === row.id || !(Number(payAmount[row.id]) > 0)}
-                          onClick={() => handleMarkPaid(row, Number(payAmount[row.id]) || 0)}
+                          disabled={
+                            payingId === row.id ||
+                            !(Number(payAmount[row.id]) > 0)
+                          }
+                          onClick={() =>
+                            handleMarkPaid(row, Number(payAmount[row.id]) || 0)
+                          }
                           className="ios-secondary-btn h-8 px-3 text-xs disabled:opacity-50"
                         >
                           {payingId === row.id ? "..." : "Mark paid"}

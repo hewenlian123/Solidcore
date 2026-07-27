@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import { calculateAvailable } from "@/lib/inventory-availability";
 
 function startOfTodayUtc() {
   const now = new Date();
@@ -28,7 +29,7 @@ export async function GET(request: NextRequest) {
           id: true,
           sku: true,
           reorderLevel: true,
-          inventoryStock: { select: { onHand: true, reserved: true } },
+          inventoryStock: { select: { onHand: true, reserved: true, hold: true } },
           product: { select: { id: true, name: true, title: true } },
         },
       }),
@@ -52,7 +53,11 @@ export async function GET(request: NextRequest) {
       .map((variant) => {
         const onHand = Number(variant.inventoryStock?.onHand ?? 0);
         const reserved = Number(variant.inventoryStock?.reserved ?? 0);
-        const available = onHand - reserved;
+        const available = calculateAvailable({
+          onHand,
+          reserved,
+          hold: variant.inventoryStock?.hold,
+        });
         const reorderLevel = Number(variant.reorderLevel ?? 0);
         return {
           id: variant.id,

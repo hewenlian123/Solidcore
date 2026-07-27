@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import { inventoryPosition } from "@/lib/inventory-availability";
 
 export type StockRow = {
   id: string;
   sku: string;
   productName: string;
   variantName: string | null;
-  currentStock: number;
+  onHand: number;
+  reserved: number;
+  hold: number;
+  available: number;
+  incoming: number;
+  inTransit: number;
   minStock: number;
   status: "ok" | "low" | "out";
 };
@@ -25,7 +31,9 @@ export async function GET(request: NextRequest) {
     const role = getRequestRole(request);
     if (!hasOneOf(role, ["ADMIN", "WAREHOUSE", "SALES"])) return deny();
 
-    const q = (request.nextUrl.searchParams.get("q") ?? "").trim().toLowerCase();
+    const q = (request.nextUrl.searchParams.get("q") ?? "")
+      .trim()
+      .toLowerCase();
 
     const variantWhere: {
       archivedAt?: null;
@@ -51,28 +59,39 @@ export async function GET(request: NextRequest) {
         displayName: true,
         reorderLevel: true,
         product: { select: { name: true } },
-        inventoryStock: { select: { onHand: true } },
+        inventoryStock: {
+          select: {
+            onHand: true,
+            reserved: true,
+            hold: true,
+            incoming: true,
+            inTransit: true,
+          },
+        },
       },
       orderBy: [{ sku: "asc" }],
     });
 
     const rows: StockRow[] = variants.map((v) => {
-      const current = Number(v.inventoryStock?.onHand ?? 0);
+      const position = inventoryPosition(v.inventoryStock ?? {});
       const min = Number(v.reorderLevel ?? 0);
       return {
         id: v.id,
         sku: v.sku,
         productName: v.product?.name ?? "-",
         variantName: v.displayName ?? null,
-        currentStock: current,
+        ...position,
         minStock: min,
-        status: statusFromStock(current, min),
+        status: statusFromStock(position.available, min),
       };
     });
 
     return NextResponse.json({ data: rows });
   } catch (err) {
     console.error("GET /api/inventory/stock error:", err);
-    return NextResponse.json({ error: "Failed to fetch stock levels." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch stock levels." },
+      { status: 500 },
+    );
   }
 }

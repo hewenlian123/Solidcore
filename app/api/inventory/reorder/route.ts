@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import { calculateAvailable } from "@/lib/inventory-availability";
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest) {
       cost: unknown;
       boxSqft: unknown;
       product: { id: string; name: string; title: string | null };
-      inventoryStock: { onHand: unknown; reserved: unknown } | null;
+      inventoryStock: { onHand: unknown; reserved: unknown; hold: unknown } | null;
     }> = [];
 
     try {
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
           cost: true,
           boxSqft: true,
           product: { select: { id: true, name: true, title: true } },
-          inventoryStock: { select: { onHand: true, reserved: true } },
+          inventoryStock: { select: { onHand: true, reserved: true, hold: true } },
         },
       });
     } catch {
@@ -52,7 +53,7 @@ export async function GET(request: NextRequest) {
           cost: true,
           boxSqft: true,
           product: { select: { id: true, name: true, title: true } },
-          inventoryStock: { select: { onHand: true, reserved: true } },
+          inventoryStock: { select: { onHand: true, reserved: true, hold: true } },
         },
       });
     }
@@ -81,7 +82,11 @@ export async function GET(request: NextRequest) {
         const product = productById.get(variant.product.id);
         const onHand = Number(variant.inventoryStock?.onHand ?? 0);
         const reserved = Number(variant.inventoryStock?.reserved ?? 0);
-        const available = onHand - reserved;
+        const available = calculateAvailable({
+          onHand,
+          reserved,
+          hold: variant.inventoryStock?.hold,
+        });
         const reorderLevel = Number(variant.reorderLevel ?? 0);
         const reorderQty = Number(variant.reorderQty ?? 0);
         const suggestedQtyBoxes =
@@ -143,4 +148,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Failed to load reorder list." }, { status: 500 });
   }
 }
-

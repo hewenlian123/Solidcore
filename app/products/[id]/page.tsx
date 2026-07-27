@@ -2,10 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import Image from "next/image";
 import { useQuery } from "@tanstack/react-query";
 import { Camera, X } from "lucide-react";
 import Link from "next/link";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { useRole } from "@/components/layout/role-provider";
 import { formatQuantity, formatQuantityWithUnit } from "@/lib/quantity-format";
 import { generateVariantSku } from "@/lib/sku/generateVariantSku";
@@ -98,10 +106,17 @@ function toSizeText(width: number | null, height: number | null) {
   return `${Math.trunc(width)}x${Math.trunc(height)}`;
 }
 
-function toVariantName(productName: string, variant: ProductVariant, category?: string | null) {
+function toVariantName(
+  productName: string,
+  variant: ProductVariant,
+  category?: string | null,
+) {
   const displayName = String(variant.displayName ?? "").trim();
   if (displayName) return displayName;
-  const size = variant.width && variant.height ? `${Math.trunc(variant.width)}"x${Math.trunc(variant.height)}"` : "";
+  const size =
+    variant.width && variant.height
+      ? `${Math.trunc(variant.width)}"x${Math.trunc(variant.height)}"`
+      : "";
   const color = variant.color ? `(${variant.color})` : "";
   if (size && color) return `${productName}-${size}${color}`;
   if (size) return `${productName}-${size}`;
@@ -140,31 +155,48 @@ type VariantFormProfile =
   | "NICHE"
   | "UNKNOWN";
 
-function resolveVariantFormProfile(product?: ProductDetail | null): VariantFormProfile {
-  const category = String(product?.category ?? "").trim().toUpperCase();
-  const name = String(product?.name ?? "").trim().toUpperCase();
+function resolveVariantFormProfile(
+  product?: ProductDetail | null,
+): VariantFormProfile {
+  const category = String(product?.category ?? "")
+    .trim()
+    .toUpperCase();
+  const name = String(product?.name ?? "")
+    .trim()
+    .toUpperCase();
   const source = `${category} ${name}`;
   if (category === "FLOOR") return "FLOOR";
   if (category === "WINDOW" || source.includes("SLIDING DOOR")) return "WINDOW";
   if (category === "MIRROR" || source.includes("LED MIRROR")) return "MIRROR";
-  if (source.includes("SHOWER") || source.includes("GLASS DOOR")) return "SHOWER";
-  if (source.includes("ACCESSORY") || source.includes("T MOLDING") || source.includes("STAIR")) return "FLOOR_ACCESSORY";
+  if (source.includes("SHOWER") || source.includes("GLASS DOOR"))
+    return "SHOWER";
+  if (
+    source.includes("ACCESSORY") ||
+    source.includes("T MOLDING") ||
+    source.includes("STAIR")
+  )
+    return "FLOOR_ACCESSORY";
   if (source.includes("TILE") || source.includes("EDGE")) return "TILE_EDGE";
   if (source.includes("NICHE")) return "NICHE";
   return "UNKNOWN";
 }
 
 function normalizeFlooringInstallationForField(value: unknown) {
-  const raw = String(value ?? "").trim().toLowerCase();
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
   if (!raw) return "";
   if (raw === "click") return "Click";
-  if (raw === "glue" || raw === "glue_down" || raw === "gluedown") return "Glue";
+  if (raw === "glue" || raw === "glue_down" || raw === "gluedown")
+    return "Glue";
   if (raw === "float" || raw === "floating") return "Float";
   return String(value ?? "").trim();
 }
 
 function normalizeUnderlaymentForField(value: unknown) {
-  const raw = String(value ?? "").trim().toLowerCase();
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
   if (!raw) return "";
   if (raw.includes("attached")) return "Attached";
   if (raw.includes("separate")) return "Separate";
@@ -195,7 +227,9 @@ function formatFlooringSummary(product?: ProductDetail | null) {
         ? "GlueDown"
         : "",
     underlayment,
-    product.flooringBoxCoverageSqft ? `Box: ${product.flooringBoxCoverageSqft} sqft` : "",
+    product.flooringBoxCoverageSqft
+      ? `Box: ${product.flooringBoxCoverageSqft} sqft`
+      : "",
   ].filter(Boolean);
   return parts.join(" · ");
 }
@@ -215,29 +249,35 @@ export default function ProductDetailPage() {
   const id = String(params?.id ?? "");
   const openVariantId = String(searchParams?.get("variantId") ?? "").trim();
   const { role } = useRole();
-  const [activeVariant, setActiveVariant] = useState<ProductVariant | null>(null);
+  const [activeVariant, setActiveVariant] = useState<ProductVariant | null>(
+    null,
+  );
   const [creatingVariant, setCreatingVariant] = useState(false);
   const [creatingBulk, setCreatingBulk] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [adjusting, setAdjusting] = useState(false);
   const [counting, setCounting] = useState(false);
   const [stockCountOpen, setStockCountOpen] = useState(false);
-  const [adjustQty, setAdjustQty] = useState("1");
   const [actualCount, setActualCount] = useState("");
   const [countNote, setCountNote] = useState("");
   const [createOpeningStock, setCreateOpeningStock] = useState("0");
   const [notice, setNotice] = useState<string | null>(null);
   const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [uploadingVariantImageId, setUploadingVariantImageId] = useState<string | null>(null);
-  const [dragOverVariantId, setDragOverVariantId] = useState<string | null>(null);
+  const [uploadingVariantImageId, setUploadingVariantImageId] = useState<
+    string | null
+  >(null);
+  const [dragOverVariantId, setDragOverVariantId] = useState<string | null>(
+    null,
+  );
   const [dragOverDetailImage, setDragOverDetailImage] = useState(false);
   const [uploadToast, setUploadToast] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [showCreateOverrides, setShowCreateOverrides] = useState(false);
   const [showBulkOverrides, setShowBulkOverrides] = useState(false);
-  const [bulkRows, setBulkRows] = useState<BulkVariantDraft[]>([createEmptyBulkVariantDraft()]);
+  const [bulkRows, setBulkRows] = useState<BulkVariantDraft[]>([
+    createEmptyBulkVariantDraft(),
+  ]);
   const [bulkOverrides, setBulkOverrides] = useState({
     glassFinishOverride: "",
     screenOverride: "",
@@ -295,7 +335,8 @@ export default function ProductDetailPage() {
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to fetch variants.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to fetch variants.");
       return (payload.data ?? []) as ProductVariant[];
     },
   });
@@ -304,24 +345,34 @@ export default function ProductDetailPage() {
     queryKey: ["product-variants", id, role, "archived"],
     enabled: Boolean(id) && showArchived,
     queryFn: async () => {
-      const res = await fetch(`/api/products/${id}/variants?showArchived=true`, {
-        cache: "no-store",
-        headers: { "x-user-role": role },
-      });
+      const res = await fetch(
+        `/api/products/${id}/variants?showArchived=true`,
+        {
+          cache: "no-store",
+          headers: { "x-user-role": role },
+        },
+      );
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to fetch variants.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to fetch variants.");
       return (payload.data ?? []) as ProductVariant[];
     },
   });
 
   const variants = useMemo(
-    () => (showArchived ? archivedVariantsQuery.data ?? [] : variantsQuery.data ?? []),
+    () =>
+      showArchived
+        ? (archivedVariantsQuery.data ?? [])
+        : (variantsQuery.data ?? []),
     [showArchived, archivedVariantsQuery.data, variantsQuery.data],
   );
   const summaryStats = useMemo(() => {
     const rows = variants ?? [];
     const totalVariants = rows.length;
-    const totalStock = rows.reduce((sum, row) => sum + Number(row.onHand ?? 0), 0);
+    const totalStock = rows.reduce(
+      (sum, row) => sum + Number(row.onHand ?? 0),
+      0,
+    );
     const totalCostValue = rows.reduce(
       (sum, row) => sum + Number(row.onHand ?? 0) * Number(row.cost ?? 0),
       0,
@@ -354,7 +405,10 @@ export default function ProductDetailPage() {
   }, [variants]);
   const createSkuPreview = useMemo(() => {
     if (!draft) return "-";
-    const normalizedDirectSku = String(draft.sku ?? "").toUpperCase().replace(/\s+/g, "").trim();
+    const normalizedDirectSku = String(draft.sku ?? "")
+      .toUpperCase()
+      .replace(/\s+/g, "")
+      .trim();
     if (normalizedDirectSku) return normalizedDirectSku;
     const specs = getEffectiveSpecs(productQuery.data, draft);
     return (
@@ -368,13 +422,17 @@ export default function ProductDetailPage() {
       }).effectiveSku || "-"
     );
   }, [creatingVariant, draft, productQuery.data]);
-  const formProfile = useMemo(() => resolveVariantFormProfile(productQuery.data), [productQuery.data]);
+  const formProfile = useMemo(
+    () => resolveVariantFormProfile(productQuery.data),
+    [productQuery.data],
+  );
   const effectiveSpecs = useMemo(
     () => getEffectiveSpecs(productQuery.data, draft),
     [productQuery.data, draft],
   );
   const effectiveSubtitle = useMemo(() => {
-    if (String(productQuery.data?.category ?? "") === "FLOOR") return formatFlooringSummary(productQuery.data);
+    if (String(productQuery.data?.category ?? "") === "FLOOR")
+      return formatFlooringSummary(productQuery.data);
     return formatSubtitle(effectiveSpecs);
   }, [effectiveSpecs, productQuery.data]);
   const defaultsSubtitle = useMemo(
@@ -402,7 +460,10 @@ export default function ProductDetailPage() {
     [bulkEffectiveSpecs, productQuery.data],
   );
   const isBulkSliding = useMemo(
-    () => String(bulkEffectiveSpecs.openingType ?? "").trim().toLowerCase() === "sliding",
+    () =>
+      String(bulkEffectiveSpecs.openingType ?? "")
+        .trim()
+        .toLowerCase() === "sliding",
     [bulkEffectiveSpecs.openingType],
   );
   const filledBulkRowCount = useMemo(
@@ -418,7 +479,10 @@ export default function ProductDetailPage() {
     [bulkRows],
   );
   const isEffectiveSliding = useMemo(
-    () => String(effectiveSpecs.openingType ?? "").trim().toLowerCase() === "sliding",
+    () =>
+      String(effectiveSpecs.openingType ?? "")
+        .trim()
+        .toLowerCase() === "sliding",
     [effectiveSpecs.openingType],
   );
 
@@ -450,8 +514,12 @@ export default function ProductDetailPage() {
         : "";
     const fallbackWearLayer = productQuery.data?.flooringWearLayer ?? "";
     const fallbackFloorType = productQuery.data?.flooringMaterial ?? "";
-    const fallbackInstall = normalizeFlooringInstallationForField(productQuery.data?.flooringInstallation);
-    const fallbackUnderlayment = normalizeUnderlaymentForField(productQuery.data?.flooringUnderlayment);
+    const fallbackInstall = normalizeFlooringInstallationForField(
+      productQuery.data?.flooringInstallation,
+    );
+    const fallbackUnderlayment = normalizeUnderlaymentForField(
+      productQuery.data?.flooringUnderlayment,
+    );
     const fallbackBoxSqft =
       productQuery.data?.flooringBoxCoverageSqft != null
         ? String(productQuery.data.flooringBoxCoverageSqft)
@@ -482,19 +550,21 @@ export default function ProductDetailPage() {
       slidingConfigOverride: variant.slidingConfigOverride ?? "",
       glassCoatingOverride: variant.glassCoatingOverride ?? "",
       glassThicknessMmOverride:
-        variant.glassThicknessMmOverride != null ? String(variant.glassThicknessMmOverride) : "",
+        variant.glassThicknessMmOverride != null
+          ? String(variant.glassThicknessMmOverride)
+          : "",
       glassFinishOverride: variant.glassFinishOverride ?? "",
-      screenOverride:
-        isFlooring
-          ? normalizeUnderlaymentForField(variant.screenOverride ?? fallbackUnderlayment)
-          : (variant.screenOverride ?? ""),
-      openingTypeOverride:
-        isFlooring
-          ? normalizeFlooringInstallationForField(variant.openingTypeOverride ?? fallbackInstall)
-          : (variant.openingTypeOverride ?? ""),
-      variantType:
-        variant.variantType ??
-        (isFlooring ? fallbackWearLayer : ""),
+      screenOverride: isFlooring
+        ? normalizeUnderlaymentForField(
+            variant.screenOverride ?? fallbackUnderlayment,
+          )
+        : (variant.screenOverride ?? ""),
+      openingTypeOverride: isFlooring
+        ? normalizeFlooringInstallationForField(
+            variant.openingTypeOverride ?? fallbackInstall,
+          )
+        : (variant.openingTypeOverride ?? ""),
+      variantType: variant.variantType ?? (isFlooring ? fallbackWearLayer : ""),
       thicknessMm:
         variant.thicknessMm != null
           ? String(variant.thicknessMm)
@@ -507,9 +577,7 @@ export default function ProductDetailPage() {
           : isFlooring
             ? fallbackBoxSqft
             : "",
-      screenType:
-        variant.screenType ??
-        (isFlooring ? fallbackFloorType : ""),
+      screenType: variant.screenType ?? (isFlooring ? fallbackFloorType : ""),
       slideDirection: variant.slideDirection ?? "",
       price: variant.price != null ? String(variant.price) : "",
       cost: variant.cost != null ? String(variant.cost) : "",
@@ -517,7 +585,6 @@ export default function ProductDetailPage() {
       reorderQty: String(variant.reorderQty ?? 0),
       description: variant.description ?? "",
     });
-    setAdjustQty("1");
     setError(null);
     setNotice(null);
   };
@@ -565,7 +632,11 @@ export default function ProductDetailPage() {
     setActiveVariant(null);
     setDraft(null);
     setShowBulkOverrides(false);
-    setBulkRows([createEmptyBulkVariantDraft(), createEmptyBulkVariantDraft(), createEmptyBulkVariantDraft()]);
+    setBulkRows([
+      createEmptyBulkVariantDraft(),
+      createEmptyBulkVariantDraft(),
+      createEmptyBulkVariantDraft(),
+    ]);
     setBulkOverrides({
       glassFinishOverride: "",
       screenOverride: "",
@@ -582,11 +653,28 @@ export default function ProductDetailPage() {
     const heightNum = Number(draft.height || 0);
     const colorText = String(draft.color ?? "").trim();
     const profile = formProfile;
-    const requiresWidthHeight = ["FLOOR", "WINDOW", "MIRROR", "SHOWER", "NICHE"].includes(profile);
-    const requiresLengthOnly = ["FLOOR_ACCESSORY", "TILE_EDGE"].includes(profile);
-    const requiresColor = ["FLOOR", "WINDOW", "NICHE", "FLOOR_ACCESSORY"].includes(profile);
+    const requiresWidthHeight = [
+      "FLOOR",
+      "WINDOW",
+      "MIRROR",
+      "SHOWER",
+      "NICHE",
+    ].includes(profile);
+    const requiresLengthOnly = ["FLOOR_ACCESSORY", "TILE_EDGE"].includes(
+      profile,
+    );
+    const requiresColor = [
+      "FLOOR",
+      "WINDOW",
+      "NICHE",
+      "FLOOR_ACCESSORY",
+    ].includes(profile);
     if (
-      (requiresWidthHeight && (!Number.isFinite(widthNum) || widthNum <= 0 || !Number.isFinite(heightNum) || heightNum <= 0)) ||
+      (requiresWidthHeight &&
+        (!Number.isFinite(widthNum) ||
+          widthNum <= 0 ||
+          !Number.isFinite(heightNum) ||
+          heightNum <= 0)) ||
       (requiresLengthOnly && (!Number.isFinite(widthNum) || widthNum <= 0))
     ) {
       setError("Size is required.");
@@ -606,7 +694,9 @@ export default function ProductDetailPage() {
             (variant) =>
               Number(variant.width ?? 0) === Math.trunc(widthNum) &&
               Number(variant.height ?? 0) === Math.trunc(heightNum) &&
-              String(variant.color ?? "").trim().toLowerCase() === colorText.toLowerCase(),
+              String(variant.color ?? "")
+                .trim()
+                .toLowerCase() === colorText.toLowerCase(),
           )
         : false;
     if (comboExists) {
@@ -652,7 +742,8 @@ export default function ProductDetailPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to create variant.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to create variant.");
       setValidationWarnings(extractValidationWarnings(payload));
       await variantsQuery.refetch();
       setNotice("Variant added");
@@ -696,7 +787,8 @@ export default function ProductDetailPage() {
           skuOverride: "",
           skuSuffix: payload.data?.skuSuffix ?? "",
           width: payload.data?.width != null ? String(payload.data.width) : "",
-          height: payload.data?.height != null ? String(payload.data.height) : "",
+          height:
+            payload.data?.height != null ? String(payload.data.height) : "",
           color: payload.data?.color ?? "",
           glassTypeOverride: payload.data?.glassTypeOverride ?? "",
           slidingConfigOverride: payload.data?.slidingConfigOverride ?? "",
@@ -709,8 +801,12 @@ export default function ProductDetailPage() {
           screenOverride: payload.data?.screenOverride ?? "",
           openingTypeOverride: payload.data?.openingTypeOverride ?? "",
           variantType: payload.data?.variantType ?? "",
-          thicknessMm: payload.data?.thicknessMm != null ? String(payload.data.thicknessMm) : "",
-          boxSqft: payload.data?.boxSqft != null ? String(payload.data.boxSqft) : "",
+          thicknessMm:
+            payload.data?.thicknessMm != null
+              ? String(payload.data.thicknessMm)
+              : "",
+          boxSqft:
+            payload.data?.boxSqft != null ? String(payload.data.boxSqft) : "",
           screenType: payload.data?.screenType ?? "",
           slideDirection: payload.data?.slideDirection ?? "",
           price: payload.data?.price != null ? String(payload.data.price) : "",
@@ -721,7 +817,9 @@ export default function ProductDetailPage() {
         });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create variant.");
+      setError(
+        err instanceof Error ? err.message : "Failed to create variant.",
+      );
     } finally {
       setSaving(false);
     }
@@ -739,8 +837,7 @@ export default function ProductDetailPage() {
         openingStock: row.openingStock.trim(),
       }))
       .filter(
-        (row) =>
-          row.width || row.height || row.color || row.price || row.cost,
+        (row) => row.width || row.height || row.color || row.price || row.cost,
       );
     if (normalizedRows.length === 0) {
       setError("Add at least one bulk row.");
@@ -767,7 +864,9 @@ export default function ProductDetailPage() {
       );
     });
     if (invalid) {
-      setError("Each bulk row requires valid width, height, color, price, cost, and opening stock.");
+      setError(
+        "Each bulk row requires valid width, height, color, price, cost, and opening stock.",
+      );
       return;
     }
 
@@ -792,20 +891,26 @@ export default function ProductDetailPage() {
           screenOverride: bulkOverrides.screenOverride || null,
           openingTypeOverride: bulkOverrides.openingTypeOverride || null,
           slidingConfigOverride:
-            String(bulkOverrides.openingTypeOverride).trim().toLowerCase() === "sliding"
+            String(bulkOverrides.openingTypeOverride).trim().toLowerCase() ===
+            "sliding"
               ? bulkOverrides.slidingConfigOverride || null
               : null,
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to create variants.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to create variants.");
       setValidationWarnings(extractValidationWarnings(payload));
       await variantsQuery.refetch();
-      setNotice(`Created ${Array.isArray(payload.data) ? payload.data.length : normalizedRows.length} variants.`);
+      setNotice(
+        `Created ${Array.isArray(payload.data) ? payload.data.length : normalizedRows.length} variants.`,
+      );
       setCreatingBulk(false);
       setBulkRows([createEmptyBulkVariantDraft()]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create variants.");
+      setError(
+        err instanceof Error ? err.message : "Failed to create variants.",
+      );
     } finally {
       setSaving(false);
     }
@@ -824,7 +929,9 @@ export default function ProductDetailPage() {
         body: JSON.stringify({
           variantId: activeVariant.id,
           displayName: draft.displayName || null,
-          sku: String(draft.sku ?? "").toUpperCase().replace(/\s+/g, ""),
+          sku: String(draft.sku ?? "")
+            .toUpperCase()
+            .replace(/\s+/g, ""),
           skuOverride: draft.skuOverride || null,
           skuSuffix: draft.skuSuffix || null,
           width: draft.width ? Number(draft.width) : null,
@@ -852,43 +959,21 @@ export default function ProductDetailPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to update variant.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to update variant.");
       setValidationWarnings(extractValidationWarnings(payload));
       await variantsQuery.refetch();
-      const next = variantsQuery.data?.find((row) => row.id === activeVariant.id) ?? payload.data;
+      const next =
+        variantsQuery.data?.find((row) => row.id === activeVariant.id) ??
+        payload.data;
       if (next) openVariant(next as ProductVariant);
       setNotice("Variant updated.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update variant.");
+      setError(
+        err instanceof Error ? err.message : "Failed to update variant.",
+      );
     } finally {
       setSaving(false);
-    }
-  };
-
-  const onAdjustStock = async () => {
-    if (!activeVariant) return;
-    setAdjusting(true);
-    setError(null);
-    setNotice(null);
-    try {
-      const res = await fetch(`/api/products/${id}/inventory`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-role": role },
-        body: JSON.stringify({
-          variantId: activeVariant.id,
-          adjustmentQty: Number(adjustQty),
-        }),
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to adjust stock.");
-      await variantsQuery.refetch();
-      const next = variantsQuery.data?.find((row) => row.id === activeVariant.id);
-      if (next) openVariant(next);
-      setNotice("Stock adjusted.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to adjust stock.");
-    } finally {
-      setAdjusting(false);
     }
   };
 
@@ -920,9 +1005,12 @@ export default function ProductDetailPage() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to apply stock count.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to apply stock count.");
       await variantsQuery.refetch();
-      const next = variantsQuery.data?.find((row) => row.id === activeVariant.id);
+      const next = variantsQuery.data?.find(
+        (row) => row.id === activeVariant.id,
+      );
       if (next) openVariant(next);
       const delta = Number(payload.data?.delta ?? 0);
       if (delta === 0) {
@@ -937,7 +1025,9 @@ export default function ProductDetailPage() {
       }
       setStockCountOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to apply stock count.");
+      setError(
+        err instanceof Error ? err.message : "Failed to apply stock count.",
+      );
     } finally {
       setCounting(false);
     }
@@ -946,8 +1036,14 @@ export default function ProductDetailPage() {
   const isAllowedImageFile = (file: File) => {
     const mime = String(file.type || "").toLowerCase();
     const name = String(file.name || "").toLowerCase();
-    if (mime === "image/jpeg" || mime === "image/png" || mime === "image/webp") return true;
-    return name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".png") || name.endsWith(".webp");
+    if (mime === "image/jpeg" || mime === "image/png" || mime === "image/webp")
+      return true;
+    return (
+      name.endsWith(".jpg") ||
+      name.endsWith(".jpeg") ||
+      name.endsWith(".png") ||
+      name.endsWith(".webp")
+    );
   };
 
   const showInvalidImageTypeToast = () => {
@@ -961,20 +1057,26 @@ export default function ProductDetailPage() {
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await fetch(`/api/products/${id}/variants/${variantId}/images`, {
-        method: "POST",
-        headers: { "x-user-role": role },
-        body: form,
-      });
+      const res = await fetch(
+        `/api/products/${id}/variants/${variantId}/images`,
+        {
+          method: "POST",
+          headers: { "x-user-role": role },
+          body: form,
+        },
+      );
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to upload variant image.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to upload variant image.");
       const refreshed = await variantsQuery.refetch();
       if (showArchived) await archivedVariantsQuery.refetch();
       const next = refreshed.data?.find((row) => row.id === variantId);
       if (next && activeVariant?.id === variantId) openVariant(next);
       setNotice("Variant image uploaded.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload variant image.");
+      setError(
+        err instanceof Error ? err.message : "Failed to upload variant image.",
+      );
     } finally {
       setUploadingVariantImageId(null);
     }
@@ -985,19 +1087,25 @@ export default function ProductDetailPage() {
     setError(null);
     setNotice(null);
     try {
-      const res = await fetch(`/api/products/${id}/variants/${variantId}/images`, {
-        method: "DELETE",
-        headers: { "x-user-role": role },
-      });
+      const res = await fetch(
+        `/api/products/${id}/variants/${variantId}/images`,
+        {
+          method: "DELETE",
+          headers: { "x-user-role": role },
+        },
+      );
       const payload = await res.json().catch(() => null);
-      if (!res.ok) throw new Error(payload?.error ?? "Failed to delete variant image.");
+      if (!res.ok)
+        throw new Error(payload?.error ?? "Failed to delete variant image.");
       const refreshed = await variantsQuery.refetch();
       if (showArchived) await archivedVariantsQuery.refetch();
       const next = refreshed.data?.find((row) => row.id === variantId);
       if (next && activeVariant?.id === variantId) openVariant(next);
       setNotice("Variant image deleted.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete variant image.");
+      setError(
+        err instanceof Error ? err.message : "Failed to delete variant image.",
+      );
     } finally {
       setUploadingVariantImageId(null);
     }
@@ -1013,9 +1121,12 @@ export default function ProductDetailPage() {
     <section className="space-y-4">
       <div className="glass-card flex items-start justify-between p-5">
         <div>
-          <h1 className="text-2xl font-semibold text-white">{productQuery.data?.name ?? "Product"}</h1>
+          <h1 className="text-2xl font-semibold text-white">
+            {productQuery.data?.name ?? "Product"}
+          </h1>
           <p className="mt-1 text-sm text-white/70">
-            Category: {productQuery.data?.category ?? "-"} · SKU Prefix: {productQuery.data?.skuPrefix ?? "-"}
+            Category: {productQuery.data?.category ?? "-"} · SKU Prefix:{" "}
+            {productQuery.data?.skuPrefix ?? "-"}
           </p>
           <p className="mt-1 text-sm text-white/70">
             Preferred Supplier: {productQuery.data?.supplier?.name ?? "-"}
@@ -1029,10 +1140,18 @@ export default function ProductDetailPage() {
           >
             {showArchived ? "Hide Archived" : "Show Archived"}
           </button>
-          <button type="button" onClick={openBulkCreate} className="ios-secondary-btn h-9 px-3 text-sm font-semibold">
+          <button
+            type="button"
+            onClick={openBulkCreate}
+            className="ios-secondary-btn h-9 px-3 text-sm font-semibold"
+          >
             + Bulk Add Variants
           </button>
-          <button type="button" onClick={openCreateVariant} className="ios-primary-btn h-9 px-3 text-sm font-semibold">
+          <button
+            type="button"
+            onClick={openCreateVariant}
+            className="ios-primary-btn h-9 px-3 text-sm font-semibold"
+          >
             + Add Variant
           </button>
           <button
@@ -1046,7 +1165,9 @@ export default function ProductDetailPage() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">{error}</div>
+        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+          {error}
+        </div>
       ) : null}
       {notice ? (
         <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
@@ -1060,7 +1181,10 @@ export default function ProductDetailPage() {
       ) : null}
       {validationWarnings.length > 0 ? (
         <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
-          <span className="font-medium text-white/70">Validation warnings:</span> {validationWarnings.join(" ")}
+          <span className="font-medium text-white/70">
+            Validation warnings:
+          </span>{" "}
+          {validationWarnings.join(" ")}
         </div>
       ) : null}
 
@@ -1074,20 +1198,29 @@ export default function ProductDetailPage() {
         <article className="glass-card p-3">
           <p className="text-[11px] text-white/60">Total Stock</p>
           <p className="mt-1 text-lg font-semibold text-white/90">
-            {formatStockWithUnit(summaryStats.totalStock, productQuery.data?.unit)}
+            {formatStockWithUnit(
+              summaryStats.totalStock,
+              productQuery.data?.unit,
+            )}
           </p>
         </article>
         <article className="glass-card p-3">
           <p className="text-[11px] text-white/60">Total Cost Value</p>
-          <p className="mt-1 text-lg font-semibold text-white/90">{formatMoney(summaryStats.totalCostValue)}</p>
+          <p className="mt-1 text-lg font-semibold text-white/90">
+            {formatMoney(summaryStats.totalCostValue)}
+          </p>
         </article>
         <article className="glass-card p-3">
           <p className="text-[11px] text-white/60">Total Retail Value</p>
-          <p className="mt-1 text-lg font-semibold text-white/90">{formatMoney(summaryStats.totalRetailValue)}</p>
+          <p className="mt-1 text-lg font-semibold text-white/90">
+            {formatMoney(summaryStats.totalRetailValue)}
+          </p>
         </article>
         <article className="glass-card p-3">
           <p className="text-[11px] text-white/60">Avg Margin %</p>
-          <p className="mt-1 text-lg font-semibold text-white/90">{formatPercent(summaryStats.avgMarginPct)}</p>
+          <p className="mt-1 text-lg font-semibold text-white/90">
+            {formatPercent(summaryStats.avgMarginPct)}
+          </p>
         </article>
         <article
           className={`p-3 ${
@@ -1096,12 +1229,12 @@ export default function ProductDetailPage() {
               : "glass-card"
           }`}
         >
-          <p className="text-[11px] text-white/60">
-            Low Stock Variants
-          </p>
+          <p className="text-[11px] text-white/60">Low Stock Variants</p>
           <p
             className={`mt-1 text-lg font-semibold ${
-              summaryStats.lowStockVariants > 0 ? "text-amber-200" : "text-white/90"
+              summaryStats.lowStockVariants > 0
+                ? "text-amber-200"
+                : "text-white/90"
             }`}
           >
             {formatQuantity(summaryStats.lowStockVariants)} low stock
@@ -1130,11 +1263,15 @@ export default function ProductDetailPage() {
             <TableBody>
               {!hydrated || variantsQuery.isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center text-white/50">Loading variants...</TableCell>
+                  <TableCell colSpan={11} className="text-center text-white/50">
+                    Loading variants...
+                  </TableCell>
                 </TableRow>
               ) : variants.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center text-white/50">No variants.</TableCell>
+                  <TableCell colSpan={11} className="text-center text-white/50">
+                    No variants.
+                  </TableCell>
                 </TableRow>
               ) : (
                 variants.map((variant) => (
@@ -1167,12 +1304,15 @@ export default function ProductDetailPage() {
                         onDragOver={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          if (dragOverVariantId !== variant.id) setDragOverVariantId(variant.id);
+                          if (dragOverVariantId !== variant.id)
+                            setDragOverVariantId(variant.id);
                         }}
                         onDragLeave={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          setDragOverVariantId((prev) => (prev === variant.id ? null : prev));
+                          setDragOverVariantId((prev) =>
+                            prev === variant.id ? null : prev,
+                          );
                         }}
                         onDrop={(e) => {
                           e.preventDefault();
@@ -1188,7 +1328,14 @@ export default function ProductDetailPage() {
                         }}
                       >
                         {variant.imageUrl ? (
-                          <img src={variant.imageUrl} alt={variant.displayName ?? variant.sku} className="h-full w-full object-cover" />
+                          <Image
+                            src={variant.imageUrl}
+                            alt={variant.displayName ?? variant.sku}
+                            width={64}
+                            height={64}
+                            unoptimized
+                            className="h-full w-full object-cover"
+                          />
                         ) : (
                           <Camera className="h-4 w-4 text-white/50" />
                         )}
@@ -1211,7 +1358,11 @@ export default function ProductDetailPage() {
                       </label>
                     </TableCell>
                     <TableCell className="font-semibold text-white/90">
-                      {toVariantName(productQuery.data?.name ?? "Product", variant, productQuery.data?.category)}
+                      {toVariantName(
+                        productQuery.data?.name ?? "Product",
+                        variant,
+                        productQuery.data?.category,
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
@@ -1223,21 +1374,35 @@ export default function ProductDetailPage() {
                         ) : null}
                       </div>
                     </TableCell>
-                    <TableCell>{toSizeText(variant.width, variant.height)}</TableCell>
+                    <TableCell>
+                      {toSizeText(variant.width, variant.height)}
+                    </TableCell>
                     <TableCell>{variant.color ?? "-"}</TableCell>
                     <TableCell className="text-right">
-                      {variant.price != null ? `$${Number(variant.price ?? 0).toFixed(2)}` : "-"}
+                      {variant.price != null
+                        ? `$${Number(variant.price ?? 0).toFixed(2)}`
+                        : "-"}
                     </TableCell>
                     <TableCell className="text-right">
-                      {variant.cost != null ? `$${Number(variant.cost ?? 0).toFixed(2)}` : "-"}
+                      {variant.cost != null
+                        ? `$${Number(variant.cost ?? 0).toFixed(2)}`
+                        : "-"}
                     </TableCell>
                     <TableCell className="text-right">
-                      {formatStockWithUnit(Number(variant.onHand ?? 0), productQuery.data?.unit)}
+                      {formatStockWithUnit(
+                        Number(variant.onHand ?? 0),
+                        productQuery.data?.unit,
+                      )}
                     </TableCell>
-                    <TableCell className="text-right">{Number(variant.reorderLevel ?? 0).toFixed(2)}</TableCell>
+                    <TableCell className="text-right">
+                      {Number(variant.reorderLevel ?? 0).toFixed(2)}
+                    </TableCell>
                     <TableCell className="text-right">
                       {(() => {
-                        const stockState = getStockAlertState(variant.available, variant.reorderLevel);
+                        const stockState = getStockAlertState(
+                          variant.available,
+                          variant.reorderLevel,
+                        );
                         const numberClass =
                           stockState === "LOW"
                             ? "text-rose-300"
@@ -1247,7 +1412,10 @@ export default function ProductDetailPage() {
                         return (
                           <div className="inline-flex flex-col items-end gap-1">
                             <span className={`font-medium ${numberClass}`}>
-                              {formatStockWithUnit(Number(variant.available ?? 0), productQuery.data?.unit)}
+                              {formatStockWithUnit(
+                                Number(variant.available ?? 0),
+                                productQuery.data?.unit,
+                              )}
                             </span>
                             {stockState ? (
                               <span
@@ -1294,13 +1462,24 @@ export default function ProductDetailPage() {
             setDraft(null);
           }}
         >
-          <div className="h-full w-full max-w-md overflow-y-auto bg-white p-4" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="h-full w-full max-w-md overflow-y-auto bg-white p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <h3 className="text-lg font-semibold text-slate-900">
-              {creatingBulk ? "Bulk Add Variants" : creatingVariant ? "Add Variant" : "Variant Detail"}
+              {creatingBulk
+                ? "Bulk Add Variants"
+                : creatingVariant
+                  ? "Add Variant"
+                  : "Variant Detail"}
             </h3>
             {!creatingBulk && !creatingVariant && activeVariant ? (
               <p className="mt-1 text-sm text-slate-500">
-                {toVariantName(productQuery.data?.name ?? "Product", activeVariant, productQuery.data?.category)}
+                {toVariantName(
+                  productQuery.data?.name ?? "Product",
+                  activeVariant,
+                  productQuery.data?.category,
+                )}
               </p>
             ) : null}
             {creatingBulk ? (
@@ -1313,21 +1492,31 @@ export default function ProductDetailPage() {
                   onClick={() => setShowBulkOverrides((prev) => !prev)}
                   className="ios-secondary-btn h-9 px-3 text-sm"
                 >
-                  {showBulkOverrides ? "Hide Batch Overrides" : "Batch Override Specs (optional)"}
+                  {showBulkOverrides
+                    ? "Hide Batch Overrides"
+                    : "Batch Override Specs (optional)"}
                 </button>
                 {showBulkOverrides ? (
                   <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block space-y-1">
-                        <span className="text-sm text-slate-600">Finish (batch)</span>
+                        <span className="text-sm text-slate-600">
+                          Finish (batch)
+                        </span>
                         <select
                           value={bulkOverrides.glassFinishOverride}
                           onChange={(e) =>
-                            setBulkOverrides((prev) => ({ ...prev, glassFinishOverride: e.target.value }))
+                            setBulkOverrides((prev) => ({
+                              ...prev,
+                              glassFinishOverride: e.target.value,
+                            }))
                           }
                           className="ios-input h-10 w-full bg-white px-3 text-sm"
                         >
-                          <option value="">Use Product Default ({productQuery.data?.glassFinishDefault ?? "-"})</option>
+                          <option value="">
+                            Use Product Default (
+                            {productQuery.data?.glassFinishDefault ?? "-"})
+                          </option>
                           <option value="Clear">Clear</option>
                           <option value="Frosted">Frosted</option>
                         </select>
@@ -1335,7 +1524,12 @@ export default function ProductDetailPage() {
                       <Input
                         label="Screen (batch)"
                         value={bulkOverrides.screenOverride}
-                        onChange={(value) => setBulkOverrides((prev) => ({ ...prev, screenOverride: value }))}
+                        onChange={(value) =>
+                          setBulkOverrides((prev) => ({
+                            ...prev,
+                            screenOverride: value,
+                          }))
+                        }
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
@@ -1347,7 +1541,9 @@ export default function ProductDetailPage() {
                             ...prev,
                             openingTypeOverride: value,
                             slidingConfigOverride:
-                              value.trim().toLowerCase() === "sliding" ? prev.slidingConfigOverride : "",
+                              value.trim().toLowerCase() === "sliding"
+                                ? prev.slidingConfigOverride
+                                : "",
                           }))
                         }
                       />
@@ -1356,7 +1552,10 @@ export default function ProductDetailPage() {
                           label="Sliding Config (batch)"
                           value={bulkOverrides.slidingConfigOverride}
                           onChange={(value) =>
-                            setBulkOverrides((prev) => ({ ...prev, slidingConfigOverride: value }))
+                            setBulkOverrides((prev) => ({
+                              ...prev,
+                              slidingConfigOverride: value,
+                            }))
                           }
                         />
                       ) : null}
@@ -1364,12 +1563,20 @@ export default function ProductDetailPage() {
                   </div>
                 ) : null}
                 <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                  <p className="font-semibold text-slate-700">Specifications (Effective Batch)</p>
+                  <p className="font-semibold text-slate-700">
+                    Specifications (Effective Batch)
+                  </p>
                   <p className="mt-1">{bulkSubtitle || "-"}</p>
                 </div>
                 <div className="space-y-2">
                   <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 text-xs text-slate-500">
-                    <span>W</span><span>H</span><span>Color</span><span>Price</span><span>Cost</span><span>Stock</span><span></span>
+                    <span>W</span>
+                    <span>H</span>
+                    <span>Color</span>
+                    <span>Price</span>
+                    <span>Cost</span>
+                    <span>Stock</span>
+                    <span></span>
                   </div>
                   {bulkRows.map((row) => {
                     const skuPreview =
@@ -1382,23 +1589,117 @@ export default function ProductDetailPage() {
                         manualSkuOverride: null,
                       }).effectiveSku || "-";
                     return (
-                      <div key={row.id} className="space-y-1 rounded-md border border-slate-100 p-2">
+                      <div
+                        key={row.id}
+                        className="space-y-1 rounded-md border border-slate-100 p-2"
+                      >
                         <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2">
-                          <input value={row.width} onChange={(e) => setBulkRows((prev) => prev.map((item) => item.id === row.id ? { ...item, width: e.target.value } : item))} className="ios-input h-9 px-2 text-sm" />
-                          <input value={row.height} onChange={(e) => setBulkRows((prev) => prev.map((item) => item.id === row.id ? { ...item, height: e.target.value } : item))} className="ios-input h-9 px-2 text-sm" />
-                          <input value={row.color} onChange={(e) => setBulkRows((prev) => prev.map((item) => item.id === row.id ? { ...item, color: e.target.value } : item))} className="ios-input h-9 px-2 text-sm" />
-                          <input value={row.price} onChange={(e) => setBulkRows((prev) => prev.map((item) => item.id === row.id ? { ...item, price: e.target.value } : item))} className="ios-input h-9 px-2 text-sm" />
-                          <input value={row.cost} onChange={(e) => setBulkRows((prev) => prev.map((item) => item.id === row.id ? { ...item, cost: e.target.value } : item))} className="ios-input h-9 px-2 text-sm" />
-                          <input value={row.openingStock} onChange={(e) => setBulkRows((prev) => prev.map((item) => item.id === row.id ? { ...item, openingStock: e.target.value } : item))} className="ios-input h-9 px-2 text-sm" />
-                          <button type="button" onClick={() => setBulkRows((prev) => prev.length > 1 ? prev.filter((item) => item.id !== row.id) : prev)} className="ios-secondary-btn h-9 px-2 text-xs">Del</button>
+                          <input
+                            value={row.width}
+                            onChange={(e) =>
+                              setBulkRows((prev) =>
+                                prev.map((item) =>
+                                  item.id === row.id
+                                    ? { ...item, width: e.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            className="ios-input h-9 px-2 text-sm"
+                          />
+                          <input
+                            value={row.height}
+                            onChange={(e) =>
+                              setBulkRows((prev) =>
+                                prev.map((item) =>
+                                  item.id === row.id
+                                    ? { ...item, height: e.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            className="ios-input h-9 px-2 text-sm"
+                          />
+                          <input
+                            value={row.color}
+                            onChange={(e) =>
+                              setBulkRows((prev) =>
+                                prev.map((item) =>
+                                  item.id === row.id
+                                    ? { ...item, color: e.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            className="ios-input h-9 px-2 text-sm"
+                          />
+                          <input
+                            value={row.price}
+                            onChange={(e) =>
+                              setBulkRows((prev) =>
+                                prev.map((item) =>
+                                  item.id === row.id
+                                    ? { ...item, price: e.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            className="ios-input h-9 px-2 text-sm"
+                          />
+                          <input
+                            value={row.cost}
+                            onChange={(e) =>
+                              setBulkRows((prev) =>
+                                prev.map((item) =>
+                                  item.id === row.id
+                                    ? { ...item, cost: e.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            className="ios-input h-9 px-2 text-sm"
+                          />
+                          <input
+                            value={row.openingStock}
+                            onChange={(e) =>
+                              setBulkRows((prev) =>
+                                prev.map((item) =>
+                                  item.id === row.id
+                                    ? { ...item, openingStock: e.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            className="ios-input h-9 px-2 text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setBulkRows((prev) =>
+                                prev.length > 1
+                                  ? prev.filter((item) => item.id !== row.id)
+                                  : prev,
+                              )
+                            }
+                            className="ios-secondary-btn h-9 px-2 text-xs"
+                          >
+                            Del
+                          </button>
                         </div>
-                        <p className="text-xs text-slate-500">SKU Preview: {skuPreview}</p>
+                        <p className="text-xs text-slate-500">
+                          SKU Preview: {skuPreview}
+                        </p>
                       </div>
                     );
                   })}
                   <button
                     type="button"
-                    onClick={() => setBulkRows((prev) => [...prev, createEmptyBulkVariantDraft()])}
+                    onClick={() =>
+                      setBulkRows((prev) => [
+                        ...prev,
+                        createEmptyBulkVariantDraft(),
+                      ])
+                    }
                     className="ios-secondary-btn h-9 px-3 text-sm"
                   >
                     + Add Row
@@ -1406,18 +1707,91 @@ export default function ProductDetailPage() {
                 </div>
               </div>
             ) : draft ? (
-            <div className="mt-4 space-y-3">
-              {!creatingVariant && activeVariant ? (
-                <div className="space-y-2">
-                  <span className="text-sm text-slate-600">Image</span>
-                  {activeVariant.imageUrl ? (
-                    <div
-                      className={`relative overflow-hidden rounded-xl border bg-slate-50 ${
-                        dragOverDetailImage ? "border-sky-400 ring-2 ring-sky-300" : "border-slate-200"
-                      }`}
-                    >
+              <div className="mt-4 space-y-3">
+                {!creatingVariant && activeVariant ? (
+                  <div className="space-y-2">
+                    <span className="text-sm text-slate-600">Image</span>
+                    {activeVariant.imageUrl ? (
+                      <div
+                        className={`relative overflow-hidden rounded-xl border bg-slate-50 ${
+                          dragOverDetailImage
+                            ? "border-sky-400 ring-2 ring-sky-300"
+                            : "border-slate-200"
+                        }`}
+                      >
+                        <label
+                          className="block cursor-pointer"
+                          onDragEnter={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDragOverDetailImage(true);
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (!dragOverDetailImage)
+                              setDragOverDetailImage(true);
+                          }}
+                          onDragLeave={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDragOverDetailImage(false);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setDragOverDetailImage(false);
+                            const file = e.dataTransfer?.files?.[0];
+                            if (!file) return;
+                            if (!isAllowedImageFile(file)) {
+                              showInvalidImageTypeToast();
+                              return;
+                            }
+                            void uploadVariantImage(activeVariant.id, file);
+                          }}
+                        >
+                          <Image
+                            src={activeVariant.imageUrl}
+                            alt={activeVariant.displayName ?? activeVariant.sku}
+                            width={640}
+                            height={160}
+                            unoptimized
+                            className="h-40 w-full object-cover"
+                          />
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              event.currentTarget.value = "";
+                              if (!file) return;
+                              if (!isAllowedImageFile(file)) {
+                                showInvalidImageTypeToast();
+                                return;
+                              }
+                              void uploadVariantImage(activeVariant.id, file);
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void removeVariantImage(activeVariant.id)
+                          }
+                          className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow hover:bg-white"
+                          aria-label="Remove image"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
                       <label
-                        className="block cursor-pointer"
+                        className={`flex h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-slate-50 text-slate-500 transition hover:bg-slate-100 ${
+                          dragOverDetailImage
+                            ? "border-sky-400 ring-2 ring-sky-300"
+                            : "border-slate-300"
+                        }`}
                         onDragEnter={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -1426,7 +1800,8 @@ export default function ProductDetailPage() {
                         onDragOver={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          if (!dragOverDetailImage) setDragOverDetailImage(true);
+                          if (!dragOverDetailImage)
+                            setDragOverDetailImage(true);
                         }}
                         onDragLeave={(e) => {
                           e.preventDefault();
@@ -1446,11 +1821,10 @@ export default function ProductDetailPage() {
                           void uploadVariantImage(activeVariant.id, file);
                         }}
                       >
-                        <img
-                          src={activeVariant.imageUrl}
-                          alt={activeVariant.displayName ?? activeVariant.sku}
-                          className="h-40 w-full object-cover"
-                        />
+                        <Camera className="h-5 w-5" />
+                        <span className="text-sm font-medium">
+                          Upload Image
+                        </span>
                         <input
                           type="file"
                           accept="image/jpeg,image/png,image/webp"
@@ -1467,403 +1841,826 @@ export default function ProductDetailPage() {
                           }}
                         />
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => void removeVariantImage(activeVariant.id)}
-                        className="absolute right-2 top-2 inline-flex h-7 w-7 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow hover:bg-white"
-                        aria-label="Remove image"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <label
-                      className={`flex h-32 cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border border-dashed bg-slate-50 text-slate-500 transition hover:bg-slate-100 ${
-                        dragOverDetailImage ? "border-sky-400 ring-2 ring-sky-300" : "border-slate-300"
-                      }`}
-                      onDragEnter={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDragOverDetailImage(true);
-                      }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (!dragOverDetailImage) setDragOverDetailImage(true);
-                      }}
-                      onDragLeave={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDragOverDetailImage(false);
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setDragOverDetailImage(false);
-                        const file = e.dataTransfer?.files?.[0];
-                        if (!file) return;
-                        if (!isAllowedImageFile(file)) {
-                          showInvalidImageTypeToast();
-                          return;
-                        }
-                        void uploadVariantImage(activeVariant.id, file);
-                      }}
-                    >
-                      <Camera className="h-5 w-5" />
-                      <span className="text-sm font-medium">Upload Image</span>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        className="hidden"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          event.currentTarget.value = "";
-                          if (!file) return;
-                          if (!isAllowedImageFile(file)) {
-                            showInvalidImageTypeToast();
-                            return;
-                          }
-                          void uploadVariantImage(activeVariant.id, file);
-                        }}
-                      />
-                    </label>
-                  )}
-                  {uploadingVariantImageId === activeVariant.id ? (
-                    <p className="text-xs text-slate-500">Uploading image...</p>
-                  ) : null}
-                </div>
-              ) : creatingVariant ? (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                  Save the variant first, then upload one image (jpg, png, webp).
-                </div>
-              ) : null}
-              <Input
-                label="Display Name"
-                value={draft.displayName}
-                onChange={(v) => setDraft((prev) => (prev ? { ...prev, displayName: v } : prev))}
-                required
-                placeholder="e.g. Santafe Oak or Albany Elm"
-              />
-              <Input
-                label="SKU"
-                value={draft.sku}
-                required
-                onChange={(v) =>
-                  setDraft((prev) =>
-                    prev ? { ...prev, sku: String(v ?? "").toUpperCase().replace(/\s+/g, "") } : prev,
-                  )
-                }
-              />
-              <label className="block space-y-1">
-                <span className="text-sm text-slate-600">SKU Preview</span>
-                <div className="ios-input flex h-10 items-center bg-slate-50 px-3 text-sm text-slate-700">
-                  {createSkuPreview}
-                </div>
-                {draft.skuOverride ? (
-                  <p className="text-xs text-slate-500">Manual SKU (not auto-updated).</p>
+                    )}
+                    {uploadingVariantImageId === activeVariant.id ? (
+                      <p className="text-xs text-slate-500">
+                        Uploading image...
+                      </p>
+                    ) : null}
+                  </div>
+                ) : creatingVariant ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                    Save the variant first, then upload one image (jpg, png,
+                    webp).
+                  </div>
                 ) : null}
-              </label>
-              {String(productQuery.data?.category ?? "").toUpperCase() !== "FLOOR" ? (
                 <Input
-                  label="Variant SKU Override (optional)"
-                  value={draft.skuOverride}
-                  onChange={(v) => setDraft((prev) => (prev ? { ...prev, skuOverride: v } : prev))}
+                  label="Display Name"
+                  value={draft.displayName}
+                  onChange={(v) =>
+                    setDraft((prev) =>
+                      prev ? { ...prev, displayName: v } : prev,
+                    )
+                  }
+                  required
+                  placeholder="e.g. Santafe Oak or Albany Elm"
                 />
-              ) : null}
-              {creatingVariant ? (
-                <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                  Defaults: {defaultsSubtitle || "-"}
-                </div>
-              ) : null}
-              {formProfile === "FLOOR" ? (
-                <>
+                <Input
+                  label="SKU"
+                  value={draft.sku}
+                  required
+                  onChange={(v) =>
+                    setDraft((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            sku: String(v ?? "")
+                              .toUpperCase()
+                              .replace(/\s+/g, ""),
+                          }
+                        : prev,
+                    )
+                  }
+                />
+                <label className="block space-y-1">
+                  <span className="text-sm text-slate-600">SKU Preview</span>
+                  <div className="ios-input flex h-10 items-center bg-slate-50 px-3 text-sm text-slate-700">
+                    {createSkuPreview}
+                  </div>
+                  {draft.skuOverride ? (
+                    <p className="text-xs text-slate-500">
+                      Manual SKU (not auto-updated).
+                    </p>
+                  ) : null}
+                </label>
+                {String(productQuery.data?.category ?? "").toUpperCase() !==
+                "FLOOR" ? (
                   <Input
-                    label="Type / Category"
-                    value={draft.screenType}
-                    onChange={(v) => setDraft((prev) => (prev ? { ...prev, screenType: v } : prev))}
-                    placeholder="e.g. LVP"
+                    label="Variant SKU Override (optional)"
+                    value={draft.skuOverride}
+                    onChange={(v) =>
+                      setDraft((prev) =>
+                        prev ? { ...prev, skuOverride: v } : prev,
+                      )
+                    }
                   />
-                  <div className="grid grid-cols-2 gap-2">
+                ) : null}
+                {creatingVariant ? (
+                  <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    Defaults: {defaultsSubtitle || "-"}
+                  </div>
+                ) : null}
+                {formProfile === "FLOOR" ? (
+                  <>
                     <Input
-                      label="Plank Length (in)"
-                      value={draft.width}
-                      onChange={(v) => setDraft((prev) => (prev ? { ...prev, width: v } : prev))}
-                      inputRef={creatingVariant ? widthInputRef : undefined}
-                    />
-                    <Input
-                      label="Plank Width (in)"
-                      value={draft.height}
-                      onChange={(v) => setDraft((prev) => (prev ? { ...prev, height: v } : prev))}
-                    />
-                  </div>
-                  <Input label="Color / Style" value={draft.color} onChange={(v) => setDraft((prev) => (prev ? { ...prev, color: v } : prev))} />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input label="Thickness (mm)" value={draft.thicknessMm} onChange={(v) => setDraft((prev) => (prev ? { ...prev, thicknessMm: v } : prev))} />
-                    <Input label="Wear Layer (mil)" value={draft.variantType} onChange={(v) => setDraft((prev) => (prev ? { ...prev, variantType: v } : prev))} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input label="Core Thickness (mm)" value={draft.glassThicknessMmOverride} onChange={(v) => setDraft((prev) => (prev ? { ...prev, glassThicknessMmOverride: v } : prev))} />
-                    <Input label="Box Coverage (sqft)" value={draft.boxSqft} onChange={(v) => setDraft((prev) => (prev ? { ...prev, boxSqft: v } : prev))} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select
-                      label="Installation Type"
-                      value={draft.openingTypeOverride}
-                      options={["Click", "Glue", "Float"]}
-                      onChange={(v) => setDraft((prev) => (prev ? { ...prev, openingTypeOverride: v } : prev))}
-                    />
-                    <Select
-                      label="Underlayment"
-                      value={draft.screenOverride}
-                      options={["Attached", "Separate", "None"]}
-                      onChange={(v) => setDraft((prev) => (prev ? { ...prev, screenOverride: v } : prev))}
-                    />
-                  </div>
-                </>
-              ) : formProfile === "WINDOW" ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      label="Width (in)"
-                      value={draft.width}
-                      onChange={(v) => setDraft((prev) => (prev ? { ...prev, width: v } : prev))}
-                      inputRef={creatingVariant ? widthInputRef : undefined}
-                    />
-                    <Input label="Height (in)" value={draft.height} onChange={(v) => setDraft((prev) => (prev ? { ...prev, height: v } : prev))} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select label="Color" value={draft.color} options={["White", "Black"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, color: v } : prev))} />
-                    <Select label="Glass Type" value={draft.glassTypeOverride} options={["Low-E", "Clear", "Tempered"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, glassTypeOverride: v } : prev))} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select label="Frame Material" value={draft.slidingConfigOverride} options={["Vinyl", "Aluminum"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, slidingConfigOverride: v } : prev))} />
-                    <Select label="Screen" value={draft.screenOverride} options={["Yes", "No"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, screenOverride: v } : prev))} />
-                  </div>
-                  <Input label="Lock Type" value={draft.slideDirection} onChange={(v) => setDraft((prev) => (prev ? { ...prev, slideDirection: v } : prev))} />
-                </>
-              ) : formProfile === "MIRROR" ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      label="Width (in)"
-                      value={draft.width}
-                      onChange={(v) => setDraft((prev) => (prev ? { ...prev, width: v } : prev))}
-                      inputRef={creatingVariant ? widthInputRef : undefined}
-                    />
-                    <Input label="Height (in)" value={draft.height} onChange={(v) => setDraft((prev) => (prev ? { ...prev, height: v } : prev))} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select label="Shape" value={draft.variantType} options={["Round", "Rectangle", "Square"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, variantType: v } : prev))} />
-                    <Select label="Frame" value={draft.glassFinishOverride} options={["Frameless", "Black", "Gold"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, glassFinishOverride: v } : prev))} />
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Select label="Anti-Fog" value={draft.glassTypeOverride} options={["No", "Yes"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, glassTypeOverride: v } : prev))} />
-                    <Select label="Dimmable" value={draft.slidingConfigOverride} options={["No", "Yes"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, slidingConfigOverride: v } : prev))} />
-                    <Select label="Color Changeable" value={draft.screenOverride} options={["No", "Yes"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, screenOverride: v } : prev))} />
-                  </div>
-                </>
-              ) : formProfile === "SHOWER" ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      label="Width (in)"
-                      value={draft.width}
-                      onChange={(v) => setDraft((prev) => (prev ? { ...prev, width: v } : prev))}
-                      inputRef={creatingVariant ? widthInputRef : undefined}
-                    />
-                    <Input label="Height (in)" value={draft.height} onChange={(v) => setDraft((prev) => (prev ? { ...prev, height: v } : prev))} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input label="Glass Thickness (mm)" value={draft.thicknessMm} onChange={(v) => setDraft((prev) => (prev ? { ...prev, thicknessMm: v } : prev))} />
-                    <Select label="Glass Type" value={draft.glassTypeOverride} options={["Clear", "Frosted", "Tempered"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, glassTypeOverride: v } : prev))} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select label="Frame Material" value={draft.openingTypeOverride} options={["SS304", "Aluminum", "Frameless"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, openingTypeOverride: v } : prev))} />
-                    <Select label="Color / Finish" value={draft.glassFinishOverride} options={["Silver", "Black", "Gold"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, glassFinishOverride: v } : prev))} />
-                  </div>
-                  <Select label="Door Type" value={draft.slidingConfigOverride} options={["Sliding", "Pivot", "Bi-fold"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, slidingConfigOverride: v } : prev))} />
-                </>
-              ) : formProfile === "FLOOR_ACCESSORY" ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select label="Accessory Type" value={draft.variantType} options={["T Molding", "Stair Bullnose", "Corner Round", "Baseboard", "F Molding", "G Molding", "Stair Plank", "Stair Sticker"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, variantType: v } : prev))} />
-                    <Input label="Length (feet)" value={draft.width} onChange={(v) => setDraft((prev) => (prev ? { ...prev, width: v } : prev))} inputRef={creatingVariant ? widthInputRef : undefined} />
-                  </div>
-                  <Input label="Color / Style" value={draft.color} onChange={(v) => setDraft((prev) => (prev ? { ...prev, color: v } : prev))} />
-                </>
-              ) : formProfile === "TILE_EDGE" ? (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select label="Edge Type" value={draft.variantType} options={["Bullnose", "L-Angle", "Square", "Quadec"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, variantType: v } : prev))} />
-                    <Select label="Material" value={draft.openingTypeOverride} options={["Stainless Steel", "Aluminum"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, openingTypeOverride: v } : prev))} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select label="Finish" value={draft.glassFinishOverride} options={["Silver Brushed", "Silver Mirror", "Gold"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, glassFinishOverride: v } : prev))} />
-                    <Input label="Length (feet)" value={draft.width} onChange={(v) => setDraft((prev) => (prev ? { ...prev, width: v } : prev))} inputRef={creatingVariant ? widthInputRef : undefined} />
-                  </div>
-                </>
-              ) : formProfile === "NICHE" ? (
-                <>
-                  <div className="grid grid-cols-3 gap-2">
-                    <Input label="Width (in)" value={draft.width} onChange={(v) => setDraft((prev) => (prev ? { ...prev, width: v } : prev))} inputRef={creatingVariant ? widthInputRef : undefined} />
-                    <Input label="Height (in)" value={draft.height} onChange={(v) => setDraft((prev) => (prev ? { ...prev, height: v } : prev))} />
-                    <Input label="Depth (in)" value={draft.slideDirection} onChange={(v) => setDraft((prev) => (prev ? { ...prev, slideDirection: v } : prev))} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Select label="Color" value={draft.color} options={["Black", "Gray", "White"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, color: v } : prev))} />
-                    <Select label="Material" value={draft.openingTypeOverride} options={["Stainless Steel"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, openingTypeOverride: v } : prev))} />
-                  </div>
-                  <Select label="LED" value={draft.screenOverride} options={["No", "Yes"]} onChange={(v) => setDraft((prev) => (prev ? { ...prev, screenOverride: v } : prev))} />
-                </>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-2">
-                    <Input
-                      label="Width"
-                      value={draft.width}
-                      onChange={(v) => setDraft((prev) => (prev ? { ...prev, width: v } : prev))}
-                      inputRef={creatingVariant ? widthInputRef : undefined}
-                    />
-                    <Input label="Height" value={draft.height} onChange={(v) => setDraft((prev) => (prev ? { ...prev, height: v } : prev))} />
-                  </div>
-                  <Input label="Color" value={draft.color} onChange={(v) => setDraft((prev) => (prev ? { ...prev, color: v } : prev))} />
-                </>
-              )}
-              {creatingVariant && formProfile === "UNKNOWN" ? (
-                <button
-                  type="button"
-                  onClick={() => setShowCreateOverrides((prev) => !prev)}
-                  className="ios-secondary-btn h-9 px-3 text-sm"
-                >
-                  {showCreateOverrides ? "Hide Override Specs" : "Override Specs (optional)"}
-                </button>
-              ) : null}
-              {(formProfile === "UNKNOWN" || (!creatingVariant && formProfile === "WINDOW")) && (!creatingVariant || showCreateOverrides) ? (
-                <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-slate-800">Override Specs (optional)</p>
-                    <button
-                      type="button"
-                      onClick={() =>
+                      label="Type / Category"
+                      value={draft.screenType}
+                      onChange={(v) =>
                         setDraft((prev) =>
-                          prev
-                            ? {
-                                ...prev,
-                                openingTypeOverride: "",
-                                slidingConfigOverride: "",
-                                glassTypeOverride: "",
-                                glassCoatingOverride: "",
-                                glassThicknessMmOverride: "",
-                                glassFinishOverride: "",
-                                screenOverride: "",
-                              }
-                            : prev,
+                          prev ? { ...prev, screenType: v } : prev,
                         )
                       }
-                      className="text-xs text-slate-500 hover:text-slate-700"
-                    >
-                      Reset all to Product Default
-                    </button>
-                  </div>
-                  {String(productQuery.data?.category ?? "").toUpperCase() !== "FLOOR" ? (
+                      placeholder="e.g. LVP"
+                    />
                     <div className="grid grid-cols-2 gap-2">
-                      <label className="block space-y-1">
-                        <span className="text-sm text-slate-600">Glass Finish Override</span>
-                        <select
-                          value={draft.glassFinishOverride}
-                          onChange={(e) => setDraft((prev) => (prev ? { ...prev, glassFinishOverride: e.target.value } : prev))}
-                          className="ios-input h-10 w-full bg-white px-3 text-sm"
-                        >
-                          <option value="">Use Product Default ({productQuery.data?.glassFinishDefault ?? "-"})</option>
-                          <option value="Clear">Clear</option>
-                          <option value="Frosted">Frosted</option>
-                        </select>
-                      </label>
                       <Input
-                        label="Glass Type Override"
-                        value={draft.glassTypeOverride}
-                        onChange={(v) => setDraft((prev) => (prev ? { ...prev, glassTypeOverride: v } : prev))}
+                        label="Plank Length (in)"
+                        value={draft.width}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, width: v } : prev,
+                          )
+                        }
+                        inputRef={creatingVariant ? widthInputRef : undefined}
+                      />
+                      <Input
+                        label="Plank Width (in)"
+                        value={draft.height}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, height: v } : prev,
+                          )
+                        }
                       />
                     </div>
-                  ) : null}
-                  <div className="grid grid-cols-2 gap-2">
                     <Input
-                      label="Coating Override"
-                      value={draft.glassCoatingOverride}
-                      onChange={(v) => setDraft((prev) => (prev ? { ...prev, glassCoatingOverride: v } : prev))}
+                      label="Color / Style"
+                      value={draft.color}
+                      onChange={(v) =>
+                        setDraft((prev) =>
+                          prev ? { ...prev, color: v } : prev,
+                        )
+                      }
                     />
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        label="Thickness (mm)"
+                        value={draft.thicknessMm}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, thicknessMm: v } : prev,
+                          )
+                        }
+                      />
+                      <Input
+                        label="Wear Layer (mil)"
+                        value={draft.variantType}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, variantType: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        label="Core Thickness (mm)"
+                        value={draft.glassThicknessMmOverride}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev
+                              ? { ...prev, glassThicknessMmOverride: v }
+                              : prev,
+                          )
+                        }
+                      />
+                      <Input
+                        label="Box Coverage (sqft)"
+                        value={draft.boxSqft}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, boxSqft: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        label="Installation Type"
+                        value={draft.openingTypeOverride}
+                        options={["Click", "Glue", "Float"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, openingTypeOverride: v } : prev,
+                          )
+                        }
+                      />
+                      <Select
+                        label="Underlayment"
+                        value={draft.screenOverride}
+                        options={["Attached", "Separate", "None"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, screenOverride: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                  </>
+                ) : formProfile === "WINDOW" ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        label="Width (in)"
+                        value={draft.width}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, width: v } : prev,
+                          )
+                        }
+                        inputRef={creatingVariant ? widthInputRef : undefined}
+                      />
+                      <Input
+                        label="Height (in)"
+                        value={draft.height}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, height: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        label="Color"
+                        value={draft.color}
+                        options={["White", "Black"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, color: v } : prev,
+                          )
+                        }
+                      />
+                      <Select
+                        label="Glass Type"
+                        value={draft.glassTypeOverride}
+                        options={["Low-E", "Clear", "Tempered"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, glassTypeOverride: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        label="Frame Material"
+                        value={draft.slidingConfigOverride}
+                        options={["Vinyl", "Aluminum"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, slidingConfigOverride: v } : prev,
+                          )
+                        }
+                      />
+                      <Select
+                        label="Screen"
+                        value={draft.screenOverride}
+                        options={["Yes", "No"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, screenOverride: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
                     <Input
-                      label="Thickness Override (mm)"
-                      value={draft.glassThicknessMmOverride}
-                      onChange={(v) => setDraft((prev) => (prev ? { ...prev, glassThicknessMmOverride: v } : prev))}
+                      label="Lock Type"
+                      value={draft.slideDirection}
+                      onChange={(v) =>
+                        setDraft((prev) =>
+                          prev ? { ...prev, slideDirection: v } : prev,
+                        )
+                      }
                     />
-                  </div>
-                  {String(productQuery.data?.category ?? "").toUpperCase() !== "FLOOR" ? (
-                    <>
+                  </>
+                ) : formProfile === "MIRROR" ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        label="Width (in)"
+                        value={draft.width}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, width: v } : prev,
+                          )
+                        }
+                        inputRef={creatingVariant ? widthInputRef : undefined}
+                      />
+                      <Input
+                        label="Height (in)"
+                        value={draft.height}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, height: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        label="Shape"
+                        value={draft.variantType}
+                        options={["Round", "Rectangle", "Square"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, variantType: v } : prev,
+                          )
+                        }
+                      />
+                      <Select
+                        label="Frame"
+                        value={draft.glassFinishOverride}
+                        options={["Frameless", "Black", "Gold"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, glassFinishOverride: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Select
+                        label="Anti-Fog"
+                        value={draft.glassTypeOverride}
+                        options={["No", "Yes"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, glassTypeOverride: v } : prev,
+                          )
+                        }
+                      />
+                      <Select
+                        label="Dimmable"
+                        value={draft.slidingConfigOverride}
+                        options={["No", "Yes"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, slidingConfigOverride: v } : prev,
+                          )
+                        }
+                      />
+                      <Select
+                        label="Color Changeable"
+                        value={draft.screenOverride}
+                        options={["No", "Yes"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, screenOverride: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                  </>
+                ) : formProfile === "SHOWER" ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        label="Width (in)"
+                        value={draft.width}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, width: v } : prev,
+                          )
+                        }
+                        inputRef={creatingVariant ? widthInputRef : undefined}
+                      />
+                      <Input
+                        label="Height (in)"
+                        value={draft.height}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, height: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        label="Glass Thickness (mm)"
+                        value={draft.thicknessMm}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, thicknessMm: v } : prev,
+                          )
+                        }
+                      />
+                      <Select
+                        label="Glass Type"
+                        value={draft.glassTypeOverride}
+                        options={["Clear", "Frosted", "Tempered"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, glassTypeOverride: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        label="Frame Material"
+                        value={draft.openingTypeOverride}
+                        options={["SS304", "Aluminum", "Frameless"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, openingTypeOverride: v } : prev,
+                          )
+                        }
+                      />
+                      <Select
+                        label="Color / Finish"
+                        value={draft.glassFinishOverride}
+                        options={["Silver", "Black", "Gold"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, glassFinishOverride: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <Select
+                      label="Door Type"
+                      value={draft.slidingConfigOverride}
+                      options={["Sliding", "Pivot", "Bi-fold"]}
+                      onChange={(v) =>
+                        setDraft((prev) =>
+                          prev ? { ...prev, slidingConfigOverride: v } : prev,
+                        )
+                      }
+                    />
+                  </>
+                ) : formProfile === "FLOOR_ACCESSORY" ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        label="Accessory Type"
+                        value={draft.variantType}
+                        options={[
+                          "T Molding",
+                          "Stair Bullnose",
+                          "Corner Round",
+                          "Baseboard",
+                          "F Molding",
+                          "G Molding",
+                          "Stair Plank",
+                          "Stair Sticker",
+                        ]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, variantType: v } : prev,
+                          )
+                        }
+                      />
+                      <Input
+                        label="Length (feet)"
+                        value={draft.width}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, width: v } : prev,
+                          )
+                        }
+                        inputRef={creatingVariant ? widthInputRef : undefined}
+                      />
+                    </div>
+                    <Input
+                      label="Color / Style"
+                      value={draft.color}
+                      onChange={(v) =>
+                        setDraft((prev) =>
+                          prev ? { ...prev, color: v } : prev,
+                        )
+                      }
+                    />
+                  </>
+                ) : formProfile === "TILE_EDGE" ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        label="Edge Type"
+                        value={draft.variantType}
+                        options={["Bullnose", "L-Angle", "Square", "Quadec"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, variantType: v } : prev,
+                          )
+                        }
+                      />
+                      <Select
+                        label="Material"
+                        value={draft.openingTypeOverride}
+                        options={["Stainless Steel", "Aluminum"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, openingTypeOverride: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        label="Finish"
+                        value={draft.glassFinishOverride}
+                        options={["Silver Brushed", "Silver Mirror", "Gold"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, glassFinishOverride: v } : prev,
+                          )
+                        }
+                      />
+                      <Input
+                        label="Length (feet)"
+                        value={draft.width}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, width: v } : prev,
+                          )
+                        }
+                        inputRef={creatingVariant ? widthInputRef : undefined}
+                      />
+                    </div>
+                  </>
+                ) : formProfile === "NICHE" ? (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Input
+                        label="Width (in)"
+                        value={draft.width}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, width: v } : prev,
+                          )
+                        }
+                        inputRef={creatingVariant ? widthInputRef : undefined}
+                      />
+                      <Input
+                        label="Height (in)"
+                        value={draft.height}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, height: v } : prev,
+                          )
+                        }
+                      />
+                      <Input
+                        label="Depth (in)"
+                        value={draft.slideDirection}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, slideDirection: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        label="Color"
+                        value={draft.color}
+                        options={["Black", "Gray", "White"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, color: v } : prev,
+                          )
+                        }
+                      />
+                      <Select
+                        label="Material"
+                        value={draft.openingTypeOverride}
+                        options={["Stainless Steel"]}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, openingTypeOverride: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <Select
+                      label="LED"
+                      value={draft.screenOverride}
+                      options={["No", "Yes"]}
+                      onChange={(v) =>
+                        setDraft((prev) =>
+                          prev ? { ...prev, screenOverride: v } : prev,
+                        )
+                      }
+                    />
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        label="Width"
+                        value={draft.width}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, width: v } : prev,
+                          )
+                        }
+                        inputRef={creatingVariant ? widthInputRef : undefined}
+                      />
+                      <Input
+                        label="Height"
+                        value={draft.height}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, height: v } : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    <Input
+                      label="Color"
+                      value={draft.color}
+                      onChange={(v) =>
+                        setDraft((prev) =>
+                          prev ? { ...prev, color: v } : prev,
+                        )
+                      }
+                    />
+                  </>
+                )}
+                {creatingVariant && formProfile === "UNKNOWN" ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateOverrides((prev) => !prev)}
+                    className="ios-secondary-btn h-9 px-3 text-sm"
+                  >
+                    {showCreateOverrides
+                      ? "Hide Override Specs"
+                      : "Override Specs (optional)"}
+                  </button>
+                ) : null}
+                {(formProfile === "UNKNOWN" ||
+                  (!creatingVariant && formProfile === "WINDOW")) &&
+                (!creatingVariant || showCreateOverrides) ? (
+                  <div className="space-y-2 rounded-lg border border-slate-100 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-800">
+                        Override Specs (optional)
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setDraft((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  openingTypeOverride: "",
+                                  slidingConfigOverride: "",
+                                  glassTypeOverride: "",
+                                  glassCoatingOverride: "",
+                                  glassThicknessMmOverride: "",
+                                  glassFinishOverride: "",
+                                  screenOverride: "",
+                                }
+                              : prev,
+                          )
+                        }
+                        className="text-xs text-slate-500 hover:text-slate-700"
+                      >
+                        Reset all to Product Default
+                      </button>
+                    </div>
+                    {String(productQuery.data?.category ?? "").toUpperCase() !==
+                    "FLOOR" ? (
                       <div className="grid grid-cols-2 gap-2">
+                        <label className="block space-y-1">
+                          <span className="text-sm text-slate-600">
+                            Glass Finish Override
+                          </span>
+                          <select
+                            value={draft.glassFinishOverride}
+                            onChange={(e) =>
+                              setDraft((prev) =>
+                                prev
+                                  ? {
+                                      ...prev,
+                                      glassFinishOverride: e.target.value,
+                                    }
+                                  : prev,
+                              )
+                            }
+                            className="ios-input h-10 w-full bg-white px-3 text-sm"
+                          >
+                            <option value="">
+                              Use Product Default (
+                              {productQuery.data?.glassFinishDefault ?? "-"})
+                            </option>
+                            <option value="Clear">Clear</option>
+                            <option value="Frosted">Frosted</option>
+                          </select>
+                        </label>
                         <Input
-                          label="Opening Type Override"
-                          value={draft.openingTypeOverride}
-                          onChange={(v) => setDraft((prev) => (prev ? { ...prev, openingTypeOverride: v } : prev))}
+                          label="Glass Type Override"
+                          value={draft.glassTypeOverride}
+                          onChange={(v) =>
+                            setDraft((prev) =>
+                              prev ? { ...prev, glassTypeOverride: v } : prev,
+                            )
+                          }
                         />
-                        {isEffectiveSliding ? (
+                      </div>
+                    ) : null}
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        label="Coating Override"
+                        value={draft.glassCoatingOverride}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev ? { ...prev, glassCoatingOverride: v } : prev,
+                          )
+                        }
+                      />
+                      <Input
+                        label="Thickness Override (mm)"
+                        value={draft.glassThicknessMmOverride}
+                        onChange={(v) =>
+                          setDraft((prev) =>
+                            prev
+                              ? { ...prev, glassThicknessMmOverride: v }
+                              : prev,
+                          )
+                        }
+                      />
+                    </div>
+                    {String(productQuery.data?.category ?? "").toUpperCase() !==
+                    "FLOOR" ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-2">
                           <Input
-                            label="Sliding Config Override"
-                            value={draft.slidingConfigOverride}
-                            onChange={(v) => setDraft((prev) => (prev ? { ...prev, slidingConfigOverride: v } : prev))}
+                            label="Opening Type Override"
+                            value={draft.openingTypeOverride}
+                            onChange={(v) =>
+                              setDraft((prev) =>
+                                prev
+                                  ? { ...prev, openingTypeOverride: v }
+                                  : prev,
+                              )
+                            }
                           />
-                        ) : (
+                          {isEffectiveSliding ? (
+                            <Input
+                              label="Sliding Config Override"
+                              value={draft.slidingConfigOverride}
+                              onChange={(v) =>
+                                setDraft((prev) =>
+                                  prev
+                                    ? { ...prev, slidingConfigOverride: v }
+                                    : prev,
+                                )
+                              }
+                            />
+                          ) : (
+                            <Input
+                              label="Screen Override"
+                              value={draft.screenOverride}
+                              onChange={(v) =>
+                                setDraft((prev) =>
+                                  prev ? { ...prev, screenOverride: v } : prev,
+                                )
+                              }
+                            />
+                          )}
+                        </div>
+                        {isEffectiveSliding ? (
                           <Input
                             label="Screen Override"
                             value={draft.screenOverride}
-                            onChange={(v) => setDraft((prev) => (prev ? { ...prev, screenOverride: v } : prev))}
+                            onChange={(v) =>
+                              setDraft((prev) =>
+                                prev ? { ...prev, screenOverride: v } : prev,
+                              )
+                            }
                           />
-                        )}
-                      </div>
-                      {isEffectiveSliding ? (
-                        <Input
-                          label="Screen Override"
-                          value={draft.screenOverride}
-                          onChange={(v) => setDraft((prev) => (prev ? { ...prev, screenOverride: v } : prev))}
-                        />
-                      ) : null}
-                    </>
-                  ) : null}
+                        ) : null}
+                      </>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <p className="font-semibold text-slate-700">
+                    Specifications (Effective)
+                  </p>
+                  <p className="mt-1">
+                    {effectiveSubtitle || "No effective specs."}
+                  </p>
                 </div>
-              ) : null}
-              <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                <p className="font-semibold text-slate-700">Specifications (Effective)</p>
-                <p className="mt-1">{effectiveSubtitle || "No effective specs."}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    label="Sale Price"
+                    value={draft.price}
+                    onChange={(v) =>
+                      setDraft((prev) => (prev ? { ...prev, price: v } : prev))
+                    }
+                  />
+                  <Input
+                    label="Cost"
+                    value={draft.cost}
+                    onChange={(v) =>
+                      setDraft((prev) => (prev ? { ...prev, cost: v } : prev))
+                    }
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    label="Reorder Level"
+                    value={draft.reorderLevel}
+                    onChange={(v) =>
+                      setDraft((prev) =>
+                        prev ? { ...prev, reorderLevel: v } : prev,
+                      )
+                    }
+                  />
+                  <Input
+                    label="Reorder Qty"
+                    value={draft.reorderQty}
+                    onChange={(v) =>
+                      setDraft((prev) =>
+                        prev ? { ...prev, reorderQty: v } : prev,
+                      )
+                    }
+                  />
+                </div>
+                {creatingVariant ? (
+                  <Input
+                    label="Opening Stock"
+                    value={createOpeningStock}
+                    onChange={setCreateOpeningStock}
+                  />
+                ) : null}
+                <label className="block space-y-1">
+                  <span className="text-sm text-slate-600">Description</span>
+                  <textarea
+                    rows={3}
+                    value={draft.description}
+                    onChange={(e) =>
+                      setDraft((prev) =>
+                        prev ? { ...prev, description: e.target.value } : prev,
+                      )
+                    }
+                    className="ios-input w-full px-3 py-2 text-sm"
+                  />
+                </label>
               </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Input label="Sale Price" value={draft.price} onChange={(v) => setDraft((prev) => (prev ? { ...prev, price: v } : prev))} />
-                <Input label="Cost" value={draft.cost} onChange={(v) => setDraft((prev) => (prev ? { ...prev, cost: v } : prev))} />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  label="Reorder Level"
-                  value={draft.reorderLevel}
-                  onChange={(v) => setDraft((prev) => (prev ? { ...prev, reorderLevel: v } : prev))}
-                />
-                <Input
-                  label="Reorder Qty"
-                  value={draft.reorderQty}
-                  onChange={(v) => setDraft((prev) => (prev ? { ...prev, reorderQty: v } : prev))}
-                />
-              </div>
-              {creatingVariant ? (
-                <Input label="Opening Stock" value={createOpeningStock} onChange={setCreateOpeningStock} />
-              ) : null}
-              <label className="block space-y-1">
-                <span className="text-sm text-slate-600">Description</span>
-                <textarea
-                  rows={3}
-                  value={draft.description}
-                  onChange={(e) => setDraft((prev) => (prev ? { ...prev, description: e.target.value } : prev))}
-                  className="ios-input w-full px-3 py-2 text-sm"
-                />
-              </label>
-            </div>
             ) : null}
 
             <div className="mt-4 flex items-center gap-2">
@@ -1876,7 +2673,9 @@ export default function ProductDetailPage() {
                   disabled={saving || filledBulkRowCount === 0}
                   className="ios-primary-btn h-9 px-3 text-sm"
                 >
-                  {saving ? "Creating..." : `Create ${filledBulkRowCount} Variants`}
+                  {saving
+                    ? "Creating..."
+                    : `Create ${filledBulkRowCount} Variants`}
                 </button>
               ) : creatingVariant ? (
                 <>
@@ -1920,23 +2719,41 @@ export default function ProductDetailPage() {
                         setError(null);
                         setNotice(null);
                         try {
-                          const res = await fetch(`/api/products/${id}/variants`, {
-                            method: "PATCH",
-                            headers: { "Content-Type": "application/json", "x-user-role": role },
-                            body: JSON.stringify({
-                              variantId: activeVariant.id,
-                              archive: !activeVariant.archivedAt,
-                            }),
-                          });
+                          const res = await fetch(
+                            `/api/products/${id}/variants`,
+                            {
+                              method: "PATCH",
+                              headers: {
+                                "Content-Type": "application/json",
+                                "x-user-role": role,
+                              },
+                              body: JSON.stringify({
+                                variantId: activeVariant.id,
+                                archive: !activeVariant.archivedAt,
+                              }),
+                            },
+                          );
                           const payload = await res.json();
-                          if (!res.ok) throw new Error(payload.error ?? "Failed to update archive status.");
+                          if (!res.ok)
+                            throw new Error(
+                              payload.error ??
+                                "Failed to update archive status.",
+                            );
                           await variantsQuery.refetch();
                           await archivedVariantsQuery.refetch();
-                          setNotice(activeVariant.archivedAt ? "Variant restored." : "Variant archived.");
+                          setNotice(
+                            activeVariant.archivedAt
+                              ? "Variant restored."
+                              : "Variant archived.",
+                          );
                           setActiveVariant(null);
                           setDraft(null);
                         } catch (err) {
-                          setError(err instanceof Error ? err.message : "Failed to update archive status.");
+                          setError(
+                            err instanceof Error
+                              ? err.message
+                              : "Failed to update archive status.",
+                          );
                         } finally {
                           setSaving(false);
                         }
@@ -1964,23 +2781,24 @@ export default function ProductDetailPage() {
 
             {!creatingVariant ? (
               <div className="mt-6 rounded-lg border border-slate-200 p-3">
-                <p className="text-sm font-medium text-slate-900">Adjust Stock</p>
+                <p className="text-sm font-medium text-slate-900">
+                  Inventory records
+                </p>
                 {activeVariant ? (
                   <p className="mt-1 text-xs text-slate-500">
-                    Use positive or negative number. Current on-hand:{" "}
-                    {formatStockWithUnit(Number(activeVariant.onHand ?? 0), productQuery.data?.unit)}
+                    Current on-hand:{" "}
+                    {formatStockWithUnit(
+                      Number(activeVariant.onHand ?? 0),
+                      productQuery.data?.unit,
+                    )}
                   </p>
                 ) : null}
                 <div className="mt-2 flex items-center gap-2">
-                  <input
-                    value={adjustQty}
-                    onChange={(e) => setAdjustQty(e.target.value)}
-                    className="ios-input h-9 w-28 px-2 text-right text-sm"
-                  />
-                  <button type="button" onClick={onAdjustStock} disabled={adjusting} className="ios-secondary-btn h-9 px-3 text-sm">
-                    {adjusting ? "Applying..." : "Adjust Stock"}
-                  </button>
-                  <button type="button" onClick={onOpenStockCount} className="ios-secondary-btn h-9 px-3 text-sm">
+                  <button
+                    type="button"
+                    onClick={onOpenStockCount}
+                    className="ios-secondary-btn h-9 px-3 text-sm"
+                  >
                     Stock Count
                   </button>
                   {activeVariant ? (
@@ -2001,8 +2819,12 @@ export default function ProductDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]">
           <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-5 shadow-md">
             <div className="mb-3">
-              <h3 className="text-base font-semibold text-slate-900">Stock Count</h3>
-              <p className="mt-1 text-xs text-slate-500">Variant: {activeVariant.sku}</p>
+              <h3 className="text-base font-semibold text-slate-900">
+                Stock Count
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Variant: {activeVariant.sku}
+              </p>
             </div>
             <div className="space-y-3">
               <label className="block space-y-1">
@@ -2026,7 +2848,9 @@ export default function ProductDetailPage() {
                 />
               </label>
               <label className="block space-y-1">
-                <span className="text-sm text-slate-600">Count Note (optional)</span>
+                <span className="text-sm text-slate-600">
+                  Count Note (optional)
+                </span>
                 <textarea
                   value={countNote}
                   onChange={(e) => setCountNote(e.target.value)}
@@ -2050,13 +2874,12 @@ export default function ProductDetailPage() {
                 disabled={counting}
                 className="ios-primary-btn h-9 px-3 text-sm disabled:opacity-60"
               >
-                {counting ? "Applying..." : "Apply Adjustment"}
+                {counting ? "Recording..." : "Record Count"}
               </button>
             </div>
           </div>
         </div>
       ) : null}
-
     </section>
   );
 }
@@ -2105,7 +2928,11 @@ function Select({
   return (
     <label className="block space-y-1">
       <span className="text-sm text-slate-600">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="ios-input h-10 w-full bg-white px-3 text-sm">
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="ios-input h-10 w-full bg-white px-3 text-sm"
+      >
         <option value="">Not Set</option>
         {options.map((option) => (
           <option key={option} value={option}>

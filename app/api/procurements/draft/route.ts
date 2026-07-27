@@ -15,7 +15,10 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error("GET /api/procurements/draft error:", error);
-    return NextResponse.json({ error: "Failed to generate purchase draft." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to generate purchase draft." },
+      { status: 500 },
+    );
   }
 }
 
@@ -36,7 +39,10 @@ export async function POST(request: NextRequest) {
     const payload = await request.json();
     const items = Array.isArray(payload?.items) ? payload.items : [];
     if (items.length === 0) {
-      return NextResponse.json({ error: "Please select at least one reorder item." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Please select at least one reorder item." },
+        { status: 400 },
+      );
     }
 
     type DraftItem = {
@@ -58,24 +64,34 @@ export async function POST(request: NextRequest) {
         variantName: String(item?.variantName ?? "").trim(),
         suggestedQtyBoxes: Math.max(Number(item?.suggestedQtyBoxes ?? 0), 0),
         suggestedQtySqft:
-          item?.suggestedQtySqft === null || item?.suggestedQtySqft === undefined
+          item?.suggestedQtySqft === null ||
+          item?.suggestedQtySqft === undefined
             ? null
             : Math.max(Number(item?.suggestedQtySqft ?? 0), 0),
         unitCost: Math.max(Number(item?.unitCost ?? 0), 0),
         lineNotes: item?.lineNotes ? String(item.lineNotes) : null,
       }))
-      .filter((item: DraftItem) => item.variantId && item.supplierId && item.suggestedQtyBoxes > 0);
+      .filter(
+        (item: DraftItem) =>
+          item.variantId && item.supplierId && item.suggestedQtyBoxes > 0,
+      );
 
     if (normalized.length === 0) {
       return NextResponse.json(
-        { error: "No valid supplier-linked items with suggested quantity were selected." },
+        {
+          error:
+            "No valid supplier-linked items with suggested quantity were selected.",
+        },
         { status: 400 },
       );
     }
 
     const grouped = new Map<string, typeof normalized>();
     for (const item of normalized) {
-      grouped.set(item.supplierId, [...(grouped.get(item.supplierId) ?? []), item]);
+      grouped.set(item.supplierId, [
+        ...(grouped.get(item.supplierId) ?? []),
+        item,
+      ]);
     }
 
     const suppliers = await prisma.supplier.findMany({
@@ -83,9 +99,14 @@ export async function POST(request: NextRequest) {
       select: { id: true },
     });
     const validSupplierIds = new Set(suppliers.map((s) => s.id));
-    const validEntries = Array.from(grouped.entries()).filter(([supplierId]) => validSupplierIds.has(supplierId));
+    const validEntries = Array.from(grouped.entries()).filter(([supplierId]) =>
+      validSupplierIds.has(supplierId),
+    );
     if (validEntries.length === 0) {
-      return NextResponse.json({ error: "No valid suppliers were found for selected items." }, { status: 400 });
+      return NextResponse.json(
+        { error: "No valid suppliers were found for selected items." },
+        { status: 400 },
+      );
     }
 
     const created = await prisma.$transaction(async (tx) => {
@@ -93,7 +114,10 @@ export async function POST(request: NextRequest) {
       for (let index = 0; index < validEntries.length; index++) {
         const [supplierId, supplierItems] = validEntries[index];
         const totalCost = supplierItems.reduce(
-          (sum, item) => sum + Math.max(Number(item.suggestedQtyBoxes), 0) * Math.max(Number(item.unitCost), 0),
+          (sum, item) =>
+            sum +
+            Math.max(Number(item.suggestedQtyBoxes), 0) *
+              Math.max(Number(item.unitCost), 0),
           0,
         );
         const totalBoxes = supplierItems.reduce(
@@ -114,6 +138,17 @@ export async function POST(request: NextRequest) {
               totalBoxes,
               items: supplierItems,
             }),
+            items: {
+              create: supplierItems.map((item) => ({
+                variantId: item.variantId,
+                sku: item.sku,
+                title: item.variantName,
+                unit: "box",
+                expectedQty: item.suggestedQtyBoxes,
+                unitCost: item.unitCost,
+                notes: item.lineNotes,
+              })),
+            },
           },
           select: {
             id: true,
@@ -135,6 +170,9 @@ export async function POST(request: NextRequest) {
     );
   } catch (error) {
     console.error("POST /api/procurements/draft error:", error);
-    return NextResponse.json({ error: "Failed to generate purchase draft." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to generate purchase draft." },
+      { status: 500 },
+    );
   }
 }

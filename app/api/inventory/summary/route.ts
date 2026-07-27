@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { calculateAvailable } from "@/lib/inventory-availability";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 
 function round2(value: number) {
@@ -20,7 +21,9 @@ export async function GET(request: NextRequest) {
           reorderLevel: true,
           cost: true,
           price: true,
-          inventoryStock: { select: { onHand: true } },
+          inventoryStock: {
+            select: { onHand: true, reserved: true, hold: true },
+          },
           product: {
             select: {
               id: true,
@@ -32,7 +35,11 @@ export async function GET(request: NextRequest) {
       }),
     ]);
 
-    const productIds = Array.from(new Set(variants.map((row) => String(row.product?.id ?? "")).filter(Boolean)));
+    const productIds = Array.from(
+      new Set(
+        variants.map((row) => String(row.product?.id ?? "")).filter(Boolean),
+      ),
+    );
     const products = productIds.length
       ? await prisma.product.findMany({
           where: { id: { in: productIds } },
@@ -65,25 +72,30 @@ export async function GET(request: NextRequest) {
 
     for (const variant of variants) {
       const onHand = Number(variant.inventoryStock?.onHand ?? 0);
+      const available = calculateAvailable(variant.inventoryStock);
       const reorderLevel = Number(variant.reorderLevel ?? 0);
       const productMaster = productById.get(String(variant.product?.id ?? ""));
       const costPrice = Number(
         variant.cost ?? productMaster?.costPrice ?? variant.product?.cost ?? 0,
       );
       const salePrice = Number(
-        variant.price ?? productMaster?.salePrice ?? variant.product?.price ?? 0,
+        variant.price ??
+          productMaster?.salePrice ??
+          variant.product?.price ??
+          0,
       );
       const costValue = onHand * costPrice;
       const retailValue = onHand * salePrice;
       const category =
-        productMaster?.category === "OTHER" && String(productMaster?.customCategoryName ?? "").trim()
+        productMaster?.category === "OTHER" &&
+        String(productMaster?.customCategoryName ?? "").trim()
           ? String(productMaster?.customCategoryName ?? "").trim()
           : String(productMaster?.category ?? "OTHER");
 
       totalUnitsInStock += onHand;
       totalCostValue += costValue;
       totalRetailValue += retailValue;
-      if (onHand <= reorderLevel) lowStockItems += 1;
+      if (available <= reorderLevel) lowStockItems += 1;
 
       const prev = categoryMap.get(category) ?? {
         category,
@@ -102,7 +114,8 @@ export async function GET(request: NextRequest) {
     const categoryBreakdown = Array.from(categoryMap.values())
       .map((row) => {
         const marginValue = row.retailValue - row.costValue;
-        const marginPct = row.retailValue > 0 ? (marginValue / row.retailValue) * 100 : 0;
+        const marginPct =
+          row.retailValue > 0 ? (marginValue / row.retailValue) * 100 : 0;
         return {
           category: row.category,
           skus: row.skus,
@@ -132,6 +145,9 @@ export async function GET(request: NextRequest) {
     );
   } catch (error) {
     console.error("GET /api/inventory/summary error:", error);
-    return NextResponse.json({ error: "Failed to fetch inventory summary." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch inventory summary." },
+      { status: 500 },
+    );
   }
 }

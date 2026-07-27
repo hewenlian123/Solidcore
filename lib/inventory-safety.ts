@@ -1,11 +1,16 @@
 import { Prisma } from "@prisma/client";
+import { calculateAvailable } from "@/lib/inventory-availability";
 
 export class InsufficientInventoryError extends Error {
   variantId: string;
   available: number;
   requested: number;
 
-  constructor(args: { variantId: string; available: number; requested: number }) {
+  constructor(args: {
+    variantId: string;
+    available: number;
+    requested: number;
+  }) {
     super("INSUFFICIENT_INVENTORY");
     this.name = "InsufficientInventoryError";
     this.variantId = args.variantId;
@@ -23,12 +28,16 @@ export async function assertSufficientVariantInventory(
 
   const stock = await tx.inventoryStock.findUnique({
     where: { variantId: args.variantId },
-    select: { onHand: true, reserved: true },
+    select: { onHand: true, reserved: true, hold: true },
   });
 
   const onHand = Number(stock?.onHand ?? 0);
   const reserved = Number(stock?.reserved ?? 0);
-  const available = onHand - reserved;
+  const available = calculateAvailable({
+    onHand,
+    reserved,
+    hold: stock?.hold,
+  });
 
   if (available < deductionQty) {
     throw new InsufficientInventoryError({

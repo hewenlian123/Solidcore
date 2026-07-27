@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Image from "next/image";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import * as XLSX from "xlsx";
@@ -179,7 +180,11 @@ type ImportFieldKey =
   | "warehouseName"
   | "supplierName";
 
-const IMPORT_FIELDS: Array<{ key: ImportFieldKey; label: string; required?: boolean }> = [
+const IMPORT_FIELDS: Array<{
+  key: ImportFieldKey;
+  label: string;
+  required?: boolean;
+}> = [
   { key: "sku", label: "SKU", required: true },
   { key: "name", label: "Product Name", required: true },
   { key: "description", label: "Description" },
@@ -199,7 +204,10 @@ const IMPORT_FIELDS: Array<{ key: ImportFieldKey; label: string; required?: bool
 function guessImportMapping(columns: string[]) {
   const normalizedEntries = columns.map((column) => ({
     raw: column,
-    key: String(column).trim().toLowerCase().replace(/[\s_()-]+/g, ""),
+    key: String(column)
+      .trim()
+      .toLowerCase()
+      .replace(/[\s_()-]+/g, ""),
   }));
   const aliases: Record<ImportFieldKey, string[]> = {
     sku: ["sku", "productsku", "variantsku", "itemsku"],
@@ -220,7 +228,9 @@ function guessImportMapping(columns: string[]) {
   const mapping = {} as Record<ImportFieldKey, string>;
   for (const field of IMPORT_FIELDS) {
     const targetAliases = aliases[field.key];
-    const hit = normalizedEntries.find((entry) => targetAliases.includes(entry.key));
+    const hit = normalizedEntries.find((entry) =>
+      targetAliases.includes(entry.key),
+    );
     if (hit) mapping[field.key] = hit.raw;
   }
   return mapping;
@@ -248,7 +258,13 @@ const BULK_CATEGORY_OPTIONS = [
 const ADD_NEW_CATEGORY_VALUE = "__ADD_NEW_CATEGORY__";
 const TEMPLATE_FIELD_META: Record<
   string,
-  { label: string; type?: "text" | "number"; placeholder?: string; min?: string; step?: string }
+  {
+    label: string;
+    type?: "text" | "number";
+    placeholder?: string;
+    min?: string;
+    step?: string;
+  }
 > = {
   brand: { label: "Brand" },
   collection: { label: "Collection" },
@@ -265,12 +281,20 @@ const TEMPLATE_FIELD_META: Record<
   handing: { label: "Sliding Configuration" },
   size_w: { label: "Width", type: "number", min: "0", step: "0.01" },
   size_h: { label: "Height", type: "number", min: "0", step: "0.01" },
-  thickness_mm: { label: "Thickness (mm)", type: "number", min: "0", step: "0.01" },
+  thickness_mm: {
+    label: "Thickness (mm)",
+    type: "number",
+    min: "0",
+    step: "0.01",
+  },
   notes: { label: "Template Notes", placeholder: "Optional notes" },
 };
 
 function normalizeSkuValue(value: string) {
-  return String(value ?? "").toUpperCase().replace(/\s+/g, "").trim();
+  return String(value ?? "")
+    .toUpperCase()
+    .replace(/\s+/g, "")
+    .trim();
 }
 
 function toSkuDimensionPart(value: string) {
@@ -280,7 +304,9 @@ function toSkuDimensionPart(value: string) {
 }
 
 function colorCodeFromColor(color: string) {
-  const normalized = String(color ?? "").trim().toLowerCase();
+  const normalized = String(color ?? "")
+    .trim()
+    .toLowerCase();
   if (!normalized) return "";
   const map: Record<string, string> = {
     white: "W",
@@ -304,7 +330,12 @@ function buildVariantSkuPreview(
   const h = toSkuDimensionPart(height);
   const c = colorCodeFromColor(color);
   if (!p || !w || !h || !c) return "";
-  const suffix = String(glassFinishDefault ?? "").trim().toUpperCase() === "FROSTED" ? "F" : "";
+  const suffix =
+    String(glassFinishDefault ?? "")
+      .trim()
+      .toUpperCase() === "FROSTED"
+      ? "F"
+      : "";
   return `${p}${w}${h}${c}${suffix}`;
 }
 
@@ -428,7 +459,9 @@ const TEMPLATE_SPEC_KEYS = [
 ] as const;
 
 function hasTemplateSpecData(form: typeof initialNewProductForm) {
-  return TEMPLATE_SPEC_KEYS.some((key) => String(form[key] ?? "").trim().length > 0);
+  return TEMPLATE_SPEC_KEYS.some(
+    (key) => String(form[key] ?? "").trim().length > 0,
+  );
 }
 
 function clearTemplateSpecFields(form: typeof initialNewProductForm) {
@@ -485,7 +518,10 @@ function getStockAlertState(available: number, reorderLevel: number) {
   return null;
 }
 
-function formatStockByProductUnit(value: number, unit: string | null | undefined) {
+function formatStockByProductUnit(
+  value: number,
+  unit: string | null | undefined,
+) {
   const rawUnit = UNIT_LABEL_MAP[String(unit ?? "").toUpperCase()] ?? unit;
   return formatQuantityWithUnit(value, rawUnit);
 }
@@ -504,43 +540,53 @@ function ProductsPageContent() {
   const [importParsing, setImportParsing] = useState(false);
   const [importSubmitting, setImportSubmitting] = useState(false);
   const [importColumns, setImportColumns] = useState<string[]>([]);
-  const [importRowsRaw, setImportRowsRaw] = useState<Array<Record<string, unknown>>>([]);
-  const [importMapping, setImportMapping] = useState<Partial<Record<ImportFieldKey, string>>>({});
-  const [importErrors, setImportErrors] = useState<Array<{ row: number; sku: string; error: string }>>([]);
-  const [importWarnings, setImportWarnings] = useState<Array<{ row: number; sku: string; warning: string }>>([]);
+  const [importRowsRaw, setImportRowsRaw] = useState<
+    Array<Record<string, unknown>>
+  >([]);
+  const [importMapping, setImportMapping] = useState<
+    Partial<Record<ImportFieldKey, string>>
+  >({});
+  const [importErrors, setImportErrors] = useState<
+    Array<{ row: number; sku: string; error: string }>
+  >([]);
+  const [importWarnings, setImportWarnings] = useState<
+    Array<{ row: number; sku: string; warning: string }>
+  >([]);
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
   const [openNewDialog, setOpenNewDialog] = useState(false);
-  const [addProductTab, setAddProductTab] = useState<"GENERAL" | "VARIANTS">("GENERAL");
+  const [addProductTab, setAddProductTab] = useState<"GENERAL" | "VARIANTS">(
+    "GENERAL",
+  );
   const [newProductForm, setNewProductForm] = useState(initialNewProductForm);
-  const [newProductVariants, setNewProductVariants] = useState<NewVariantDraft[]>([
-    createEmptyVariantDraft(),
-  ]);
+  const [newProductVariants, setNewProductVariants] = useState<
+    NewVariantDraft[]
+  >([createEmptyVariantDraft()]);
   const [removedVariantIds, setRemovedVariantIds] = useState<string[]>([]);
-  const [seriesSpecErrors, setSeriesSpecErrors] = useState<Record<string, string>>({});
+  const [seriesSpecErrors, setSeriesSpecErrors] = useState<
+    Record<string, string>
+  >({});
   const [submittingNew, setSubmittingNew] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [skuPrefixCustomMode, setSkuPrefixCustomMode] = useState(false);
   const [newCategoryDraft, setNewCategoryDraft] = useState("");
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [openGroupDialog, setOpenGroupDialog] = useState(false);
-  const [openStockDialog, setOpenStockDialog] = useState(false);
-  const [stockProduct, setStockProduct] = useState<Product | null>(null);
-  const [stockVariantId, setStockVariantId] = useState("");
-  const [stockAdjustmentQty, setStockAdjustmentQty] = useState("");
-  const [submittingStock, setSubmittingStock] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupDescription, setNewGroupDescription] = useState("");
   const [submittingGroup, setSubmittingGroup] = useState(false);
   const [submittingBatchSku, setSubmittingBatchSku] = useState(false);
-  const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
+  const [deletingProductId, setDeletingProductId] = useState<string | null>(
+    null,
+  );
   const [skuChecking, setSkuChecking] = useState(false);
   const [skuConflict, setSkuConflict] = useState(false);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = useState("");
   const [editingGroupDescription, setEditingGroupDescription] = useState("");
   const [groupFilter, setGroupFilter] = useState<string>("ALL");
-  const [customCategoryFilter, setCustomCategoryFilter] = useState<string>("ALL");
+  const [customCategoryFilter, setCustomCategoryFilter] =
+    useState<string>("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [openAdvancedFilters, setOpenAdvancedFilters] = useState(false);
   const [openColumnMenu, setOpenColumnMenu] = useState(false);
@@ -569,7 +615,8 @@ function ProductsPageContent() {
     resetNewCategoryDraft: boolean;
   } | null>(null);
   const lowStockOnly =
-    searchParams?.get("lowStockOnly") === "true" || searchParams?.get("filter") === "low";
+    searchParams?.get("lowStockOnly") === "true" ||
+    searchParams?.get("filter") === "low";
 
   const setLowStockFilter = (mode: "all" | "low") => {
     const params = new URLSearchParams(searchParams?.toString() ?? "");
@@ -615,7 +662,10 @@ function ProductsPageContent() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    window.localStorage.setItem("products:advanced-filters-open", openAdvancedFilters ? "1" : "0");
+    window.localStorage.setItem(
+      "products:advanced-filters-open",
+      openAdvancedFilters ? "1" : "0",
+    );
   }, [openAdvancedFilters]);
 
   useEffect(() => {
@@ -639,13 +689,21 @@ function ProductsPageContent() {
   }, [openNewDialog, addProductTab, newProductVariants.length]);
 
   const productsQuery = useQuery({
-    queryKey: ["products", role, category, groupFilter, customCategoryFilter, lowStockOnly],
+    queryKey: [
+      "products",
+      role,
+      category,
+      groupFilter,
+      customCategoryFilter,
+      lowStockOnly,
+    ],
     placeholderData: (previousData) => previousData,
     queryFn: async () => {
       const params = new URLSearchParams();
       if (category !== "ALL") params.set("category", category);
       if (groupFilter !== "ALL") params.set("groupId", groupFilter);
-      if (customCategoryFilter !== "ALL") params.set("customCategoryName", customCategoryFilter);
+      if (customCategoryFilter !== "ALL")
+        params.set("customCategoryName", customCategoryFilter);
       if (lowStockOnly) params.set("lowStockOnly", "true");
       const query = params.toString() ? `?${params.toString()}` : "";
       const res = await fetch(`/api/products${query}`, {
@@ -666,7 +724,8 @@ function ProductsPageContent() {
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to fetch warehouses");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to fetch warehouses");
       return payload.data as Warehouse[];
     },
     enabled: role !== "SALES",
@@ -680,7 +739,8 @@ function ProductsPageContent() {
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to fetch suppliers");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to fetch suppliers");
       return payload.data as Supplier[];
     },
     enabled: role !== "WAREHOUSE",
@@ -694,7 +754,8 @@ function ProductsPageContent() {
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to fetch inventory groups");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to fetch inventory groups");
       return payload.data as InventoryGroup[];
     },
   });
@@ -707,7 +768,8 @@ function ProductsPageContent() {
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to fetch category templates");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to fetch category templates");
       const rows = payload.data as Array<
         Omit<ProductCategoryTemplate, "requiredFields" | "fieldOrder"> & {
           requiredFields: unknown;
@@ -716,8 +778,12 @@ function ProductsPageContent() {
       >;
       return rows.map((row) => ({
         ...row,
-        requiredFields: Array.isArray(row.requiredFields) ? (row.requiredFields as string[]) : [],
-        fieldOrder: Array.isArray(row.fieldOrder) ? (row.fieldOrder as string[]) : [],
+        requiredFields: Array.isArray(row.requiredFields)
+          ? (row.requiredFields as string[])
+          : [],
+        fieldOrder: Array.isArray(row.fieldOrder)
+          ? (row.fieldOrder as string[])
+          : [],
       })) as ProductCategoryTemplate[];
     },
   });
@@ -730,7 +796,8 @@ function ProductsPageContent() {
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to fetch custom categories");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to fetch custom categories");
       const rows = (payload.data ?? []) as Product[];
       return Array.from(
         new Set(
@@ -742,9 +809,15 @@ function ProductsPageContent() {
     },
   });
 
-  const displayRows = useMemo(() => productsQuery.data?.data ?? [], [productsQuery.data]);
+  const displayRows = useMemo(
+    () => productsQuery.data?.data ?? [],
+    [productsQuery.data],
+  );
   const importRequiredMapped = useMemo(
-    () => IMPORT_FIELDS.filter((field) => field.required).every((field) => Boolean(importMapping[field.key])),
+    () =>
+      IMPORT_FIELDS.filter((field) => field.required).every((field) =>
+        Boolean(importMapping[field.key]),
+      ),
     [importMapping],
   );
   const importMappedRows = useMemo(() => {
@@ -758,11 +831,16 @@ function ProductsPageContent() {
       return mapped;
     });
   }, [importMapping, importRowsRaw]);
-  const importPreviewRows = useMemo(() => importMappedRows.slice(0, 20), [importMappedRows]);
+  const importPreviewRows = useMemo(
+    () => importMappedRows.slice(0, 20),
+    [importMappedRows],
+  );
   const selectedTemplate = useMemo(
     () =>
       (templatesQuery.data ?? []).find(
-        (tpl) => tpl.id === newProductForm.categoryId || tpl.categoryKey === newProductForm.category,
+        (tpl) =>
+          tpl.id === newProductForm.categoryId ||
+          tpl.categoryKey === newProductForm.category,
       ) ?? null,
     [templatesQuery.data, newProductForm.categoryId, newProductForm.category],
   );
@@ -800,7 +878,10 @@ function ProductsPageContent() {
     }),
     [newProductForm],
   );
-  const autoTitlePreview = useMemo(() => newProductForm.name.trim(), [newProductForm.name]);
+  const autoTitlePreview = useMemo(
+    () => newProductForm.name.trim(),
+    [newProductForm.name],
+  );
   const autoSkuPreview = useMemo(() => {
     const prefix = normalizeSkuValue(newProductForm.skuPrefix);
     const width = Number(newProductForm.sizeW);
@@ -809,10 +890,22 @@ function ProductsPageContent() {
       return `${prefix}${Math.trunc(width)}${Math.trunc(height)}`;
     }
     if (!selectedTemplate) return "";
-    const raw = renderTemplateSku(selectedTemplate.skuTemplate, templateDataPreview, []);
+    const raw = renderTemplateSku(
+      selectedTemplate.skuTemplate,
+      templateDataPreview,
+      [],
+    );
     return normalizeSkuValue(raw);
-  }, [newProductForm.skuPrefix, newProductForm.sizeW, newProductForm.sizeH, selectedTemplate, templateDataPreview]);
-  const variantSkuOverrideValue = normalizeNullableString(newProductForm.variantSku);
+  }, [
+    newProductForm.skuPrefix,
+    newProductForm.sizeW,
+    newProductForm.sizeH,
+    selectedTemplate,
+    templateDataPreview,
+  ]);
+  const variantSkuOverrideValue = normalizeNullableString(
+    newProductForm.variantSku,
+  );
   const primaryVariant = newProductVariants[0];
   const primaryVariantAutoSkuPreview = useMemo(() => {
     if (!primaryVariant) return "";
@@ -840,21 +933,29 @@ function ProductsPageContent() {
     autoSkuPreview,
   ]);
   const hasVariantSkuOverride = Boolean(variantSkuOverrideValue);
-  const effectiveSkuValue = normalizeSkuValue((variantSkuOverrideValue ?? primaryVariantAutoSkuPreview) || "");
+  const effectiveSkuValue = normalizeSkuValue(
+    (variantSkuOverrideValue ?? primaryVariantAutoSkuPreview) || "",
+  );
   const skuPrefixSelectValue = useMemo(() => {
     const value = normalizeSkuValue(newProductForm.skuPrefix);
     if (!value) return "";
     if (skuPrefixCustomMode) return CUSTOM_SKU_PREFIX_VALUE;
-    return SKU_PREFIX_OPTIONS.includes(value as (typeof SKU_PREFIX_OPTIONS)[number])
+    return SKU_PREFIX_OPTIONS.includes(
+      value as (typeof SKU_PREFIX_OPTIONS)[number],
+    )
       ? value
       : CUSTOM_SKU_PREFIX_VALUE;
   }, [newProductForm.skuPrefix, skuPrefixCustomMode]);
   const customCategoryOptions = customCategoriesQuery.data ?? [];
   const effectiveCustomCategoryOptions =
-    newProductForm.category === "OTHER" && newProductForm.customCategoryName?.trim()
-      ? Array.from(new Set([...customCategoryOptions, newProductForm.customCategoryName.trim()])).sort((a, b) =>
-          a.localeCompare(b),
-        )
+    newProductForm.category === "OTHER" &&
+    newProductForm.customCategoryName?.trim()
+      ? Array.from(
+          new Set([
+            ...customCategoryOptions,
+            newProductForm.customCategoryName.trim(),
+          ]),
+        ).sort((a, b) => a.localeCompare(b))
       : customCategoryOptions;
   const getCategoryLabel = (product: Product) => {
     if (product.category === "OTHER" && product.customCategoryName?.trim()) {
@@ -862,7 +963,9 @@ function ProductsPageContent() {
     }
     return CATEGORY_LABEL_MAP[product.category] ?? product.category;
   };
-  const templateFieldToFormKey = (field: string): keyof typeof initialNewProductForm => {
+  const templateFieldToFormKey = (
+    field: string,
+  ): keyof typeof initialNewProductForm => {
     if (field === "size_w") return "sizeW";
     if (field === "size_h") return "sizeH";
     if (field === "thickness_mm") return "thicknessMm";
@@ -870,10 +973,12 @@ function ProductsPageContent() {
     return field as keyof typeof initialNewProductForm;
   };
   const customCategorySelectValue =
-    newProductForm.category === "OTHER" && newProductForm.customCategoryName?.trim()
+    newProductForm.category === "OTHER" &&
+    newProductForm.customCategoryName?.trim()
       ? `CUSTOM:${newProductForm.customCategoryName.trim()}`
       : newProductForm.category;
-  const optionalColumnCount = Object.values(showOptionalColumns).filter(Boolean).length;
+  const optionalColumnCount =
+    Object.values(showOptionalColumns).filter(Boolean).length;
   const isWindowCategory = newProductForm.category === "WINDOW";
 
   useEffect(() => {
@@ -888,13 +993,16 @@ function ProductsPageContent() {
       return next;
     });
   }, [newProductForm.name, newProductVariants]);
-  const applyCategoryChange = (next: {
-    category: string;
-    categoryId: string;
-    customCategoryName: string;
-    showNewCategoryInput: boolean;
-    resetNewCategoryDraft: boolean;
-  }, resetTemplateFields: boolean) => {
+  const applyCategoryChange = (
+    next: {
+      category: string;
+      categoryId: string;
+      customCategoryName: string;
+      showNewCategoryInput: boolean;
+      resetNewCategoryDraft: boolean;
+    },
+    resetTemplateFields: boolean,
+  ) => {
     setShowNewCategoryInput(next.showNewCategoryInput);
     if (next.resetNewCategoryDraft) setNewCategoryDraft("");
     setNewProductForm((prev) => {
@@ -904,7 +1012,8 @@ function ProductsPageContent() {
         categoryId: next.categoryId,
         customCategoryName: next.customCategoryName,
         flooringMaterial:
-          next.category === "FLOOR" && !String(prev.flooringMaterial ?? "").trim()
+          next.category === "FLOOR" &&
+          !String(prev.flooringMaterial ?? "").trim()
             ? "LVP"
             : prev.flooringMaterial,
       };
@@ -943,7 +1052,9 @@ function ProductsPageContent() {
         resetNewCategoryDraft: false,
       };
     } else {
-      const tpl = (templatesQuery.data ?? []).find((item) => item.categoryKey === value);
+      const tpl = (templatesQuery.data ?? []).find(
+        (item) => item.categoryKey === value,
+      );
       next = {
         category: value,
         categoryId: tpl?.id ?? "",
@@ -957,7 +1068,11 @@ function ProductsPageContent() {
     const nextKind = getTemplateKind(next.category);
     const isSwitchingCategory = next.category !== newProductForm.category;
 
-    if (isSwitchingCategory && hasTemplateSpecData(newProductForm) && currentKind !== nextKind) {
+    if (
+      isSwitchingCategory &&
+      hasTemplateSpecData(newProductForm) &&
+      currentKind !== nextKind
+    ) {
       setPendingCategoryChange(next);
       return;
     }
@@ -982,7 +1097,8 @@ function ProductsPageContent() {
     });
   }, [displayRows, searchTerm]);
   const allVisibleSelected =
-    filteredRows.length > 0 && filteredRows.every((row) => selectedProductIds.includes(row.id));
+    filteredRows.length > 0 &&
+    filteredRows.every((row) => selectedProductIds.includes(row.id));
 
   const addVariantRow = () => {
     setNewProductVariants((prev) => [...prev, createEmptyVariantDraft()]);
@@ -1012,9 +1128,14 @@ function ProductsPageContent() {
     ]);
   };
 
-  const updateVariantRow = (variantId: string, patch: Partial<NewVariantDraft>) => {
+  const updateVariantRow = (
+    variantId: string,
+    patch: Partial<NewVariantDraft>,
+  ) => {
     setNewProductVariants((prev) =>
-      prev.map((item) => (item.id === variantId ? { ...item, ...patch } : item)),
+      prev.map((item) =>
+        item.id === variantId ? { ...item, ...patch } : item,
+      ),
     );
   };
 
@@ -1022,7 +1143,9 @@ function ProductsPageContent() {
     event.preventDefault();
     const isEdit = Boolean(editingProductId);
     if (hasVariantSkuOverride && skuConflict) {
-      setError("SKU already exists. Please update SKU prefix, size, or override value.");
+      setError(
+        "SKU already exists. Please update SKU prefix, size, or override value.",
+      );
       return;
     }
     if (!newProductForm.name.trim() || !newProductForm.warehouseId) {
@@ -1036,14 +1159,20 @@ function ProductsPageContent() {
     if (newProductForm.category === "WINDOW") {
       const nextSpecErrors: Record<string, string> = {};
       if (!newProductForm.openingTypeDefault.trim()) {
-        nextSpecErrors.openingTypeDefault = "Opening Type is required for Window.";
+        nextSpecErrors.openingTypeDefault =
+          "Opening Type is required for Window.";
       }
       if (!newProductForm.glassTypeDefault.trim()) {
         nextSpecErrors.glassTypeDefault = "Glass Type is required for Window.";
       }
       const thicknessValue = Number(newProductForm.glassThicknessMmDefault);
-      if (!newProductForm.glassThicknessMmDefault.trim() || !Number.isFinite(thicknessValue) || thicknessValue <= 0) {
-        nextSpecErrors.glassThicknessMmDefault = "Glass Thickness (mm) must be a positive number.";
+      if (
+        !newProductForm.glassThicknessMmDefault.trim() ||
+        !Number.isFinite(thicknessValue) ||
+        thicknessValue <= 0
+      ) {
+        nextSpecErrors.glassThicknessMmDefault =
+          "Glass Thickness (mm) must be a positive number.";
       }
       if (!newProductForm.screenDefault.trim()) {
         nextSpecErrors.screenDefault = "Screen is required for Window.";
@@ -1075,16 +1204,21 @@ function ProductsPageContent() {
         nextSpecErrors.flooringMaterial = "Type is required for Flooring.";
       }
       if (!newProductForm.flooringWearLayer.trim()) {
-        nextSpecErrors.flooringWearLayer = "Wear Layer is required for Flooring.";
+        nextSpecErrors.flooringWearLayer =
+          "Wear Layer is required for Flooring.";
       }
       if (!newProductForm.flooringUnderlaymentType.trim()) {
-        nextSpecErrors.flooringUnderlaymentType = "Underlayment Type is required for Flooring.";
+        nextSpecErrors.flooringUnderlaymentType =
+          "Underlayment Type is required for Flooring.";
       }
       requiredPositiveDecimal("flooringPlankLengthIn", "Plank Length (in)");
       requiredPositiveDecimal("flooringPlankWidthIn", "Plank Width (in)");
       requiredPositiveDecimal("flooringThicknessMm", "Total Thickness (mm)");
       requiredPositiveDecimal("flooringCoreThicknessMm", "Core Thickness (mm)");
-      requiredPositiveDecimal("flooringUnderlaymentMm", "Underlayment Thickness (mm)");
+      requiredPositiveDecimal(
+        "flooringUnderlaymentMm",
+        "Underlayment Thickness (mm)",
+      );
       requiredPositiveDecimal("flooringBoxCoverageSqft", "Sqft Per Box");
       setSeriesSpecErrors(nextSpecErrors);
       if (Object.keys(nextSpecErrors).length > 0) {
@@ -1114,9 +1248,14 @@ function ProductsPageContent() {
         newProductForm.glassFinishDefault,
       );
       const normalizedSuffix = normalizeSkuValue(item.skuSuffix);
-      const flooringSku = normalizedSkuPrefix && normalizedSuffix ? `${normalizedSkuPrefix}${normalizedSuffix}` : "";
+      const flooringSku =
+        normalizedSkuPrefix && normalizedSuffix
+          ? `${normalizedSkuPrefix}${normalizedSuffix}`
+          : "";
       const rawSku = normalizeSkuValue(item.sku);
-      const finalSku = isFlooringVariantMode ? flooringSku || rawSku : rawSku || skuPreview;
+      const finalSku = isFlooringVariantMode
+        ? flooringSku || rawSku
+        : rawSku || skuPreview;
       return {
         ...item,
         displayName: item.displayName.trim(),
@@ -1144,7 +1283,10 @@ function ProductsPageContent() {
         if (!item.color) return true;
         const code = colorCodeFromColor(item.color);
         if (!code) return true;
-        const isFrostedDefault = String(newProductForm.glassFinishDefault ?? "").trim().toUpperCase() === "FROSTED";
+        const isFrostedDefault =
+          String(newProductForm.glassFinishDefault ?? "")
+            .trim()
+            .toUpperCase() === "FROSTED";
         const expectedTail = isFrostedDefault ? `${code}F` : code;
         if (!item.sku.endsWith(expectedTail)) return true;
       }
@@ -1161,7 +1303,10 @@ function ProductsPageContent() {
       );
     });
     if (hasInvalid) {
-      if (isFlooringVariantMode && normalizedVariants.some((item) => !item.displayName)) {
+      if (
+        isFlooringVariantMode &&
+        normalizedVariants.some((item) => !item.displayName)
+      ) {
         setError("Display Name is required for Flooring variants.");
         return;
       }
@@ -1175,7 +1320,10 @@ function ProductsPageContent() {
         setError("SKU Suffix is required for Flooring variants.");
         return;
       }
-      if (isSizeColorDriven && normalizedVariants.some((item) => !item.width || !item.height)) {
+      if (
+        isSizeColorDriven &&
+        normalizedVariants.some((item) => !item.width || !item.height)
+      ) {
         setError("Size is required.");
         return;
       }
@@ -1187,26 +1335,35 @@ function ProductsPageContent() {
         setError("SKU cannot contain hyphen.");
         return;
       }
-      setError("Each variant requires SKU, Sale Price, Cost, and non-negative Opening Stock.");
+      setError(
+        "Each variant requires SKU, Sale Price, Cost, and non-negative Opening Stock.",
+      );
       return;
     }
-    const uniqueCount = new Set(normalizedVariants.map((item) => item.sku)).size;
+    const uniqueCount = new Set(normalizedVariants.map((item) => item.sku))
+      .size;
     if (uniqueCount !== normalizedVariants.length) {
       setError("Variant SKUs must be unique within the product.");
       return;
     }
     const skuChecks = await Promise.all(
-      Array.from(new Set(normalizedVariants.map((item) => item.sku))).map(async (sku) => {
-        const params = new URLSearchParams({ sku });
-        if (editingProductId) params.set("productId", editingProductId);
-        const res = await fetch(`/api/products/sku/check?${params.toString()}`, {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        });
-        const payload = await res.json();
-        if (!res.ok) throw new Error(payload.error ?? "Failed to validate SKU");
-        return { sku, exists: Boolean(payload?.data?.exists) };
-      }),
+      Array.from(new Set(normalizedVariants.map((item) => item.sku))).map(
+        async (sku) => {
+          const params = new URLSearchParams({ sku });
+          if (editingProductId) params.set("productId", editingProductId);
+          const res = await fetch(
+            `/api/products/sku/check?${params.toString()}`,
+            {
+              cache: "no-store",
+              headers: { "x-user-role": role },
+            },
+          );
+          const payload = await res.json();
+          if (!res.ok)
+            throw new Error(payload.error ?? "Failed to validate SKU");
+          return { sku, exists: Boolean(payload?.data?.exists) };
+        },
+      ),
     );
     const conflict = skuChecks.find((item) => item.exists);
     if (conflict) {
@@ -1219,25 +1376,30 @@ function ProductsPageContent() {
     setValidationWarnings([]);
     try {
       const primaryVariant = newProductVariants[0];
-      const nextCostPrice = primaryVariant?.cost?.trim() ? primaryVariant.cost : newProductForm.costPrice;
-      const nextSalePrice = primaryVariant?.salePrice?.trim() ? primaryVariant.salePrice : newProductForm.salePrice;
-      const res = await fetch(isEdit ? `/api/products/${editingProductId}` : "/api/products", {
-        method: isEdit ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json", "x-user-role": role },
-        body: JSON.stringify({
-          ...newProductForm,
-          costPrice: nextCostPrice || "0",
-          salePrice: nextSalePrice || "0",
-          categoryId: isEdit ? newProductForm.categoryId : "",
-          variantSku: variantSkuOverrideValue,
-          skuOverride: null,
-          removedVariantIds,
-          variants: newProductVariants.map((item) => ({
-            id: item.variantId || undefined,
-            displayName: item.displayName?.trim() || null,
-            skuSuffix: normalizeSkuValue(item.skuSuffix),
-            sku:
-              isFlooringVariantMode
+      const nextCostPrice = primaryVariant?.cost?.trim()
+        ? primaryVariant.cost
+        : newProductForm.costPrice;
+      const nextSalePrice = primaryVariant?.salePrice?.trim()
+        ? primaryVariant.salePrice
+        : newProductForm.salePrice;
+      const res = await fetch(
+        isEdit ? `/api/products/${editingProductId}` : "/api/products",
+        {
+          method: isEdit ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json", "x-user-role": role },
+          body: JSON.stringify({
+            ...newProductForm,
+            costPrice: nextCostPrice || "0",
+            salePrice: nextSalePrice || "0",
+            categoryId: isEdit ? newProductForm.categoryId : "",
+            variantSku: variantSkuOverrideValue,
+            skuOverride: null,
+            removedVariantIds,
+            variants: newProductVariants.map((item) => ({
+              id: item.variantId || undefined,
+              displayName: item.displayName?.trim() || null,
+              skuSuffix: normalizeSkuValue(item.skuSuffix),
+              sku: isFlooringVariantMode
                 ? normalizeSkuValue(item.sku) ||
                   `${normalizedSkuPrefix}${normalizeSkuValue(item.skuSuffix)}`
                 : normalizeSkuValue(item.sku) ||
@@ -1248,18 +1410,23 @@ function ProductsPageContent() {
                     item.color,
                     newProductForm.glassFinishDefault,
                   ),
-            width: Number(item.width || 0),
-            height: Number(item.height || 0),
-            color: item.color?.trim() || null,
-            salePrice: Number(item.salePrice || 0),
-            cost: Number(item.cost || 0),
-            openingStock: Number(item.openingStock || 0),
-            reorderLevel: Number(item.reorderLevel || 0),
-          })),
-        }),
-      });
+              width: Number(item.width || 0),
+              height: Number(item.height || 0),
+              color: item.color?.trim() || null,
+              salePrice: Number(item.salePrice || 0),
+              cost: Number(item.cost || 0),
+              openingStock: Number(item.openingStock || 0),
+              reorderLevel: Number(item.reorderLevel || 0),
+            })),
+          }),
+        },
+      );
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? (isEdit ? "Failed to update product" : "Failed to add product"));
+      if (!res.ok)
+        throw new Error(
+          payload.error ??
+            (isEdit ? "Failed to update product" : "Failed to add product"),
+        );
       const warnings = extractValidationWarnings(payload).filter(
         (w) => !/description is empty/i.test(w),
       );
@@ -1278,11 +1445,21 @@ function ProductsPageContent() {
         warehouseId: prev.warehouseId || warehousesQuery.data?.[0]?.id || "",
       }));
       await queryClient.invalidateQueries({ queryKey: ["products"] });
-      await queryClient.invalidateQueries({ queryKey: ["product-custom-categories"] });
-      if (isEdit && payload?.meta?.prefixChanged && Number(payload?.meta?.prefixRegeneratedCount ?? 0) > 0) {
+      await queryClient.invalidateQueries({
+        queryKey: ["product-custom-categories"],
+      });
+      if (
+        isEdit &&
+        payload?.meta?.prefixChanged &&
+        Number(payload?.meta?.prefixRegeneratedCount ?? 0) > 0
+      ) {
         setNotice("SKU Prefix updated. Variant SKUs regenerated.");
       } else {
-        setNotice(isEdit ? "Product updated successfully." : "Product created successfully.");
+        setNotice(
+          isEdit
+            ? "Product updated successfully."
+            : "Product created successfully.",
+        );
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save product");
@@ -1321,15 +1498,25 @@ function ProductsPageContent() {
               variant.skuSuffix ??
               (product.category === "FLOOR" &&
               product.skuPrefix &&
-              String(variant.sku ?? "").toUpperCase().startsWith(normalizeSkuValue(product.skuPrefix))
-                ? String(variant.sku ?? "").slice(normalizeSkuValue(product.skuPrefix).length)
+              String(variant.sku ?? "")
+                .toUpperCase()
+                .startsWith(normalizeSkuValue(product.skuPrefix))
+                ? String(variant.sku ?? "").slice(
+                    normalizeSkuValue(product.skuPrefix).length,
+                  )
                 : ""),
             width: variant.width != null ? String(variant.width) : "",
             height: variant.height != null ? String(variant.height) : "",
             color: variant.color ?? "",
             sku: variant.sku ?? "",
-            salePrice: variant.price != null ? String(variant.price) : product.salePrice ?? "",
-            cost: variant.cost != null ? String(variant.cost) : product.costPrice ?? "",
+            salePrice:
+              variant.price != null
+                ? String(variant.price)
+                : (product.salePrice ?? ""),
+            cost:
+              variant.cost != null
+                ? String(variant.cost)
+                : (product.costPrice ?? ""),
             openingStock: String(variant.onHand ?? 0),
             reorderLevel: String(variant.reorderLevel ?? 0),
             reservedBoxes: Number(variant.reserved ?? 0),
@@ -1337,7 +1524,14 @@ function ProductsPageContent() {
         : [createEmptyVariantDraft()],
     );
     setSkuPrefixCustomMode(
-      Boolean(product.skuPrefix && !SKU_PREFIX_OPTIONS.includes(normalizeSkuValue(product.skuPrefix) as (typeof SKU_PREFIX_OPTIONS)[number])),
+      Boolean(
+        product.skuPrefix &&
+        !SKU_PREFIX_OPTIONS.includes(
+          normalizeSkuValue(
+            product.skuPrefix,
+          ) as (typeof SKU_PREFIX_OPTIONS)[number],
+        ),
+      ),
     );
     setSeriesSpecErrors({});
     setShowNewCategoryInput(false);
@@ -1368,40 +1562,67 @@ function ProductsPageContent() {
       glassTypeDefault: product.glassTypeDefault ?? "",
       glassCoatingDefault: product.glassCoatingDefault ?? "",
       glassThicknessMmDefault:
-        product.glassThicknessMmDefault != null ? String(product.glassThicknessMmDefault) : "",
+        product.glassThicknessMmDefault != null
+          ? String(product.glassThicknessMmDefault)
+          : "",
       glassFinishDefault: product.glassFinishDefault ?? "",
       screenDefault: product.screenDefault ?? "",
       flooringBrand: product.flooringBrand ?? "",
       flooringSeries: product.flooringSeries ?? "",
       flooringMaterial: product.flooringMaterial ?? "",
       flooringWearLayer: product.flooringWearLayer ?? "",
-      flooringThicknessMm: product.flooringThicknessMm != null ? String(product.flooringThicknessMm) : "",
+      flooringThicknessMm:
+        product.flooringThicknessMm != null
+          ? String(product.flooringThicknessMm)
+          : "",
       flooringPlankLengthIn:
-        product.flooringPlankLengthIn != null ? String(product.flooringPlankLengthIn) : "",
+        product.flooringPlankLengthIn != null
+          ? String(product.flooringPlankLengthIn)
+          : "",
       flooringPlankWidthIn:
-        product.flooringPlankWidthIn != null ? String(product.flooringPlankWidthIn) : "",
+        product.flooringPlankWidthIn != null
+          ? String(product.flooringPlankWidthIn)
+          : "",
       flooringCoreThicknessMm:
-        product.flooringCoreThicknessMm != null ? String(product.flooringCoreThicknessMm) : "",
+        product.flooringCoreThicknessMm != null
+          ? String(product.flooringCoreThicknessMm)
+          : "",
       flooringFinish: product.flooringFinish ?? "",
       flooringEdge: product.flooringEdge ?? "",
       flooringInstallation: product.flooringInstallation ?? "",
       flooringUnderlayment: product.flooringUnderlayment ?? "",
       flooringUnderlaymentType: product.flooringUnderlaymentType ?? "",
       flooringUnderlaymentMm:
-        product.flooringUnderlaymentMm != null ? String(product.flooringUnderlaymentMm) : "",
+        product.flooringUnderlaymentMm != null
+          ? String(product.flooringUnderlaymentMm)
+          : "",
       flooringWaterproof:
-        product.flooringWaterproof === true ? "true" : product.flooringWaterproof === false ? "false" : "",
+        product.flooringWaterproof === true
+          ? "true"
+          : product.flooringWaterproof === false
+            ? "false"
+            : "",
       flooringWaterResistance: product.flooringWaterResistance ?? "",
       flooringWarrantyResidentialYr:
-        product.flooringWarrantyResidentialYr != null ? String(product.flooringWarrantyResidentialYr) : "",
+        product.flooringWarrantyResidentialYr != null
+          ? String(product.flooringWarrantyResidentialYr)
+          : "",
       flooringWarrantyCommercialYr:
-        product.flooringWarrantyCommercialYr != null ? String(product.flooringWarrantyCommercialYr) : "",
+        product.flooringWarrantyCommercialYr != null
+          ? String(product.flooringWarrantyCommercialYr)
+          : "",
       flooringPiecesPerBox:
-        product.flooringPiecesPerBox != null ? String(product.flooringPiecesPerBox) : "",
+        product.flooringPiecesPerBox != null
+          ? String(product.flooringPiecesPerBox)
+          : "",
       flooringBoxCoverageSqft:
-        product.flooringBoxCoverageSqft != null ? String(product.flooringBoxCoverageSqft) : "",
+        product.flooringBoxCoverageSqft != null
+          ? String(product.flooringBoxCoverageSqft)
+          : "",
       flooringLowStockThreshold:
-        product.flooringLowStockThreshold != null ? String(product.flooringLowStockThreshold) : "",
+        product.flooringLowStockThreshold != null
+          ? String(product.flooringLowStockThreshold)
+          : "",
       rating: product.rating ?? "",
       swing: product.swing ?? "",
       handing: product.handing ?? "",
@@ -1436,14 +1657,17 @@ function ProductsPageContent() {
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to batch generate SKU");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to batch generate SKU");
       const summary = payload.data ?? {};
       setNotice(
         `Batch done: updated ${summary.updated ?? 0}, conflict ${summary.skippedConflict ?? 0}, no prefix ${summary.skippedNoPrefix ?? 0}, no size ${summary.skippedNoSize ?? 0}.`,
       );
       await queryClient.invalidateQueries({ queryKey: ["products"] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to batch generate SKU");
+      setError(
+        err instanceof Error ? err.message : "Failed to batch generate SKU",
+      );
     } finally {
       setSubmittingBatchSku(false);
     }
@@ -1485,7 +1709,9 @@ function ProductsPageContent() {
       setImportColumns(columns);
       setImportMapping(guessImportMapping(columns));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to parse import file.");
+      setError(
+        err instanceof Error ? err.message : "Failed to parse import file.",
+      );
     } finally {
       setImportParsing(false);
     }
@@ -1529,61 +1755,26 @@ function ProductsPageContent() {
         body: JSON.stringify({ rows: payloadRows }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to import products.");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to import products.");
       const summary = payload?.data?.summary ?? {};
       setImportErrors(payload?.data?.errors ?? []);
       setImportWarnings(payload?.data?.warnings ?? []);
       setNotice(
         `Import done: total ${summary.totalRows ?? 0}, created ${summary.createdCount ?? 0}, updated ${summary.updatedCount ?? 0}, failed ${summary.failedCount ?? 0}.`,
       );
-      setValidationWarnings((payload?.data?.warnings ?? []).slice(0, 6).map((row: any) => `Row ${row.row}: ${row.warning}`));
+      setValidationWarnings(
+        (payload?.data?.warnings ?? [])
+          .slice(0, 6)
+          .map((row: any) => `Row ${row.row}: ${row.warning}`),
+      );
       await queryClient.invalidateQueries({ queryKey: ["products"] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to import products.");
+      setError(
+        err instanceof Error ? err.message : "Failed to import products.",
+      );
     } finally {
       setImportSubmitting(false);
-    }
-  };
-
-  const openAdjustStock = (product: Product) => {
-    const variants = product.variants ?? [];
-    if (variants.length === 0) {
-      setError("No product variant found. Please save product first.");
-      return;
-    }
-    setError(null);
-    setStockProduct(product);
-    setStockVariantId(variants[0]?.id ?? "");
-    setStockAdjustmentQty("");
-    setOpenStockDialog(true);
-  };
-
-  const submitAdjustStock = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!stockProduct) return;
-    setSubmittingStock(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/products/${stockProduct.id}/inventory`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-user-role": role },
-        body: JSON.stringify({
-          variantId: stockVariantId,
-          adjustmentQty: Number(stockAdjustmentQty),
-        }),
-      });
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to adjust stock");
-      setOpenStockDialog(false);
-      setStockProduct(null);
-      setStockVariantId("");
-      setStockAdjustmentQty("");
-      await queryClient.invalidateQueries({ queryKey: ["products"] });
-      toast.success("Stock adjusted successfully.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to adjust stock");
-    } finally {
-      setSubmittingStock(false);
     }
   };
 
@@ -1612,10 +1803,13 @@ function ProductsPageContent() {
       try {
         const params = new URLSearchParams({ sku: effectiveSkuValue });
         if (editingProductId) params.set("productId", editingProductId);
-        const res = await fetch(`/api/products/sku/check?${params.toString()}`, {
-          cache: "no-store",
-          headers: { "x-user-role": role },
-        });
+        const res = await fetch(
+          `/api/products/sku/check?${params.toString()}`,
+          {
+            cache: "no-store",
+            headers: { "x-user-role": role },
+          },
+        );
         const payload = await res.json();
         if (!res.ok) throw new Error(payload.error ?? "Failed to validate SKU");
         if (!cancelled) setSkuConflict(Boolean(payload?.data?.exists));
@@ -1630,13 +1824,21 @@ function ProductsPageContent() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [effectiveSkuValue, editingProductId, hasVariantSkuOverride, openNewDialog, role]);
+  }, [
+    effectiveSkuValue,
+    editingProductId,
+    hasVariantSkuOverride,
+    openNewDialog,
+    role,
+  ]);
 
   useEffect(() => {
     if (!templatesQuery.data?.length) return;
     setNewProductForm((prev) => {
       if (prev.categoryId) return prev;
-      const matched = templatesQuery.data.find((tpl) => tpl.categoryKey === prev.category);
+      const matched = templatesQuery.data.find(
+        (tpl) => tpl.categoryKey === prev.category,
+      );
       if (!matched) return prev;
       return { ...prev, categoryId: matched.id };
     });
@@ -1664,10 +1866,13 @@ function ProductsPageContent() {
         body: form,
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to upload product image");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to upload product image");
       await queryClient.invalidateQueries({ queryKey: ["products"] });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to upload product image");
+      setError(
+        err instanceof Error ? err.message : "Failed to upload product image",
+      );
     } finally {
       setUploadingImageId(null);
     }
@@ -1734,7 +1939,9 @@ function ProductsPageContent() {
 
   const toggleSelectOne = (productId: string, checked: boolean) => {
     setSelectedProductIds((prev) =>
-      checked ? Array.from(new Set([...prev, productId])) : prev.filter((id) => id !== productId),
+      checked
+        ? Array.from(new Set([...prev, productId]))
+        : prev.filter((id) => id !== productId),
     );
   };
 
@@ -1768,21 +1975,28 @@ function ProductsPageContent() {
         }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to bulk update category");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to bulk update category");
       setSelectedProductIds([]);
       const updatedCount = Number(payload?.data?.updatedCount ?? 0);
       setNotice(`${updatedCount} products updated to ${bulkCategory}`);
       await queryClient.invalidateQueries({ queryKey: ["products"] });
-      await queryClient.invalidateQueries({ queryKey: ["product-custom-categories"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["product-custom-categories"],
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to bulk update category");
+      setError(
+        err instanceof Error ? err.message : "Failed to bulk update category",
+      );
     } finally {
       setSubmittingBulkGroup(false);
     }
   };
 
   const deleteGroup = async (group: InventoryGroup) => {
-    const ok = window.confirm(`Delete group "${group.name}"? Products in this group will be unassigned.`);
+    const ok = window.confirm(
+      `Delete group "${group.name}"? Products in this group will be unassigned.`,
+    );
     if (!ok) return;
     setSubmittingGroup(true);
     setError(null);
@@ -1804,7 +2018,9 @@ function ProductsPageContent() {
   };
 
   const deleteProduct = async (product: Product) => {
-    const ok = window.confirm(`Delete product "${product.name}"? This cannot be undone.`);
+    const ok = window.confirm(
+      `Delete product "${product.name}"? This cannot be undone.`,
+    );
     if (!ok) return;
     setDeletingProductId(product.id);
     setError(null);
@@ -1817,7 +2033,9 @@ function ProductsPageContent() {
       const payload = await res.json();
       if (!res.ok) throw new Error(payload.error ?? "Failed to delete product");
       await queryClient.invalidateQueries({ queryKey: ["products"] });
-      await queryClient.invalidateQueries({ queryKey: ["product-custom-categories"] });
+      await queryClient.invalidateQueries({
+        queryKey: ["product-custom-categories"],
+      });
       setNotice("Product deleted successfully.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete product");
@@ -1827,7 +2045,9 @@ function ProductsPageContent() {
   };
 
   useEffect(() => {
-    setSelectedProductIds((prev) => prev.filter((id) => displayRows.some((row) => row.id === id)));
+    setSelectedProductIds((prev) =>
+      prev.filter((id) => displayRows.some((row) => row.id === id)),
+    );
   }, [displayRows]);
 
   if (!mounted) {
@@ -1835,7 +2055,9 @@ function ProductsPageContent() {
       <section className="mx-auto max-w-[1320px]">
         <div className="glass-card p-5">
           <div className="glass-card-content">
-            <p className="text-sm text-white/50">Loading product management...</p>
+            <p className="text-sm text-white/50">
+              Loading product management...
+            </p>
           </div>
         </div>
       </section>
@@ -1847,57 +2069,58 @@ function ProductsPageContent() {
       <div className="glass-card p-5">
         <div className="glass-card-content">
           <PageHeader
-            title="Product Management"
+            title="Products"
             subtitle="Enterprise product master, pricing, and stock visibility."
             actions={
               <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={runBatchGenerateSku}
-            disabled={submittingBatchSku}
-            className="ios-secondary-btn inline-flex h-10 items-center justify-center gap-2 px-3 text-sm disabled:opacity-60"
-          >
-            {submittingBatchSku ? "Generating..." : "Batch Generate SKU"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setOpenGroupDialog(true)}
-            className="ios-secondary-btn inline-flex h-10 items-center justify-center gap-2 px-3 text-sm"
-          >
-            Manage Groups
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              resetImportState();
-              setOpenImportDialog(true);
-            }}
-            className="ios-secondary-btn inline-flex h-10 items-center justify-center gap-2 px-3 text-sm"
-          >
-            Import CSV/XLSX
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditingProductId(null);
-              setAddProductTab("GENERAL");
-              setNewProductVariants([createEmptyVariantDraft()]);
-              setRemovedVariantIds([]);
-              setSeriesSpecErrors({});
-              setSkuPrefixCustomMode(false);
-              setShowNewCategoryInput(false);
-              setNewCategoryDraft("");
-              setNewProductForm((prev) => ({
-                ...initialNewProductForm,
-                warehouseId: prev.warehouseId || warehousesQuery.data?.[0]?.id || "",
-              }));
-              setOpenNewDialog(true);
-            }}
-            className="ios-primary-btn inline-flex h-10 items-center justify-center gap-2 px-4 text-sm"
-          >
-            <Plus className="h-4 w-4" />
-            Add Product
-          </button>
+                <button
+                  type="button"
+                  onClick={runBatchGenerateSku}
+                  disabled={submittingBatchSku}
+                  className="ios-secondary-btn inline-flex h-10 items-center justify-center gap-2 px-3 text-sm disabled:opacity-60"
+                >
+                  {submittingBatchSku ? "Generating..." : "Batch Generate SKU"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpenGroupDialog(true)}
+                  className="ios-secondary-btn inline-flex h-10 items-center justify-center gap-2 px-3 text-sm"
+                >
+                  Manage Groups
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    resetImportState();
+                    setOpenImportDialog(true);
+                  }}
+                  className="ios-secondary-btn inline-flex h-10 items-center justify-center gap-2 px-3 text-sm"
+                >
+                  Import CSV/XLSX
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingProductId(null);
+                    setAddProductTab("GENERAL");
+                    setNewProductVariants([createEmptyVariantDraft()]);
+                    setRemovedVariantIds([]);
+                    setSeriesSpecErrors({});
+                    setSkuPrefixCustomMode(false);
+                    setShowNewCategoryInput(false);
+                    setNewCategoryDraft("");
+                    setNewProductForm((prev) => ({
+                      ...initialNewProductForm,
+                      warehouseId:
+                        prev.warehouseId || warehousesQuery.data?.[0]?.id || "",
+                    }));
+                    setOpenNewDialog(true);
+                  }}
+                  className="ios-primary-btn inline-flex h-10 items-center justify-center gap-2 px-4 text-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Product
+                </button>
               </div>
             }
           />
@@ -2027,7 +2250,10 @@ function ProductsPageContent() {
                           ["gallery", "Gallery"],
                         ] as const
                       ).map(([key, label]) => (
-                        <label key={key} className="flex items-center gap-2 px-2 py-1.5 text-sm text-white/80">
+                        <label
+                          key={key}
+                          className="flex items-center gap-2 px-2 py-1.5 text-sm text-white/80"
+                        >
                           <input
                             type="checkbox"
                             checked={showOptionalColumns[key]}
@@ -2052,7 +2278,9 @@ function ProductsPageContent() {
         {selectedProductIds.length > 0 ? (
           <div className="sticky top-0 z-10 border-y border-white/[0.10] bg-white/[0.04] px-4 py-2 backdrop-blur-2xl">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-white/80">{selectedProductIds.length} selected</span>
+              <span className="text-sm font-medium text-white/80">
+                {selectedProductIds.length} selected
+              </span>
               <select
                 value={bulkCategory}
                 onChange={(e) => setBulkCategory(e.target.value)}
@@ -2083,353 +2311,425 @@ function ProductsPageContent() {
           </div>
         ) : null}
 
-      {error ? (
-        <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-          {error}
-        </div>
-      ) : null}
-      {notice ? (
-        <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-          {notice}
-        </div>
-      ) : null}
-      {validationWarnings.length > 0 ? (
-        <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-          <p className="font-medium">Validation warnings</p>
-          <p className="mt-1">{validationWarnings.join(" ")}</p>
-        </div>
-      ) : null}
+        {error ? (
+          <div className="rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            {error}
+          </div>
+        ) : null}
+        {notice ? (
+          <div className="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+            {notice}
+          </div>
+        ) : null}
+        {validationWarnings.length > 0 ? (
+          <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            <p className="font-medium">Validation warnings</p>
+            <p className="mt-1">{validationWarnings.join(" ")}</p>
+          </div>
+        ) : null}
 
         <div className="glass-card overflow-hidden p-0">
-        <div className="hidden md:block">
-          <div className="max-h-[calc(100vh-320px)] overflow-auto">
-            <Table>
-              <TableHeader className="sticky top-0 z-20">
-                <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
-                  <TableHead className="w-12">
-                    <input
-                      type="checkbox"
-                      checked={allVisibleSelected}
-                      onChange={(e) => toggleSelectAllVisible(e.target.checked)}
-                      aria-label="Select all visible products"
-                    />
-                  </TableHead>
-                  <TableHead>Product Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  {showOptionalColumns.group ? <TableHead>Group</TableHead> : null}
-                  {showOptionalColumns.specification ? <TableHead>Specification</TableHead> : null}
-                  {showOptionalColumns.unit ? <TableHead>Unit</TableHead> : null}
-                  <TableHead className="text-right">Variants</TableHead>
-                  <TableHead className="text-right">Price Range</TableHead>
-                  {showOptionalColumns.onHand ? <TableHead className="text-right">On Hand</TableHead> : null}
-                  {showOptionalColumns.reserved ? <TableHead className="text-right">Reserved</TableHead> : null}
-                  <TableHead className="text-right">Available</TableHead>
-                  <TableHead>Warehouse</TableHead>
-                  {showOptionalColumns.supplier ? <TableHead>Preferred Supplier</TableHead> : null}
-                  {showOptionalColumns.gallery ? <TableHead>Gallery</TableHead> : null}
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {productsQuery.isLoading ? (
-                  <TableSkeletonRows columns={7 + optionalColumnCount} rows={10} rowClassName="border-white/10" />
-                ) : filteredRows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7 + optionalColumnCount} className="text-center text-white/50">
-                      No products yet
-                    </TableCell>
+          <div className="hidden md:block">
+            <div className="max-h-[calc(100vh-320px)] overflow-auto">
+              <Table>
+                <TableHeader className="sticky top-0 z-20">
+                  <TableRow className="border-white/10 bg-white/[0.06] hover:bg-white/[0.06]">
+                    <TableHead className="w-12">
+                      <input
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={(e) =>
+                          toggleSelectAllVisible(e.target.checked)
+                        }
+                        aria-label="Select all visible products"
+                      />
+                    </TableHead>
+                    <TableHead>Product Name</TableHead>
+                    <TableHead>Category</TableHead>
+                    {showOptionalColumns.group ? (
+                      <TableHead>Group</TableHead>
+                    ) : null}
+                    {showOptionalColumns.specification ? (
+                      <TableHead>Specification</TableHead>
+                    ) : null}
+                    {showOptionalColumns.unit ? (
+                      <TableHead>Unit</TableHead>
+                    ) : null}
+                    <TableHead className="text-right">Variants</TableHead>
+                    <TableHead className="text-right">Price Range</TableHead>
+                    {showOptionalColumns.onHand ? (
+                      <TableHead className="text-right">On Hand</TableHead>
+                    ) : null}
+                    {showOptionalColumns.reserved ? (
+                      <TableHead className="text-right">Reserved</TableHead>
+                    ) : null}
+                    <TableHead className="text-right">Available</TableHead>
+                    <TableHead>Warehouse</TableHead>
+                    {showOptionalColumns.supplier ? (
+                      <TableHead>Preferred Supplier</TableHead>
+                    ) : null}
+                    {showOptionalColumns.gallery ? (
+                      <TableHead>Gallery</TableHead>
+                    ) : null}
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ) : (
-                  filteredRows.map((product) => {
-                    return (
-                      <TableRow
-                        id={`product-row-${product.id}`}
-                        key={product.id}
-                        role="button"
-                        tabIndex={0}
-                        className={`group h-12 cursor-pointer border-white/10 txt-secondary transition-colors duration-150 hover:bg-white/[0.06] ${
-                          highlightId === product.id ? "ring-2 ring-[#164E63]/30" : ""
-                        }`}
-                        onClick={() => {
-                          router.push(`/products/${product.id}`);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            router.push(`/products/${product.id}`);
-                          }
-                        }}
+                </TableHeader>
+                <TableBody>
+                  {productsQuery.isLoading ? (
+                    <TableSkeletonRows
+                      columns={7 + optionalColumnCount}
+                      rows={10}
+                      rowClassName="border-white/10"
+                    />
+                  ) : filteredRows.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7 + optionalColumnCount}
+                        className="text-center text-white/50"
                       >
-                        <TableCell>
-                          <input
-                            type="checkbox"
-                            checked={selectedProductIds.includes(product.id)}
-                            onChange={(e) => toggleSelectOne(product.id, e.target.checked)}
-                            onClick={(e) => e.stopPropagation()}
-                            aria-label={`Select ${product.name}`}
-                          />
-                        </TableCell>
-                        <TableCell className="font-semibold text-white">
-                          <div className="flex items-center gap-2">
-                            <span>{product.name}</span>
-                            {product.hasLowStock ? (
-                              <span className="rounded border border-rose-400/30 bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-200">
-                                LOW STOCK
-                              </span>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell>{getCategoryLabel(product)}</TableCell>
-                        {showOptionalColumns.group ? <TableCell>{product.group?.name ?? "-"}</TableCell> : null}
-                        {showOptionalColumns.specification ? <TableCell>{product.specification || "-"}</TableCell> : null}
-                        {showOptionalColumns.unit ? (
-                          <TableCell>{UNIT_LABEL_MAP[product.unit] ?? product.unit}</TableCell>
-                        ) : null}
-                        <TableCell className="text-right font-semibold text-white">
-                          {Number(product.variantCount ?? product.variants?.length ?? 0)}
-                        </TableCell>
-                        <TableCell className="text-right font-semibold text-white">
-                          {product.priceMin != null && product.priceMax != null
-                            ? product.priceMin === product.priceMax
-                              ? `$${Number(product.priceMin).toFixed(2)}`
-                              : `$${Number(product.priceMin).toFixed(2)} - $${Number(product.priceMax).toFixed(2)}`
-                            : role === "WAREHOUSE" || product.salePrice == null
-                              ? "Spec Confirmed"
-                              : `$${Number(product.salePrice).toFixed(2)}`}
-                        </TableCell>
-                        {showOptionalColumns.onHand ? (
-                          <TableCell className="text-right">
-                            {formatStockByProductUnit(Number(product.stockSummary?.onHand ?? 0), product.unit)}
-                          </TableCell>
-                        ) : null}
-                        {showOptionalColumns.reserved ? (
-                          <TableCell className="text-right">
-                            {formatStockByProductUnit(Number(product.stockSummary?.reserved ?? 0), product.unit)}
-                          </TableCell>
-                        ) : null}
-                        <TableCell
-                          className={`text-right ${
-                            Number(product.totalAvailable ?? product.stockSummary?.available ?? 0) <= 0
-                              ? "font-semibold text-rose-300"
-                              : "font-semibold text-emerald-300"
+                        No products yet
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredRows.map((product) => {
+                      return (
+                        <TableRow
+                          id={`product-row-${product.id}`}
+                          key={product.id}
+                          role="button"
+                          tabIndex={0}
+                          className={`group h-12 cursor-pointer border-white/10 txt-secondary transition-colors duration-150 hover:bg-white/[0.06] ${
+                            highlightId === product.id
+                              ? "ring-2 ring-[#164E63]/30"
+                              : ""
                           }`}
+                          onClick={() => {
+                            router.push(`/products/${product.id}`);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              router.push(`/products/${product.id}`);
+                            }
+                          }}
                         >
-                          {formatStockByProductUnit(
-                            Number(product.totalAvailable ?? product.stockSummary?.available ?? 0),
-                            product.unit,
-                          )}
-                        </TableCell>
-                        <TableCell>{product.warehouse?.name ?? "-"}</TableCell>
-                        {showOptionalColumns.supplier ? <TableCell>{product.supplier?.name ?? "-"}</TableCell> : null}
-                        {showOptionalColumns.gallery ? (
                           <TableCell>
-                          {product.category === "FLOOR" || product.category === "DOOR" ? (
-                            <div className="flex items-center gap-2">
-                              <ThumbImage src={product.galleryImageUrl ?? ""} alt={product.name} />
-                              <label
-                                className="ios-secondary-btn inline-flex h-10 cursor-pointer items-center px-3 text-xs"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {uploadingImageId === product.id ? "Uploading..." : "Upload Image"}
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  capture="environment"
-                                  className="hidden"
-                                  onClick={(e) => e.stopPropagation()}
-                                  onChange={(event) => {
-                                    const file = event.target.files?.[0];
-                                    if (file) uploadProductImage(product.id, file);
-                                  }}
-                                />
-                              </label>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">-</span>
-                          )}
+                            <input
+                              type="checkbox"
+                              checked={selectedProductIds.includes(product.id)}
+                              onChange={(e) =>
+                                toggleSelectOne(product.id, e.target.checked)
+                              }
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Select ${product.name}`}
+                            />
                           </TableCell>
-                        ) : null}
-                        <TableCell className="text-right group-hover:rounded-r-lg">
-                          <div className="inline-flex w-full items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                startEditProduct(product);
-                              }}
-                              className="ios-secondary-btn h-10 px-4 text-sm"
-                            >
-                              Edit
-                            </button>
-                            {role !== "SALES" ? (
+                          <TableCell className="font-semibold text-white">
+                            <div className="flex items-center gap-2">
+                              <span>{product.name}</span>
+                              {product.hasLowStock ? (
+                                <span className="rounded border border-rose-400/30 bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-200">
+                                  LOW STOCK
+                                </span>
+                              ) : null}
+                            </div>
+                          </TableCell>
+                          <TableCell>{getCategoryLabel(product)}</TableCell>
+                          {showOptionalColumns.group ? (
+                            <TableCell>{product.group?.name ?? "-"}</TableCell>
+                          ) : null}
+                          {showOptionalColumns.specification ? (
+                            <TableCell>
+                              {product.specification || "-"}
+                            </TableCell>
+                          ) : null}
+                          {showOptionalColumns.unit ? (
+                            <TableCell>
+                              {UNIT_LABEL_MAP[product.unit] ?? product.unit}
+                            </TableCell>
+                          ) : null}
+                          <TableCell className="text-right font-semibold text-white">
+                            {Number(
+                              product.variantCount ??
+                                product.variants?.length ??
+                                0,
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-white">
+                            {product.priceMin != null &&
+                            product.priceMax != null
+                              ? product.priceMin === product.priceMax
+                                ? `$${Number(product.priceMin).toFixed(2)}`
+                                : `$${Number(product.priceMin).toFixed(2)} - $${Number(product.priceMax).toFixed(2)}`
+                              : role === "WAREHOUSE" ||
+                                  product.salePrice == null
+                                ? "Spec Confirmed"
+                                : `$${Number(product.salePrice).toFixed(2)}`}
+                          </TableCell>
+                          {showOptionalColumns.onHand ? (
+                            <TableCell className="text-right">
+                              {formatStockByProductUnit(
+                                Number(product.stockSummary?.onHand ?? 0),
+                                product.unit,
+                              )}
+                            </TableCell>
+                          ) : null}
+                          {showOptionalColumns.reserved ? (
+                            <TableCell className="text-right">
+                              {formatStockByProductUnit(
+                                Number(product.stockSummary?.reserved ?? 0),
+                                product.unit,
+                              )}
+                            </TableCell>
+                          ) : null}
+                          <TableCell
+                            className={`text-right ${
+                              Number(
+                                product.totalAvailable ??
+                                  product.stockSummary?.available ??
+                                  0,
+                              ) <= 0
+                                ? "font-semibold text-rose-300"
+                                : "font-semibold text-emerald-300"
+                            }`}
+                          >
+                            {formatStockByProductUnit(
+                              Number(
+                                product.totalAvailable ??
+                                  product.stockSummary?.available ??
+                                  0,
+                              ),
+                              product.unit,
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {product.warehouse?.name ?? "-"}
+                          </TableCell>
+                          {showOptionalColumns.supplier ? (
+                            <TableCell>
+                              {product.supplier?.name ?? "-"}
+                            </TableCell>
+                          ) : null}
+                          {showOptionalColumns.gallery ? (
+                            <TableCell>
+                              {product.category === "FLOOR" ||
+                              product.category === "DOOR" ? (
+                                <div className="flex items-center gap-2">
+                                  <ThumbImage
+                                    src={product.galleryImageUrl ?? ""}
+                                    alt={product.name}
+                                  />
+                                  <label
+                                    className="ios-secondary-btn inline-flex h-10 cursor-pointer items-center px-3 text-xs"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {uploadingImageId === product.id
+                                      ? "Uploading..."
+                                      : "Upload Image"}
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      capture="environment"
+                                      className="hidden"
+                                      onClick={(e) => e.stopPropagation()}
+                                      onChange={(event) => {
+                                        const file = event.target.files?.[0];
+                                        if (file)
+                                          uploadProductImage(product.id, file);
+                                      }}
+                                    />
+                                  </label>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-slate-400">
+                                  -
+                                </span>
+                              )}
+                            </TableCell>
+                          ) : null}
+                          <TableCell className="text-right group-hover:rounded-r-lg">
+                            <div className="inline-flex w-full items-center justify-end gap-2">
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  openAdjustStock(product);
+                                  startEditProduct(product);
                                 }}
                                 className="ios-secondary-btn h-10 px-4 text-sm"
                               >
-                                Adjust Stock
+                                Edit
                               </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              aria-label={`Delete ${product.name}`}
-                              title="Delete product"
-                              disabled={deletingProductId === product.id}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void deleteProduct(product);
-                              }}
-                              className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-white/50 opacity-0 transition hover:bg-rose-500/20 hover:text-rose-300 group-hover:opacity-100 disabled:opacity-40"
-                            >
-                              {deletingProductId === product.id ? (
-                                <Spinner className="h-4 w-4 text-rose-300" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </button>
-                            <span
-                              className="ml-1 inline-flex items-center text-white/40 opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
-                              aria-hidden="true"
-                            >
-                              <ChevronRight className="h-4 w-4" />
-                            </span>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
-
-        <div className="space-y-2 p-3 md:hidden">
-          {filteredRows.map((product) => {
-            return (
-              <article
-                id={`product-row-${product.id}`}
-                key={product.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  router.push(`/products/${product.id}`);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    router.push(`/products/${product.id}`);
-                  }
-                }}
-                className={`glass-card p-3 ${
-                  highlightId === product.id ? "ring-2 ring-cyan-400/30" : ""
-                }`}
-              >
-                <div className="glass-card-content flex items-start justify-between">
-                  <h3 className="text-base font-semibold text-white">
-                    {product.name}
-                    {product.hasLowStock ? (
-                      <span className="ml-2 rounded border border-rose-400/30 bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-200">
-                        LOW STOCK
-                      </span>
-                    ) : null}
-                  </h3>
-                  <span className="text-xs text-white/50">
-                    {getCategoryLabel(product)}
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-white/70">
-                  Variants: {Number(product.variantCount ?? product.variants?.length ?? 0)} · Price:{" "}
-                  {product.priceMin != null && product.priceMax != null
-                    ? product.priceMin === product.priceMax
-                      ? `$${Number(product.priceMin).toFixed(2)}`
-                      : `$${Number(product.priceMin).toFixed(2)} - $${Number(product.priceMax).toFixed(2)}`
-                    : role === "WAREHOUSE" || product.salePrice == null
-                      ? "Spec Confirmed"
-                      : `$${Number(product.salePrice).toFixed(2)}`}
-                </p>
-                <p className="mt-1 text-sm text-white/70">
-                  Stock: On Hand {formatStockByProductUnit(Number(product.stockSummary?.onHand ?? 0), product.unit)} /
-                  Reserved {formatStockByProductUnit(Number(product.stockSummary?.reserved ?? 0), product.unit)} /
-                  Available{" "}
-                  {formatStockByProductUnit(
-                    Number(product.totalAvailable ?? product.stockSummary?.available ?? 0),
-                    product.unit,
+                              <button
+                                type="button"
+                                aria-label={`Delete ${product.name}`}
+                                title="Delete product"
+                                disabled={deletingProductId === product.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  void deleteProduct(product);
+                                }}
+                                className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-white/50 opacity-0 transition hover:bg-rose-500/20 hover:text-rose-300 group-hover:opacity-100 disabled:opacity-40"
+                              >
+                                {deletingProductId === product.id ? (
+                                  <Spinner className="h-4 w-4 text-rose-300" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </button>
+                              <span
+                                className="ml-1 inline-flex items-center text-white/40 opacity-0 transition-all duration-200 group-hover:translate-x-1 group-hover:opacity-100"
+                                aria-hidden="true"
+                              >
+                                <ChevronRight className="h-4 w-4" />
+                              </span>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
-                </p>
-                <p className="mt-1 text-sm text-white/70">Warehouse: {product.warehouse?.name ?? "-"}</p>
-                {showOptionalColumns.supplier ? (
-                  <p className="mt-1 text-sm text-white/70">Supplier: {product.supplier?.name ?? "-"}</p>
-                ) : null}
-                {(product.category === "FLOOR" || product.category === "DOOR") && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <ThumbImage src={product.galleryImageUrl ?? ""} alt={product.name} />
-                    <label className="ios-secondary-btn inline-flex h-10 cursor-pointer items-center px-3 text-xs">
-                      {uploadingImageId === product.id ? "Uploading..." : "Upload Product Image"}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        className="hidden"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (file) uploadProductImage(product.id, file);
-                        }}
-                      />
-                    </label>
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+
+          <div className="space-y-2 p-3 md:hidden">
+            {filteredRows.map((product) => {
+              return (
+                <article
+                  id={`product-row-${product.id}`}
+                  key={product.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => {
+                    router.push(`/products/${product.id}`);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      router.push(`/products/${product.id}`);
+                    }
+                  }}
+                  className={`glass-card p-3 ${
+                    highlightId === product.id ? "ring-2 ring-cyan-400/30" : ""
+                  }`}
+                >
+                  <div className="glass-card-content flex items-start justify-between">
+                    <h3 className="text-base font-semibold text-white">
+                      {product.name}
+                      {product.hasLowStock ? (
+                        <span className="ml-2 rounded border border-rose-400/30 bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-rose-200">
+                          LOW STOCK
+                        </span>
+                      ) : null}
+                    </h3>
+                    <span className="text-xs text-white/50">
+                      {getCategoryLabel(product)}
+                    </span>
                   </div>
-                )}
-                <div className="mt-3 flex items-center justify-between">
-                  <div className="inline-flex gap-2">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startEditProduct(product);
-                      }}
-                      className="ios-secondary-btn h-10 px-3 text-sm"
-                    >
-                      Edit
-                    </button>
-                    {role !== "SALES" ? (
+                  <p className="mt-1 text-sm text-white/70">
+                    Variants:{" "}
+                    {Number(
+                      product.variantCount ?? product.variants?.length ?? 0,
+                    )}{" "}
+                    · Price:{" "}
+                    {product.priceMin != null && product.priceMax != null
+                      ? product.priceMin === product.priceMax
+                        ? `$${Number(product.priceMin).toFixed(2)}`
+                        : `$${Number(product.priceMin).toFixed(2)} - $${Number(product.priceMax).toFixed(2)}`
+                      : role === "WAREHOUSE" || product.salePrice == null
+                        ? "Spec Confirmed"
+                        : `$${Number(product.salePrice).toFixed(2)}`}
+                  </p>
+                  <p className="mt-1 text-sm text-white/70">
+                    Stock: On Hand{" "}
+                    {formatStockByProductUnit(
+                      Number(product.stockSummary?.onHand ?? 0),
+                      product.unit,
+                    )}{" "}
+                    / Reserved{" "}
+                    {formatStockByProductUnit(
+                      Number(product.stockSummary?.reserved ?? 0),
+                      product.unit,
+                    )}{" "}
+                    / Available{" "}
+                    {formatStockByProductUnit(
+                      Number(
+                        product.totalAvailable ??
+                          product.stockSummary?.available ??
+                          0,
+                      ),
+                      product.unit,
+                    )}
+                  </p>
+                  <p className="mt-1 text-sm text-white/70">
+                    Warehouse: {product.warehouse?.name ?? "-"}
+                  </p>
+                  {showOptionalColumns.supplier ? (
+                    <p className="mt-1 text-sm text-white/70">
+                      Supplier: {product.supplier?.name ?? "-"}
+                    </p>
+                  ) : null}
+                  {(product.category === "FLOOR" ||
+                    product.category === "DOOR") && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <ThumbImage
+                        src={product.galleryImageUrl ?? ""}
+                        alt={product.name}
+                      />
+                      <label className="ios-secondary-btn inline-flex h-10 cursor-pointer items-center px-3 text-xs">
+                        {uploadingImageId === product.id
+                          ? "Uploading..."
+                          : "Upload Product Image"}
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          className="hidden"
+                          onChange={(event) => {
+                            const file = event.target.files?.[0];
+                            if (file) uploadProductImage(product.id, file);
+                          }}
+                        />
+                      </label>
+                    </div>
+                  )}
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="inline-flex gap-2">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          openAdjustStock(product);
+                          startEditProduct(product);
                         }}
                         className="ios-secondary-btn h-10 px-3 text-sm"
                       >
-                        Adjust Stock
+                        Edit
                       </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      aria-label={`Delete ${product.name}`}
-                      title="Delete product"
-                      disabled={deletingProductId === product.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void deleteProduct(product);
-                      }}
-                      className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-white/50 transition hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
-                    >
-                      {deletingProductId === product.id ? (
-                        <Spinner className="h-4 w-4 text-rose-300" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </button>
+                      <button
+                        type="button"
+                        aria-label={`Delete ${product.name}`}
+                        title="Delete product"
+                        disabled={deletingProductId === product.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void deleteProduct(product);
+                        }}
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-white/50 transition hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-40"
+                      >
+                        {deletingProductId === product.id ? (
+                          <Spinner className="h-4 w-4 text-rose-300" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              </article>
-            );
-          })}
+                </article>
+              );
+            })}
+          </div>
         </div>
-      </div>
       </div>
 
       {openNewDialog ? (
@@ -2482,19 +2782,28 @@ function ProductsPageContent() {
 
                 {addProductTab === "GENERAL" ? (
                   <div className="glass-card-soft p-4">
-                    <h4 className="text-sm font-semibold text-white">General</h4>
+                    <h4 className="text-sm font-semibold text-white">
+                      General
+                    </h4>
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                       <InputField
                         label="Product Name"
                         value={newProductForm.name}
-                        onChange={(value) => setNewProductForm((prev) => ({ ...prev, name: value }))}
+                        onChange={(value) =>
+                          setNewProductForm((prev) => ({
+                            ...prev,
+                            name: value,
+                          }))
+                        }
                         required
                       />
                       <div className="space-y-2">
                         <span className="text-sm text-slate-300">Category</span>
                         <select
                           value={customCategorySelectValue}
-                          onChange={(event) => handleCategorySelectChange(event.target.value)}
+                          onChange={(event) =>
+                            handleCategorySelectChange(event.target.value)
+                          }
                           className="ios-input h-12 w-full px-3 text-sm"
                         >
                           {(templatesQuery.data ?? []).map((item) => (
@@ -2507,14 +2816,19 @@ function ProductsPageContent() {
                               {item}
                             </option>
                           ))}
-                          <option value={ADD_NEW_CATEGORY_VALUE}>+ Add New Category...</option>
+                          <option value={ADD_NEW_CATEGORY_VALUE}>
+                            + Add New Category...
+                          </option>
                         </select>
-                        {(showNewCategoryInput ||
-                          (newProductForm.category === "OTHER" && !newProductForm.customCategoryName?.trim())) ? (
+                        {showNewCategoryInput ||
+                        (newProductForm.category === "OTHER" &&
+                          !newProductForm.customCategoryName?.trim()) ? (
                           <div className="flex gap-2">
                             <input
                               value={newCategoryDraft}
-                              onChange={(event) => setNewCategoryDraft(event.target.value)}
+                              onChange={(event) =>
+                                setNewCategoryDraft(event.target.value)
+                              }
                               placeholder="e.g. Hardware"
                               className="ios-input h-10 w-full px-3 text-sm"
                             />
@@ -2531,21 +2845,33 @@ function ProductsPageContent() {
                       <SelectField
                         label="Unit"
                         value={newProductForm.unit}
-                        options={UNIT_OPTIONS.map((item) => ({ label: item.label, value: item.value }))}
-                        onChange={(value) => setNewProductForm((prev) => ({ ...prev, unit: value }))}
+                        options={UNIT_OPTIONS.map((item) => ({
+                          label: item.label,
+                          value: item.value,
+                        }))}
+                        onChange={(value) =>
+                          setNewProductForm((prev) => ({
+                            ...prev,
+                            unit: value,
+                          }))
+                        }
                       />
                       <div className="space-y-1">
                         <InputField
                           label={`SKU Prefix${newProductForm.category === "WINDOW" ? " *" : ""}`}
                           value={newProductForm.skuPrefix}
                           onChange={(value) =>
-                            setNewProductForm((prev) => ({ ...prev, skuPrefix: normalizeSkuValue(value) }))
+                            setNewProductForm((prev) => ({
+                              ...prev,
+                              skuPrefix: normalizeSkuValue(value),
+                            }))
                           }
                           placeholder="VWW"
                           required={newProductForm.category === "WINDOW"}
                         />
                         <p className="text-xs text-slate-400">
-                          Used to auto-generate variant SKU. Example: VWW3636B. No hyphen.
+                          Used to auto-generate variant SKU. Example: VWW3636B.
+                          No hyphen.
                         </p>
                       </div>
                       <SelectField
@@ -2558,18 +2884,29 @@ function ProductsPageContent() {
                             value: item.id,
                           })),
                         ]}
-                        onChange={(value) => setNewProductForm((prev) => ({ ...prev, supplierId: value }))}
+                        onChange={(value) =>
+                          setNewProductForm((prev) => ({
+                            ...prev,
+                            supplierId: value,
+                          }))
+                        }
                       />
                       {newProductForm.category === "WINDOW" ? (
                         <WindowSpecs
                           values={{
-                            frameMaterialDefault: newProductForm.frameMaterialDefault,
-                            openingTypeDefault: newProductForm.openingTypeDefault,
-                            slidingConfigDefault: newProductForm.slidingConfigDefault,
+                            frameMaterialDefault:
+                              newProductForm.frameMaterialDefault,
+                            openingTypeDefault:
+                              newProductForm.openingTypeDefault,
+                            slidingConfigDefault:
+                              newProductForm.slidingConfigDefault,
                             glassTypeDefault: newProductForm.glassTypeDefault,
-                            glassCoatingDefault: newProductForm.glassCoatingDefault,
-                            glassThicknessMmDefault: newProductForm.glassThicknessMmDefault,
-                            glassFinishDefault: newProductForm.glassFinishDefault,
+                            glassCoatingDefault:
+                              newProductForm.glassCoatingDefault,
+                            glassThicknessMmDefault:
+                              newProductForm.glassThicknessMmDefault,
+                            glassFinishDefault:
+                              newProductForm.glassFinishDefault,
                             screenDefault: newProductForm.screenDefault,
                           }}
                           errors={seriesSpecErrors}
@@ -2581,13 +2918,19 @@ function ProductsPageContent() {
                                   ...prev,
                                   openingTypeDefault: value,
                                   slidingConfigDefault:
-                                    String(value ?? "").trim().toUpperCase() === "SLIDING"
+                                    String(value ?? "")
+                                      .trim()
+                                      .toUpperCase() === "SLIDING"
                                       ? prev.slidingConfigDefault
                                       : "",
                                 };
                               }
                               if (field === "screenDefault") {
-                                return { ...prev, screenDefault: value, screenType: value };
+                                return {
+                                  ...prev,
+                                  screenDefault: value,
+                                  screenType: value,
+                                };
                               }
                               return { ...prev, [field]: value };
                             })
@@ -2601,38 +2944,64 @@ function ProductsPageContent() {
                             flooringSeries: newProductForm.flooringSeries,
                             flooringMaterial: newProductForm.flooringMaterial,
                             flooringWearLayer: newProductForm.flooringWearLayer,
-                            flooringThicknessMm: newProductForm.flooringThicknessMm,
-                            flooringPlankLengthIn: newProductForm.flooringPlankLengthIn,
-                            flooringPlankWidthIn: newProductForm.flooringPlankWidthIn,
-                            flooringCoreThicknessMm: newProductForm.flooringCoreThicknessMm,
+                            flooringThicknessMm:
+                              newProductForm.flooringThicknessMm,
+                            flooringPlankLengthIn:
+                              newProductForm.flooringPlankLengthIn,
+                            flooringPlankWidthIn:
+                              newProductForm.flooringPlankWidthIn,
+                            flooringCoreThicknessMm:
+                              newProductForm.flooringCoreThicknessMm,
                             flooringFinish: newProductForm.flooringFinish,
                             flooringEdge: newProductForm.flooringEdge,
-                            flooringInstallation: newProductForm.flooringInstallation,
-                            flooringUnderlayment: newProductForm.flooringUnderlayment,
-                            flooringUnderlaymentType: newProductForm.flooringUnderlaymentType,
-                            flooringUnderlaymentMm: newProductForm.flooringUnderlaymentMm,
-                            flooringWaterproof: newProductForm.flooringWaterproof,
-                            flooringWaterResistance: newProductForm.flooringWaterResistance,
-                            flooringWarrantyResidentialYr: newProductForm.flooringWarrantyResidentialYr,
-                            flooringWarrantyCommercialYr: newProductForm.flooringWarrantyCommercialYr,
-                            flooringPiecesPerBox: newProductForm.flooringPiecesPerBox,
-                            flooringBoxCoverageSqft: newProductForm.flooringBoxCoverageSqft,
-                            flooringLowStockThreshold: newProductForm.flooringLowStockThreshold,
+                            flooringInstallation:
+                              newProductForm.flooringInstallation,
+                            flooringUnderlayment:
+                              newProductForm.flooringUnderlayment,
+                            flooringUnderlaymentType:
+                              newProductForm.flooringUnderlaymentType,
+                            flooringUnderlaymentMm:
+                              newProductForm.flooringUnderlaymentMm,
+                            flooringWaterproof:
+                              newProductForm.flooringWaterproof,
+                            flooringWaterResistance:
+                              newProductForm.flooringWaterResistance,
+                            flooringWarrantyResidentialYr:
+                              newProductForm.flooringWarrantyResidentialYr,
+                            flooringWarrantyCommercialYr:
+                              newProductForm.flooringWarrantyCommercialYr,
+                            flooringPiecesPerBox:
+                              newProductForm.flooringPiecesPerBox,
+                            flooringBoxCoverageSqft:
+                              newProductForm.flooringBoxCoverageSqft,
+                            flooringLowStockThreshold:
+                              newProductForm.flooringLowStockThreshold,
                           }}
                           errors={seriesSpecErrors}
-                          onChange={(field, value) => setNewProductForm((prev) => ({ ...prev, [field]: value }))}
+                          onChange={(field, value) =>
+                            setNewProductForm((prev) => ({
+                              ...prev,
+                              [field]: value,
+                            }))
+                          }
                         />
                       ) : null}
                       <TextareaField
                         label="Default Description"
                         value={newProductForm.defaultDescription}
-                        onChange={(value) => setNewProductForm((prev) => ({ ...prev, defaultDescription: value }))}
+                        onChange={(value) =>
+                          setNewProductForm((prev) => ({
+                            ...prev,
+                            defaultDescription: value,
+                          }))
+                        }
                         rows={3}
                         placeholder="Used when variant-level description is empty."
                       />
                       {!newProductForm.defaultDescription.trim() ? (
                         <p className="text-xs text-slate-500">
-                          Optional. Adding a description improves order/PDF clarity, but you can leave it blank.
+                          Optional. Adding a description improves order/PDF
+                          clarity, but you can leave it blank.
                         </p>
                       ) : null}
                     </div>
@@ -2640,12 +3009,22 @@ function ProductsPageContent() {
                 ) : (
                   <div className="glass-card-soft p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h4 className="text-sm font-semibold text-white">Variants & Inventory</h4>
+                      <h4 className="text-sm font-semibold text-white">
+                        Variants & Inventory
+                      </h4>
                       <div className="inline-flex items-center gap-2">
-                        <button type="button" onClick={bulkAddVariantRows} className="ios-secondary-btn h-9 px-3 text-xs">
+                        <button
+                          type="button"
+                          onClick={bulkAddVariantRows}
+                          className="ios-secondary-btn h-9 px-3 text-xs"
+                        >
                           Bulk Add 3
                         </button>
-                        <button type="button" onClick={addVariantRow} className="ios-primary-btn h-9 px-3 text-xs">
+                        <button
+                          type="button"
+                          onClick={addVariantRow}
+                          className="ios-primary-btn h-9 px-3 text-xs"
+                        >
                           Add Variant
                         </button>
                       </div>
@@ -2655,250 +3034,337 @@ function ProductsPageContent() {
                         ref={variantsScrollRef}
                         className="scroll-x w-full overflow-x-auto overflow-y-hidden [webkit-overflow-scrolling:touch]"
                       >
-                      <table className="w-full min-w-[1460px] table-fixed border-collapse text-sm">
-                        <thead className="bg-white/[0.06]">
-                          <tr>
-                            <th className="sticky top-0 z-20 w-[280px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
-                              {newProductForm.category === "FLOOR" ? "Display Name *" : "Variant Title"}
-                            </th>
-                            {newProductForm.category === "FLOOR" ? (
-                              <>
-                                <th className="sticky top-0 z-20 w-[120px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
-                                  SKU Prefix
-                                </th>
-                                <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
-                                  SKU Suffix *
-                                </th>
-                              </>
-                            ) : (
-                              <>
-                                <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
-                                  Size (WxH)
-                                </th>
-                                <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
-                                  Color
-                                </th>
-                              </>
-                            )}
-                            <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
-                              {newProductForm.category === "FLOOR" ? "Effective SKU" : "SKU"}
-                            </th>
-                            <th className="sticky top-0 z-20 w-[140px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
-                              Sale Price
-                            </th>
-                            <th className="sticky top-0 z-20 w-[140px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
-                              Cost
-                            </th>
-                            <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
-                              {newProductForm.category === "FLOOR" ? "Boxes On Hand" : "Opening Stock"}
-                            </th>
-                            <th className="sticky top-0 z-20 w-[140px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
-                              Reorder Level
-                            </th>
-                            <th className="sticky top-0 z-20 w-[150px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
-                              Available
-                            </th>
-                            <th className="sticky top-0 z-20 w-[120px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
-                              Actions
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {newProductVariants.map((variant, index) => {
-                            const isFlooring = newProductForm.category === "FLOOR";
-                            const skuPrefix = normalizeSkuValue(newProductForm.skuPrefix);
-                            const normalizedSuffix = normalizeSkuValue(variant.skuSuffix);
-                            const flooringSkuPreview = skuPrefix && normalizedSuffix ? `${skuPrefix}${normalizedSuffix}` : "";
-                            const w = toSkuDimensionPart(variant.width);
-                            const h = toSkuDimensionPart(variant.height);
-                            const sizeLabel = w && h ? `${w}"x${h}"` : "";
-                            const colorLabel = variant.color.trim();
-                            const autoVariantTitle = `${newProductForm.name.trim() || "Product"}${
-                              sizeLabel ? `-${sizeLabel}` : ""
-                            }${colorLabel ? `(${colorLabel})` : ""}`;
-                            const skuPreview = buildVariantSkuPreview(
-                              normalizeSkuValue(newProductForm.skuPrefix),
-                              variant.width,
-                              variant.height,
-                              variant.color,
-                              newProductForm.glassFinishDefault,
-                            );
-                            const onHandBoxes = Number(variant.openingStock || 0);
-                            const reservedBoxes = Number(variant.reservedBoxes || 0);
-                            const availableBoxes = onHandBoxes - reservedBoxes;
-                            const reorderLevelBoxes = Number(variant.reorderLevel || 0);
-                            const alertState = isFlooring
-                              ? getStockAlertState(availableBoxes, reorderLevelBoxes)
-                              : null;
-                            return (
-                              <tr key={variant.id} className="border-t border-slate-100">
-                                <td className="px-3 py-2 text-slate-700">
-                                  {isFlooring ? (
-                                    <input
-                                      value={variant.displayName}
-                                      onChange={(event) => updateVariantRow(variant.id, { displayName: event.target.value })}
-                                      placeholder={`Variant ${index + 1}`}
-                                      className="ios-input h-9 w-full px-2 text-sm"
-                                    />
-                                  ) : (
-                                    <>
-                                      <p className="text-sm">{autoVariantTitle || `Variant ${index + 1}`}</p>
-                                      <p className="text-xs text-slate-500">SKU preview: {skuPreview || "-"}</p>
-                                    </>
-                                  )}
-                                </td>
-                                {isFlooring ? (
-                                  <>
-                                    <td className="px-3 py-2">
-                                      <span className="inline-flex h-9 items-center rounded border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700">
-                                        {skuPrefix || "-"}
-                                      </span>
-                                    </td>
-                                    <td className="px-3 py-2">
+                        <table className="w-full min-w-[1460px] table-fixed border-collapse text-sm">
+                          <thead className="bg-white/[0.06]">
+                            <tr>
+                              <th className="sticky top-0 z-20 w-[280px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
+                                {newProductForm.category === "FLOOR"
+                                  ? "Display Name *"
+                                  : "Variant Title"}
+                              </th>
+                              {newProductForm.category === "FLOOR" ? (
+                                <>
+                                  <th className="sticky top-0 z-20 w-[120px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
+                                    SKU Prefix
+                                  </th>
+                                  <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
+                                    SKU Suffix *
+                                  </th>
+                                </>
+                              ) : (
+                                <>
+                                  <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
+                                    Size (WxH)
+                                  </th>
+                                  <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
+                                    Color
+                                  </th>
+                                </>
+                              )}
+                              <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-left font-medium text-slate-400">
+                                {newProductForm.category === "FLOOR"
+                                  ? "Effective SKU"
+                                  : "SKU"}
+                              </th>
+                              <th className="sticky top-0 z-20 w-[140px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
+                                Sale Price
+                              </th>
+                              <th className="sticky top-0 z-20 w-[140px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
+                                Cost
+                              </th>
+                              <th className="sticky top-0 z-20 w-[160px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
+                                {newProductForm.category === "FLOOR"
+                                  ? "Boxes On Hand"
+                                  : "Opening Stock"}
+                              </th>
+                              <th className="sticky top-0 z-20 w-[140px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
+                                Reorder Level
+                              </th>
+                              <th className="sticky top-0 z-20 w-[150px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
+                                Available
+                              </th>
+                              <th className="sticky top-0 z-20 w-[120px] bg-white/[0.06] px-3 py-2 text-right font-medium text-slate-400">
+                                Actions
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {newProductVariants.map((variant, index) => {
+                              const isFlooring =
+                                newProductForm.category === "FLOOR";
+                              const skuPrefix = normalizeSkuValue(
+                                newProductForm.skuPrefix,
+                              );
+                              const normalizedSuffix = normalizeSkuValue(
+                                variant.skuSuffix,
+                              );
+                              const flooringSkuPreview =
+                                skuPrefix && normalizedSuffix
+                                  ? `${skuPrefix}${normalizedSuffix}`
+                                  : "";
+                              const w = toSkuDimensionPart(variant.width);
+                              const h = toSkuDimensionPart(variant.height);
+                              const sizeLabel = w && h ? `${w}"x${h}"` : "";
+                              const colorLabel = variant.color.trim();
+                              const autoVariantTitle = `${newProductForm.name.trim() || "Product"}${
+                                sizeLabel ? `-${sizeLabel}` : ""
+                              }${colorLabel ? `(${colorLabel})` : ""}`;
+                              const skuPreview = buildVariantSkuPreview(
+                                normalizeSkuValue(newProductForm.skuPrefix),
+                                variant.width,
+                                variant.height,
+                                variant.color,
+                                newProductForm.glassFinishDefault,
+                              );
+                              const onHandBoxes = Number(
+                                variant.openingStock || 0,
+                              );
+                              const reservedBoxes = Number(
+                                variant.reservedBoxes || 0,
+                              );
+                              const availableBoxes =
+                                onHandBoxes - reservedBoxes;
+                              const reorderLevelBoxes = Number(
+                                variant.reorderLevel || 0,
+                              );
+                              const alertState = isFlooring
+                                ? getStockAlertState(
+                                    availableBoxes,
+                                    reorderLevelBoxes,
+                                  )
+                                : null;
+                              return (
+                                <tr
+                                  key={variant.id}
+                                  className="border-t border-slate-100"
+                                >
+                                  <td className="px-3 py-2 text-slate-700">
+                                    {isFlooring ? (
                                       <input
-                                        value={variant.skuSuffix}
+                                        value={variant.displayName}
                                         onChange={(event) =>
-                                          updateVariantRow(variant.id, { skuSuffix: normalizeSkuValue(event.target.value) })
+                                          updateVariantRow(variant.id, {
+                                            displayName: event.target.value,
+                                          })
                                         }
-                                        placeholder="e.g. 170123"
+                                        placeholder={`Variant ${index + 1}`}
                                         className="ios-input h-9 w-full px-2 text-sm"
                                       />
-                                    </td>
-                                  </>
-                                ) : (
-                                  <>
-                                    <td className="px-3 py-2">
-                                      <div className="flex items-center gap-1">
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          step="1"
-                                          value={variant.width}
-                                          onChange={(event) => updateVariantRow(variant.id, { width: event.target.value })}
-                                          className="ios-input h-9 w-20 px-2 text-right text-sm"
-                                          placeholder="36"
-                                        />
-                                        <span className="text-xs text-slate-500">x</span>
-                                        <input
-                                          type="number"
-                                          min="0"
-                                          step="1"
-                                          value={variant.height}
-                                          onChange={(event) => updateVariantRow(variant.id, { height: event.target.value })}
-                                          className="ios-input h-9 w-20 px-2 text-right text-sm"
-                                          placeholder="36"
-                                        />
-                                      </div>
-                                    </td>
-                                    <td className="px-3 py-2">
-                                      <input
-                                        value={variant.color}
-                                        onChange={(event) => updateVariantRow(variant.id, { color: event.target.value })}
-                                        placeholder={newProductForm.category === "WINDOW" ? "Required" : "Optional"}
-                                        className="ios-input h-9 w-32 px-2 text-sm"
-                                      />
-                                    </td>
-                                  </>
-                                )}
-                                <td className="px-3 py-2">
+                                    ) : (
+                                      <>
+                                        <p className="text-sm">
+                                          {autoVariantTitle ||
+                                            `Variant ${index + 1}`}
+                                        </p>
+                                        <p className="text-xs text-slate-500">
+                                          SKU preview: {skuPreview || "-"}
+                                        </p>
+                                      </>
+                                    )}
+                                  </td>
                                   {isFlooring ? (
-                                    <span className="inline-flex h-9 w-full items-center rounded border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700">
-                                      {flooringSkuPreview || "-"}
-                                    </span>
+                                    <>
+                                      <td className="px-3 py-2">
+                                        <span className="inline-flex h-9 items-center rounded border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700">
+                                          {skuPrefix || "-"}
+                                        </span>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          value={variant.skuSuffix}
+                                          onChange={(event) =>
+                                            updateVariantRow(variant.id, {
+                                              skuSuffix: normalizeSkuValue(
+                                                event.target.value,
+                                              ),
+                                            })
+                                          }
+                                          placeholder="e.g. 170123"
+                                          className="ios-input h-9 w-full px-2 text-sm"
+                                        />
+                                      </td>
+                                    </>
                                   ) : (
-                                    <input
-                                      value={variant.sku}
-                                      onChange={(event) =>
-                                        updateVariantRow(variant.id, { sku: normalizeSkuValue(event.target.value) })
-                                      }
-                                      onBlur={() => {
-                                        if (variant.sku.trim()) return;
-                                        if (!skuPreview) return;
-                                        updateVariantRow(variant.id, { sku: skuPreview });
-                                      }}
-                                      placeholder={skuPreview || "e.g. VWW3636W"}
-                                      className="ios-input h-9 w-full px-2 text-sm"
-                                    />
+                                    <>
+                                      <td className="px-3 py-2">
+                                        <div className="flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            value={variant.width}
+                                            onChange={(event) =>
+                                              updateVariantRow(variant.id, {
+                                                width: event.target.value,
+                                              })
+                                            }
+                                            className="ios-input h-9 w-20 px-2 text-right text-sm"
+                                            placeholder="36"
+                                          />
+                                          <span className="text-xs text-slate-500">
+                                            x
+                                          </span>
+                                          <input
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            value={variant.height}
+                                            onChange={(event) =>
+                                              updateVariantRow(variant.id, {
+                                                height: event.target.value,
+                                              })
+                                            }
+                                            className="ios-input h-9 w-20 px-2 text-right text-sm"
+                                            placeholder="36"
+                                          />
+                                        </div>
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          value={variant.color}
+                                          onChange={(event) =>
+                                            updateVariantRow(variant.id, {
+                                              color: event.target.value,
+                                            })
+                                          }
+                                          placeholder={
+                                            newProductForm.category === "WINDOW"
+                                              ? "Required"
+                                              : "Optional"
+                                          }
+                                          className="ios-input h-9 w-32 px-2 text-sm"
+                                        />
+                                      </td>
+                                    </>
                                   )}
-                                </td>
-                                <td className="px-3 py-2">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={variant.salePrice}
-                                    onChange={(event) => updateVariantRow(variant.id, { salePrice: event.target.value })}
-                                    className="ios-input h-9 w-28 px-2 text-right text-sm"
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={variant.cost}
-                                    onChange={(event) => updateVariantRow(variant.id, { cost: event.target.value })}
-                                    className="ios-input h-9 w-28 px-2 text-right text-sm"
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={variant.openingStock}
-                                    onChange={(event) => updateVariantRow(variant.id, { openingStock: event.target.value })}
-                                    className="ios-input h-9 w-28 px-2 text-right text-sm"
-                                  />
-                                </td>
-                                <td className="px-3 py-2">
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={variant.reorderLevel}
-                                    onChange={(event) => updateVariantRow(variant.id, { reorderLevel: event.target.value })}
-                                    className="ios-input h-9 w-28 px-2 text-right text-sm"
-                                  />
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  <div className="flex items-center justify-end gap-2">
-                                    <span
-                                      className={`text-sm font-semibold ${
-                                        alertState === "LOW"
-                                          ? "text-rose-600"
-                                          : alertState === "WARNING"
-                                            ? "text-amber-600"
-                                            : "text-slate-700"
-                                      }`}
+                                  <td className="px-3 py-2">
+                                    {isFlooring ? (
+                                      <span className="inline-flex h-9 w-full items-center rounded border border-slate-200 bg-slate-50 px-2 text-xs font-medium text-slate-700">
+                                        {flooringSkuPreview || "-"}
+                                      </span>
+                                    ) : (
+                                      <input
+                                        value={variant.sku}
+                                        onChange={(event) =>
+                                          updateVariantRow(variant.id, {
+                                            sku: normalizeSkuValue(
+                                              event.target.value,
+                                            ),
+                                          })
+                                        }
+                                        onBlur={() => {
+                                          if (variant.sku.trim()) return;
+                                          if (!skuPreview) return;
+                                          updateVariantRow(variant.id, {
+                                            sku: skuPreview,
+                                          });
+                                        }}
+                                        placeholder={
+                                          skuPreview || "e.g. VWW3636W"
+                                        }
+                                        className="ios-input h-9 w-full px-2 text-sm"
+                                      />
+                                    )}
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={variant.salePrice}
+                                      onChange={(event) =>
+                                        updateVariantRow(variant.id, {
+                                          salePrice: event.target.value,
+                                        })
+                                      }
+                                      className="ios-input h-9 w-28 px-2 text-right text-sm"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={variant.cost}
+                                      onChange={(event) =>
+                                        updateVariantRow(variant.id, {
+                                          cost: event.target.value,
+                                        })
+                                      }
+                                      className="ios-input h-9 w-28 px-2 text-right text-sm"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={variant.openingStock}
+                                      onChange={(event) =>
+                                        updateVariantRow(variant.id, {
+                                          openingStock: event.target.value,
+                                        })
+                                      }
+                                      className="ios-input h-9 w-28 px-2 text-right text-sm"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-2">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={variant.reorderLevel}
+                                      onChange={(event) =>
+                                        updateVariantRow(variant.id, {
+                                          reorderLevel: event.target.value,
+                                        })
+                                      }
+                                      className="ios-input h-9 w-28 px-2 text-right text-sm"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <div className="flex items-center justify-end gap-2">
+                                      <span
+                                        className={`text-sm font-semibold ${
+                                          alertState === "LOW"
+                                            ? "text-rose-600"
+                                            : alertState === "WARNING"
+                                              ? "text-amber-600"
+                                              : "text-slate-700"
+                                        }`}
+                                      >
+                                        {formatStockByProductUnit(
+                                          availableBoxes,
+                                          newProductForm.unit,
+                                        )}
+                                      </span>
+                                      {alertState === "LOW" ? (
+                                        <span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                                          LOW
+                                        </span>
+                                      ) : alertState === "WARNING" ? (
+                                        <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                          WARNING
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </td>
+                                  <td className="px-3 py-2 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        deleteVariantRow(variant.id)
+                                      }
+                                      className="text-xs text-slate-500 hover:text-rose-600"
                                     >
-                                      {formatStockByProductUnit(availableBoxes, newProductForm.unit)}
-                                    </span>
-                                    {alertState === "LOW" ? (
-                                      <span className="rounded bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
-                                        LOW
-                                      </span>
-                                    ) : alertState === "WARNING" ? (
-                                      <span className="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                                        WARNING
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  <button
-                                    type="button"
-                                    onClick={() => deleteVariantRow(variant.id)}
-                                    className="text-xs text-slate-500 hover:text-rose-600"
-                                  >
-                                    Delete
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                                      Delete
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                       {showVariantsScrollHint ? (
                         <div className="pointer-events-none absolute inset-y-[1px] right-[1px] flex w-24 items-center justify-end bg-gradient-to-l from-white via-white/90 to-transparent pr-2">
@@ -2913,356 +3379,475 @@ function ProductsPageContent() {
               </>
             ) : (
               <>
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-              <h4 className="text-sm font-semibold text-slate-900">Basic Information</h4>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <InputField
-                  label="Product Name"
-                  value={newProductForm.name}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, name: value }))}
-                  required
-                />
-                <InputField
-                  label="Barcode / QR Value"
-                  value={newProductForm.barcode}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, barcode: value }))}
-                  placeholder="Used for quick scan lookup"
-                />
-                <InputField
-                  label="Specification"
-                  value={newProductForm.specification}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, specification: value }))}
-                  placeholder="e.g. 48 x 96 in"
-                />
-                <div className="space-y-2">
-                  <span className="text-sm text-slate-600">Category</span>
-                  <select
-                    value={customCategorySelectValue}
-                    onChange={(event) => {
-                      const value = event.target.value;
-                      if (value === ADD_NEW_CATEGORY_VALUE) {
-                        setShowNewCategoryInput(true);
-                        setNewCategoryDraft("");
+                <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                  <h4 className="text-sm font-semibold text-slate-900">
+                    Basic Information
+                  </h4>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <InputField
+                      label="Product Name"
+                      value={newProductForm.name}
+                      onChange={(value) =>
+                        setNewProductForm((prev) => ({ ...prev, name: value }))
+                      }
+                      required
+                    />
+                    <InputField
+                      label="Barcode / QR Value"
+                      value={newProductForm.barcode}
+                      onChange={(value) =>
                         setNewProductForm((prev) => ({
                           ...prev,
-                          category: "OTHER",
-                          customCategoryName: "",
-                        }));
-                        return;
+                          barcode: value,
+                        }))
                       }
-                      if (value.startsWith("CUSTOM:")) {
-                        const customName = value.slice("CUSTOM:".length).trim();
-                        setShowNewCategoryInput(false);
+                      placeholder="Used for quick scan lookup"
+                    />
+                    <InputField
+                      label="Specification"
+                      value={newProductForm.specification}
+                      onChange={(value) =>
                         setNewProductForm((prev) => ({
                           ...prev,
-                          category: "OTHER",
-                          categoryId: selectedTemplate?.id ?? prev.categoryId,
-                          customCategoryName: customName,
-                        }));
-                        return;
+                          specification: value,
+                        }))
                       }
-                      const tpl = (templatesQuery.data ?? []).find((item) => item.categoryKey === value);
-                      setShowNewCategoryInput(false);
-                      setNewProductForm((prev) => ({
-                        ...prev,
-                        category: value,
-                        categoryId: tpl?.id ?? "",
-                        customCategoryName: "",
-                      }));
-                    }}
-                    className="ios-input h-12 w-full bg-white px-3 text-sm"
-                  >
-                    {(templatesQuery.data ?? []).map((item) => (
-                      <option key={item.id} value={item.categoryKey}>
-                        {item.categoryLabel}
-                      </option>
-                    ))}
-                    {effectiveCustomCategoryOptions.map((item) => (
-                      <option key={item} value={`CUSTOM:${item}`}>
-                        {item}
-                      </option>
-                    ))}
-                    <option value={ADD_NEW_CATEGORY_VALUE}>+ Add New Category...</option>
-                  </select>
-                  {(showNewCategoryInput ||
-                    (newProductForm.category === "OTHER" && !newProductForm.customCategoryName?.trim())) ? (
-                    <div className="flex gap-2">
-                      <input
-                        value={newCategoryDraft}
-                        onChange={(event) => setNewCategoryDraft(event.target.value)}
-                        placeholder="e.g. Hardware"
-                        className="ios-input h-10 w-full px-3 text-sm"
-                      />
-                      <button
-                        type="button"
-                        onClick={applyNewCustomCategory}
-                        className="ios-secondary-btn h-10 px-3 text-xs"
-                      >
-                        Add
-                      </button>
-                    </div>
-                  ) : null}
-                  {newProductForm.category === "OTHER" && newProductForm.customCategoryName?.trim() ? (
-                    <p className="text-xs text-slate-500">Selected custom category: {newProductForm.customCategoryName}</p>
-                  ) : null}
-                </div>
-                {selectedTemplate ? (
-                  <div className="space-y-2 rounded-xl border border-slate-100 bg-white p-3 md:col-span-2">
-                    <p className="text-xs font-medium text-slate-600">Template-driven attributes</p>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      {(selectedTemplate?.fieldOrder ?? []).map((field) => {
-                        const meta = TEMPLATE_FIELD_META[field];
-                        if (!meta) return null;
-                        const key = templateFieldToFormKey(field);
-                        const required = selectedTemplate?.requiredFields.includes(field) ?? false;
-                        return (
-                          <InputField
-                            key={field}
-                            label={`${meta.label}${required ? " *" : ""}`}
-                            type={meta.type ?? "text"}
-                            min={meta.min}
-                            step={meta.step}
-                            value={String(newProductForm[key] ?? "")}
-                            placeholder={meta.placeholder}
-                            onChange={(value) => setNewProductForm((prev) => ({ ...prev, [key]: value }))}
-                            required={required}
-                          />
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-                <div className="space-y-2 rounded-xl border border-slate-100 bg-white p-3 md:col-span-2">
-                  <p className="text-xs font-medium text-slate-600">Smart title preview</p>
-                  <div className="grid gap-3 md:grid-cols-1">
+                      placeholder="e.g. 48 x 96 in"
+                    />
                     <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-500">Title</span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setNewProductForm((prev) => ({
-                              ...prev,
-                              titleOverride: false,
-                              title: autoTitlePreview,
-                            }))
-                          }
-                          className="ios-secondary-btn h-8 px-2 text-xs"
-                        >
-                          Reset to Auto
-                        </button>
-                      </div>
-                      <input
-                        value={newProductForm.title}
-                        onChange={(event) =>
-                          setNewProductForm((prev) => ({
-                            ...prev,
-                            title: event.target.value,
-                            titleOverride: true,
-                          }))
-                        }
-                        placeholder={autoTitlePreview || "Auto title will appear here"}
-                        className="ios-input h-10 w-full px-3 text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-2 rounded-xl border border-slate-100 bg-white p-3 md:col-span-2">
-                  <p className="text-xs font-medium text-slate-600">Variant SKU (No Hyphen)</p>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label className="block space-y-1">
-                      <span className="text-sm text-slate-600">SKU Prefix (optional)</span>
+                      <span className="text-sm text-slate-600">Category</span>
                       <select
-                        value={skuPrefixSelectValue}
+                        value={customCategorySelectValue}
                         onChange={(event) => {
                           const value = event.target.value;
-                          if (value === CUSTOM_SKU_PREFIX_VALUE) {
-                            setSkuPrefixCustomMode(true);
-                            setNewProductForm((prev) => ({ ...prev, skuPrefix: "" }));
+                          if (value === ADD_NEW_CATEGORY_VALUE) {
+                            setShowNewCategoryInput(true);
+                            setNewCategoryDraft("");
+                            setNewProductForm((prev) => ({
+                              ...prev,
+                              category: "OTHER",
+                              customCategoryName: "",
+                            }));
                             return;
                           }
-                          setSkuPrefixCustomMode(false);
-                          setNewProductForm((prev) => ({ ...prev, skuPrefix: normalizeSkuValue(value) }));
+                          if (value.startsWith("CUSTOM:")) {
+                            const customName = value
+                              .slice("CUSTOM:".length)
+                              .trim();
+                            setShowNewCategoryInput(false);
+                            setNewProductForm((prev) => ({
+                              ...prev,
+                              category: "OTHER",
+                              categoryId:
+                                selectedTemplate?.id ?? prev.categoryId,
+                              customCategoryName: customName,
+                            }));
+                            return;
+                          }
+                          const tpl = (templatesQuery.data ?? []).find(
+                            (item) => item.categoryKey === value,
+                          );
+                          setShowNewCategoryInput(false);
+                          setNewProductForm((prev) => ({
+                            ...prev,
+                            category: value,
+                            categoryId: tpl?.id ?? "",
+                            customCategoryName: "",
+                          }));
                         }}
                         className="ios-input h-12 w-full bg-white px-3 text-sm"
                       >
-                        <option value="">Not Set</option>
-                        {SKU_PREFIX_OPTIONS.map((item) => (
-                          <option key={item} value={item}>
+                        {(templatesQuery.data ?? []).map((item) => (
+                          <option key={item.id} value={item.categoryKey}>
+                            {item.categoryLabel}
+                          </option>
+                        ))}
+                        {effectiveCustomCategoryOptions.map((item) => (
+                          <option key={item} value={`CUSTOM:${item}`}>
                             {item}
                           </option>
                         ))}
-                        <option value={CUSTOM_SKU_PREFIX_VALUE}>Custom Prefix...</option>
+                        <option value={ADD_NEW_CATEGORY_VALUE}>
+                          + Add New Category...
+                        </option>
                       </select>
-                    </label>
-                    <InputField
-                      label="Variant SKU Override (optional)"
-                      value={newProductForm.variantSku}
+                      {showNewCategoryInput ||
+                      (newProductForm.category === "OTHER" &&
+                        !newProductForm.customCategoryName?.trim()) ? (
+                        <div className="flex gap-2">
+                          <input
+                            value={newCategoryDraft}
+                            onChange={(event) =>
+                              setNewCategoryDraft(event.target.value)
+                            }
+                            placeholder="e.g. Hardware"
+                            className="ios-input h-10 w-full px-3 text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={applyNewCustomCategory}
+                            className="ios-secondary-btn h-10 px-3 text-xs"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      ) : null}
+                      {newProductForm.category === "OTHER" &&
+                      newProductForm.customCategoryName?.trim() ? (
+                        <p className="text-xs text-slate-500">
+                          Selected custom category:{" "}
+                          {newProductForm.customCategoryName}
+                        </p>
+                      ) : null}
+                    </div>
+                    {selectedTemplate ? (
+                      <div className="space-y-2 rounded-xl border border-slate-100 bg-white p-3 md:col-span-2">
+                        <p className="text-xs font-medium text-slate-600">
+                          Template-driven attributes
+                        </p>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {(selectedTemplate?.fieldOrder ?? []).map((field) => {
+                            const meta = TEMPLATE_FIELD_META[field];
+                            if (!meta) return null;
+                            const key = templateFieldToFormKey(field);
+                            const required =
+                              selectedTemplate?.requiredFields.includes(
+                                field,
+                              ) ?? false;
+                            return (
+                              <InputField
+                                key={field}
+                                label={`${meta.label}${required ? " *" : ""}`}
+                                type={meta.type ?? "text"}
+                                min={meta.min}
+                                step={meta.step}
+                                value={String(newProductForm[key] ?? "")}
+                                placeholder={meta.placeholder}
+                                onChange={(value) =>
+                                  setNewProductForm((prev) => ({
+                                    ...prev,
+                                    [key]: value,
+                                  }))
+                                }
+                                required={required}
+                              />
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : null}
+                    <div className="space-y-2 rounded-xl border border-slate-100 bg-white p-3 md:col-span-2">
+                      <p className="text-xs font-medium text-slate-600">
+                        Smart title preview
+                      </p>
+                      <div className="grid gap-3 md:grid-cols-1">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-slate-500">
+                              Title
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setNewProductForm((prev) => ({
+                                  ...prev,
+                                  titleOverride: false,
+                                  title: autoTitlePreview,
+                                }))
+                              }
+                              className="ios-secondary-btn h-8 px-2 text-xs"
+                            >
+                              Reset to Auto
+                            </button>
+                          </div>
+                          <input
+                            value={newProductForm.title}
+                            onChange={(event) =>
+                              setNewProductForm((prev) => ({
+                                ...prev,
+                                title: event.target.value,
+                                titleOverride: true,
+                              }))
+                            }
+                            placeholder={
+                              autoTitlePreview || "Auto title will appear here"
+                            }
+                            className="ios-input h-10 w-full px-3 text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2 rounded-xl border border-slate-100 bg-white p-3 md:col-span-2">
+                      <p className="text-xs font-medium text-slate-600">
+                        Variant SKU (No Hyphen)
+                      </p>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="block space-y-1">
+                          <span className="text-sm text-slate-600">
+                            SKU Prefix (optional)
+                          </span>
+                          <select
+                            value={skuPrefixSelectValue}
+                            onChange={(event) => {
+                              const value = event.target.value;
+                              if (value === CUSTOM_SKU_PREFIX_VALUE) {
+                                setSkuPrefixCustomMode(true);
+                                setNewProductForm((prev) => ({
+                                  ...prev,
+                                  skuPrefix: "",
+                                }));
+                                return;
+                              }
+                              setSkuPrefixCustomMode(false);
+                              setNewProductForm((prev) => ({
+                                ...prev,
+                                skuPrefix: normalizeSkuValue(value),
+                              }));
+                            }}
+                            className="ios-input h-12 w-full bg-white px-3 text-sm"
+                          >
+                            <option value="">Not Set</option>
+                            {SKU_PREFIX_OPTIONS.map((item) => (
+                              <option key={item} value={item}>
+                                {item}
+                              </option>
+                            ))}
+                            <option value={CUSTOM_SKU_PREFIX_VALUE}>
+                              Custom Prefix...
+                            </option>
+                          </select>
+                        </label>
+                        <InputField
+                          label="Variant SKU Override (optional)"
+                          value={newProductForm.variantSku}
+                          onChange={(value) =>
+                            setNewProductForm((prev) => ({
+                              ...prev,
+                              variantSku: normalizeSkuValue(value),
+                            }))
+                          }
+                          placeholder="Leave empty to auto-generate"
+                        />
+                      </div>
+                      {skuPrefixCustomMode ? (
+                        <InputField
+                          label="Custom SKU Prefix"
+                          value={newProductForm.skuPrefix}
+                          onChange={(value) =>
+                            setNewProductForm((prev) => ({
+                              ...prev,
+                              skuPrefix: normalizeSkuValue(value),
+                            }))
+                          }
+                          placeholder="e.g. VWW"
+                        />
+                      ) : null}
+                      <InputField
+                        label="Display Name"
+                        required
+                        value={newProductVariants[0]?.displayName ?? ""}
+                        onChange={(value) =>
+                          setNewProductVariants((prev) => {
+                            if (prev.length === 0) return prev;
+                            const next = [...prev];
+                            next[0] = { ...next[0], displayName: value };
+                            return next;
+                          })
+                        }
+                        placeholder={newProductForm.name || "e.g. LVFloor"}
+                      />
+                      <p className="text-xs text-slate-500">
+                        Auto SKU Preview:{" "}
+                        <span className="font-semibold text-slate-700">
+                          {primaryVariantAutoSkuPreview || "-"}
+                        </span>
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        Effective SKU:{" "}
+                        <span className="font-semibold text-slate-700">
+                          {effectiveSkuValue || "-"}
+                        </span>
+                      </p>
+                      <p
+                        className={`text-xs ${skuConflict ? "text-rose-600" : "text-emerald-700"}`}
+                      >
+                        {skuChecking
+                          ? "Checking SKU uniqueness..."
+                          : skuConflict
+                            ? "SKU already exists. Please change prefix/size or override."
+                            : "SKU is available."}
+                      </p>
+                      <TextareaField
+                        label="Variant Description (for order/PDF)"
+                        value={newProductForm.variantDescription}
+                        onChange={(value) =>
+                          setNewProductForm((prev) => ({
+                            ...prev,
+                            variantDescription: value,
+                          }))
+                        }
+                        rows={3}
+                        placeholder="Shown on sales order/invoice line when this variant is selected."
+                      />
+                      {!newProductForm.variantDescription.trim() ? (
+                        <p className="text-xs text-slate-500">
+                          Optional hint: If left blank, the UI will fall back to
+                          the product/default description.
+                        </p>
+                      ) : null}
+                    </div>
+                    <SelectField
+                      label="Unit"
+                      value={newProductForm.unit}
+                      options={UNIT_OPTIONS.map((item) => ({
+                        label: item.label,
+                        value: item.value,
+                      }))}
                       onChange={(value) =>
-                        setNewProductForm((prev) => ({
-                          ...prev,
-                          variantSku: normalizeSkuValue(value),
-                        }))
+                        setNewProductForm((prev) => ({ ...prev, unit: value }))
                       }
-                      placeholder="Leave empty to auto-generate"
                     />
                   </div>
-                  {skuPrefixCustomMode ? (
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                  <h4 className="text-sm font-semibold text-slate-900">
+                    Pricing
+                  </h4>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <InputField
-                      label="Custom SKU Prefix"
-                      value={newProductForm.skuPrefix}
+                      label="Cost"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newProductForm.costPrice}
                       onChange={(value) =>
                         setNewProductForm((prev) => ({
                           ...prev,
-                          skuPrefix: normalizeSkuValue(value),
+                          costPrice: value,
                         }))
                       }
-                      placeholder="e.g. VWW"
+                      required
                     />
-                  ) : null}
-                  <InputField
-                    label="Display Name"
-                    required
-                    value={newProductVariants[0]?.displayName ?? ""}
-                    onChange={(value) =>
-                      setNewProductVariants((prev) => {
-                        if (prev.length === 0) return prev;
-                        const next = [...prev];
-                        next[0] = { ...next[0], displayName: value };
-                        return next;
-                      })
-                    }
-                    placeholder={newProductForm.name || "e.g. LVFloor"}
-                  />
-                  <p className="text-xs text-slate-500">
-                    Auto SKU Preview:{" "}
-                    <span className="font-semibold text-slate-700">{primaryVariantAutoSkuPreview || "-"}</span>
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    Effective SKU: <span className="font-semibold text-slate-700">{effectiveSkuValue || "-"}</span>
-                  </p>
-                  <p className={`text-xs ${skuConflict ? "text-rose-600" : "text-emerald-700"}`}>
-                    {skuChecking
-                      ? "Checking SKU uniqueness..."
-                      : skuConflict
-                        ? "SKU already exists. Please change prefix/size or override."
-                        : "SKU is available."}
-                  </p>
-                  <TextareaField
-                    label="Variant Description (for order/PDF)"
-                    value={newProductForm.variantDescription}
-                    onChange={(value) => setNewProductForm((prev) => ({ ...prev, variantDescription: value }))}
-                    rows={3}
-                    placeholder="Shown on sales order/invoice line when this variant is selected."
-                  />
-                  {!newProductForm.variantDescription.trim() ? (
-                    <p className="text-xs text-slate-500">
-                      Optional hint: If left blank, the UI will fall back to the product/default description.
-                    </p>
-                  ) : null}
+                    <InputField
+                      label="Sale Price"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newProductForm.salePrice}
+                      onChange={(value) =>
+                        setNewProductForm((prev) => ({
+                          ...prev,
+                          salePrice: value,
+                        }))
+                      }
+                      required
+                    />
+                    <InputField
+                      label="Template Price (optional)"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newProductForm.price}
+                      onChange={(value) =>
+                        setNewProductForm((prev) => ({ ...prev, price: value }))
+                      }
+                    />
+                    <InputField
+                      label="Template Cost (optional)"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newProductForm.cost}
+                      onChange={(value) =>
+                        setNewProductForm((prev) => ({ ...prev, cost: value }))
+                      }
+                    />
+                  </div>
                 </div>
-                <SelectField
-                  label="Unit"
-                  value={newProductForm.unit}
-                  options={UNIT_OPTIONS.map((item) => ({ label: item.label, value: item.value }))}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, unit: value }))}
-                />
-              </div>
-            </div>
 
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-              <h4 className="text-sm font-semibold text-slate-900">Pricing</h4>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <InputField
-                  label="Cost"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={newProductForm.costPrice}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, costPrice: value }))}
-                  required
-                />
-                <InputField
-                  label="Sale Price"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={newProductForm.salePrice}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, salePrice: value }))}
-                  required
-                />
-                <InputField
-                  label="Template Price (optional)"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={newProductForm.price}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, price: value }))}
-                />
-                <InputField
-                  label="Template Cost (optional)"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={newProductForm.cost}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, cost: value }))}
-                />
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
-              <h4 className="text-sm font-semibold text-slate-900">Warehouse & Linking</h4>
-              <div className="mt-3 grid gap-3 md:grid-cols-2">
-                <SelectField
-                  label="Warehouse"
-                  value={newProductForm.warehouseId}
-                  options={(warehousesQuery.data ?? []).map((item) => ({ label: item.name, value: item.id }))}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, warehouseId: value }))}
-                />
-                <SelectField
-                  label="Preferred Supplier"
-                  value={newProductForm.supplierId}
-                  options={[
-                    { label: "Not Set", value: "" },
-                    ...(suppliersQuery.data ?? []).map((item) => ({
-                      label: `${item.name} (${item.category})`,
-                      value: item.id,
-                    })),
-                  ]}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, supplierId: value }))}
-                />
-                <SelectField
-                  label="Inventory Group"
-                  value={newProductForm.groupId}
-                  options={[
-                    { label: "Unassigned", value: "" },
-                    ...(groupsQuery.data ?? []).map((item) => ({
-                      label: item.name,
-                      value: item.id,
-                    })),
-                  ]}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, groupId: value }))}
-                />
-                <InputField
-                  label="UOM (optional)"
-                  value={newProductForm.uom}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, uom: value }))}
-                  placeholder="e.g. set / sqft / piece"
-                />
-                <InputField
-                  label="Notes (optional)"
-                  value={newProductForm.notes}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, notes: value }))}
-                />
-                <TextareaField
-                  label="Default Description"
-                  value={newProductForm.defaultDescription}
-                  onChange={(value) => setNewProductForm((prev) => ({ ...prev, defaultDescription: value }))}
-                  rows={3}
-                  placeholder="Used when variant description is empty."
-                />
-              </div>
-            </div>
+                <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+                  <h4 className="text-sm font-semibold text-slate-900">
+                    Warehouse & Linking
+                  </h4>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <SelectField
+                      label="Warehouse"
+                      value={newProductForm.warehouseId}
+                      options={(warehousesQuery.data ?? []).map((item) => ({
+                        label: item.name,
+                        value: item.id,
+                      }))}
+                      onChange={(value) =>
+                        setNewProductForm((prev) => ({
+                          ...prev,
+                          warehouseId: value,
+                        }))
+                      }
+                    />
+                    <SelectField
+                      label="Preferred Supplier"
+                      value={newProductForm.supplierId}
+                      options={[
+                        { label: "Not Set", value: "" },
+                        ...(suppliersQuery.data ?? []).map((item) => ({
+                          label: `${item.name} (${item.category})`,
+                          value: item.id,
+                        })),
+                      ]}
+                      onChange={(value) =>
+                        setNewProductForm((prev) => ({
+                          ...prev,
+                          supplierId: value,
+                        }))
+                      }
+                    />
+                    <SelectField
+                      label="Inventory Group"
+                      value={newProductForm.groupId}
+                      options={[
+                        { label: "Unassigned", value: "" },
+                        ...(groupsQuery.data ?? []).map((item) => ({
+                          label: item.name,
+                          value: item.id,
+                        })),
+                      ]}
+                      onChange={(value) =>
+                        setNewProductForm((prev) => ({
+                          ...prev,
+                          groupId: value,
+                        }))
+                      }
+                    />
+                    <InputField
+                      label="UOM (optional)"
+                      value={newProductForm.uom}
+                      onChange={(value) =>
+                        setNewProductForm((prev) => ({ ...prev, uom: value }))
+                      }
+                      placeholder="e.g. set / sqft / piece"
+                    />
+                    <InputField
+                      label="Notes (optional)"
+                      value={newProductForm.notes}
+                      onChange={(value) =>
+                        setNewProductForm((prev) => ({ ...prev, notes: value }))
+                      }
+                    />
+                    <TextareaField
+                      label="Default Description"
+                      value={newProductForm.defaultDescription}
+                      onChange={(value) =>
+                        setNewProductForm((prev) => ({
+                          ...prev,
+                          defaultDescription: value,
+                        }))
+                      }
+                      rows={3}
+                      placeholder="Used when variant description is empty."
+                    />
+                  </div>
+                </div>
               </>
             )}
 
@@ -3286,7 +3871,11 @@ function ProductsPageContent() {
                 disabled={submittingNew}
                 className="ios-primary-btn h-11 px-5 text-sm disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {submittingNew ? "Submitting..." : editingProductId ? "Save Product" : "Create Product"}
+                {submittingNew
+                  ? "Submitting..."
+                  : editingProductId
+                    ? "Save Product"
+                    : "Create Product"}
               </button>
             </div>
           </form>
@@ -3303,15 +3892,20 @@ function ProductsPageContent() {
         >
           <div className="space-y-4">
             <p className="text-sm text-slate-500">
-              Upload a CSV or Excel file, map columns, preview rows, then import with upsert by SKU.
+              Upload a CSV or Excel file, map columns, preview rows, then import
+              with upsert by SKU.
             </p>
             <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
               <label className="block space-y-1">
-                <span className="text-sm text-slate-600">File (.csv, .xlsx)</span>
+                <span className="text-sm text-slate-600">
+                  File (.csv, .xlsx)
+                </span>
                 <input
                   type="file"
                   accept=".csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-                  onChange={(event) => void onImportFileChange(event.target.files?.[0] ?? null)}
+                  onChange={(event) =>
+                    void onImportFileChange(event.target.files?.[0] ?? null)
+                  }
                   className="ios-input h-11 w-full px-3 text-sm"
                 />
               </label>
@@ -3326,7 +3920,9 @@ function ProductsPageContent() {
 
             {importColumns.length > 0 ? (
               <div className="rounded-xl border border-slate-100 bg-white p-4">
-                <h4 className="text-sm font-semibold text-slate-900">Column Mapping</h4>
+                <h4 className="text-sm font-semibold text-slate-900">
+                  Column Mapping
+                </h4>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   {IMPORT_FIELDS.map((field) => (
                     <label key={field.key} className="block space-y-1">
@@ -3359,13 +3955,18 @@ function ProductsPageContent() {
 
             {importPreviewRows.length > 0 ? (
               <div className="rounded-xl border border-slate-100 bg-white p-4">
-                <h4 className="text-sm font-semibold text-slate-900">Preview (first 20 rows)</h4>
+                <h4 className="text-sm font-semibold text-slate-900">
+                  Preview (first 20 rows)
+                </h4>
                 <div className="mt-3 overflow-x-auto">
                   <table className="min-w-full text-xs">
                     <thead>
                       <tr className="border-b border-slate-200 text-left text-slate-500">
                         {IMPORT_FIELDS.map((field) => (
-                          <th key={`preview-head-${field.key}`} className="px-2 py-1">
+                          <th
+                            key={`preview-head-${field.key}`}
+                            className="px-2 py-1"
+                          >
                             {field.label}
                           </th>
                         ))}
@@ -3373,9 +3974,15 @@ function ProductsPageContent() {
                     </thead>
                     <tbody>
                       {importPreviewRows.map((row, idx) => (
-                        <tr key={`preview-row-${idx}`} className="border-b border-slate-100">
+                        <tr
+                          key={`preview-row-${idx}`}
+                          className="border-b border-slate-100"
+                        >
                           {IMPORT_FIELDS.map((field) => (
-                            <td key={`preview-cell-${idx}-${field.key}`} className="px-2 py-1 text-slate-700">
+                            <td
+                              key={`preview-cell-${idx}-${field.key}`}
+                              className="px-2 py-1 text-slate-700"
+                            >
                               {String(row[field.key] ?? "")}
                             </td>
                           ))}
@@ -3387,21 +3994,34 @@ function ProductsPageContent() {
               </div>
             ) : null}
 
-            {(importWarnings.length > 0 || importErrors.length > 0) ? (
+            {importWarnings.length > 0 || importErrors.length > 0 ? (
               <div className="rounded-xl border border-slate-100 bg-white p-4">
                 {importWarnings.length > 0 ? (
                   <div>
-                    <p className="text-sm font-semibold text-amber-700">Warnings</p>
+                    <p className="text-sm font-semibold text-amber-700">
+                      Warnings
+                    </p>
                     <p className="mt-1 text-xs text-amber-700">
-                      {importWarnings.slice(0, 8).map((row) => `Row ${row.row}: ${row.warning}`).join(" | ")}
+                      {importWarnings
+                        .slice(0, 8)
+                        .map((row) => `Row ${row.row}: ${row.warning}`)
+                        .join(" | ")}
                     </p>
                   </div>
                 ) : null}
                 {importErrors.length > 0 ? (
                   <div className={importWarnings.length > 0 ? "mt-3" : ""}>
-                    <p className="text-sm font-semibold text-rose-700">Errors</p>
+                    <p className="text-sm font-semibold text-rose-700">
+                      Errors
+                    </p>
                     <p className="mt-1 text-xs text-rose-700">
-                      {importErrors.slice(0, 8).map((row) => `Row ${row.row} (${row.sku || "-"}): ${row.error}`).join(" | ")}
+                      {importErrors
+                        .slice(0, 8)
+                        .map(
+                          (row) =>
+                            `Row ${row.row} (${row.sku || "-"}): ${row.error}`,
+                        )
+                        .join(" | ")}
                     </p>
                   </div>
                 ) : null}
@@ -3409,16 +4029,27 @@ function ProductsPageContent() {
             ) : null}
 
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setOpenImportDialog(false)} className="ios-secondary-btn h-10 px-4 text-sm">
+              <button
+                type="button"
+                onClick={() => setOpenImportDialog(false)}
+                className="ios-secondary-btn h-10 px-4 text-sm"
+              >
                 Close
               </button>
               <button
                 type="button"
                 onClick={submitImport}
-                disabled={importSubmitting || importParsing || !importRequiredMapped || importMappedRows.length === 0}
+                disabled={
+                  importSubmitting ||
+                  importParsing ||
+                  !importRequiredMapped ||
+                  importMappedRows.length === 0
+                }
                 className="ios-primary-btn h-10 px-4 text-sm disabled:opacity-60"
               >
-                {importSubmitting ? "Importing..." : `Import ${importMappedRows.length} Rows`}
+                {importSubmitting
+                  ? "Importing..."
+                  : `Import ${importMappedRows.length} Rows`}
               </button>
             </div>
           </div>
@@ -3460,54 +4091,15 @@ function ProductsPageContent() {
         </Modal>
       ) : null}
 
-      {openStockDialog && stockProduct ? (
-        <Modal
-          title={`Adjust Stock · ${stockProduct.name}`}
-          onClose={() => {
-            setOpenStockDialog(false);
-            setStockProduct(null);
-          }}
-        >
-          <form className="space-y-4" onSubmit={submitAdjustStock}>
-            <p className="text-sm text-slate-500">
-              Use a positive number to stock in, negative number to stock out.
-            </p>
-            <SelectField
-              label="Variant"
-              value={stockVariantId}
-              options={(stockProduct.variants ?? []).map((item) => ({
-                value: item.id,
-                label: `${item.sku} · Available ${formatStockByProductUnit(Number(item.available ?? 0), stockProduct.unit)}`,
-              }))}
-              onChange={setStockVariantId}
-            />
-            <InputField
-              label="Adjustment Qty (+/-)"
-              type="number"
-              step="0.01"
-              value={stockAdjustmentQty}
-              onChange={setStockAdjustmentQty}
-              required
-            />
-            <div className="flex gap-2 pt-1">
-              <button type="button" onClick={() => setOpenStockDialog(false)} className="ios-secondary-btn h-10 flex-1">
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submittingStock}
-                className="ios-primary-btn h-10 flex-1 disabled:opacity-60"
-              >
-                {submittingStock ? "Saving..." : "Save Stock"}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      ) : null}
-
       {openGroupDialog ? (
-        <Modal title="Manage Inventory Groups" onClose={() => setOpenGroupDialog(false)}>
-          <form className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3" onSubmit={createGroup}>
+        <Modal
+          title="Manage Inventory Groups"
+          onClose={() => setOpenGroupDialog(false)}
+        >
+          <form
+            className="space-y-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3"
+            onSubmit={createGroup}
+          >
             <InputField
               label="Group Name"
               value={newGroupName}
@@ -3532,10 +4124,17 @@ function ProductsPageContent() {
               <p className="text-sm text-slate-500">No groups yet.</p>
             ) : (
               (groupsQuery.data ?? []).map((group) => (
-                <div key={group.id} className="rounded-xl border border-slate-100 p-3">
+                <div
+                  key={group.id}
+                  className="rounded-xl border border-slate-100 p-3"
+                >
                   {editingGroupId === group.id ? (
                     <div className="space-y-2">
-                      <InputField label="Group Name" value={editingGroupName} onChange={setEditingGroupName} />
+                      <InputField
+                        label="Group Name"
+                        value={editingGroupName}
+                        onChange={setEditingGroupName}
+                      />
                       <InputField
                         label="Description"
                         value={editingGroupDescription}
@@ -3562,8 +4161,12 @@ function ProductsPageContent() {
                   ) : (
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <p className="text-sm font-semibold text-slate-900">{group.name}</p>
-                        <p className="text-xs text-slate-500">{group.description || "-"}</p>
+                        <p className="text-sm font-semibold text-slate-900">
+                          {group.name}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {group.description || "-"}
+                        </p>
                         <p className="mt-1 text-xs text-slate-400">
                           Products: {group._count?.products ?? 0}
                         </p>
@@ -3593,7 +4196,6 @@ function ProductsPageContent() {
           </div>
         </Modal>
       ) : null}
-
     </section>
   );
 }
@@ -3604,7 +4206,9 @@ export default function ProductsPage() {
       fallback={
         <section className="mx-auto max-w-[1320px]">
           <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
-            <p className="text-sm text-slate-500">Loading product management...</p>
+            <p className="text-sm text-slate-500">
+              Loading product management...
+            </p>
           </div>
         </section>
       }
@@ -3627,9 +4231,13 @@ function Modal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4 backdrop-blur-[2px]">
-      <div className={`max-h-[90vh] w-full overflow-y-auto rounded-lg border border-slate-200/80 bg-white p-6 shadow-md ${maxWidthClass}`}>
+      <div
+        className={`max-h-[90vh] w-full overflow-y-auto rounded-lg border border-slate-200/80 bg-white p-6 shadow-md ${maxWidthClass}`}
+      >
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-semibold tracking-tight text-slate-900">{title}</h3>
+          <h3 className="text-base font-semibold tracking-tight text-slate-900">
+            {title}
+          </h3>
           <button
             type="button"
             onClick={onClose}
@@ -3743,10 +4351,15 @@ function ThumbImage({ src, alt }: { src: string; alt: string }) {
   }
   return (
     <div className="relative h-10 w-10 overflow-hidden rounded-xl border border-slate-100">
-      {!loaded ? <div className="absolute inset-0 animate-pulse bg-slate-200/70" /> : null}
-      <img
+      {!loaded ? (
+        <div className="absolute inset-0 animate-pulse bg-slate-200/70" />
+      ) : null}
+      <Image
         src={src}
         alt={alt}
+        width={40}
+        height={40}
+        unoptimized
         className="h-full w-full object-cover"
         onLoad={() => setLoaded(true)}
       />

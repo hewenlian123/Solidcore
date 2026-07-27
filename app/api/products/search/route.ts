@@ -46,6 +46,7 @@ export async function GET(request: NextRequest) {
         inventoryStock: {
           select: {
             onHand: true,
+            reserved: true,
           },
         },
       },
@@ -60,7 +61,11 @@ export async function GET(request: NextRequest) {
           sku: row.sku,
           imageUrl: row.imageUrl ?? null,
           salePrice: Number(row.price ?? row.product.price ?? 0),
-          onHand: Number(row.inventoryStock?.onHand ?? 0),
+          onHand: Math.max(
+            Number(row.inventoryStock?.onHand ?? 0) -
+              Number(row.inventoryStock?.reserved ?? 0),
+            0,
+          ),
           unit: row.product.unit ?? null,
           reorderLevel: Number(row.reorderLevel ?? 0),
         })),

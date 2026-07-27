@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import { calculateAvailable } from "@/lib/inventory-availability";
 
 type CategoryMap = Record<string, string>;
 
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
           select: {
             onHand: true,
             reserved: true,
+            hold: true,
           },
         },
       },
@@ -78,7 +80,11 @@ export async function GET(request: NextRequest) {
       .map((item) => {
         const onHand = toNum(item.inventoryStock?.onHand);
         const reserved = toNum(item.inventoryStock?.reserved);
-        const available = onHand - reserved;
+        const available = calculateAvailable({
+          onHand,
+          reserved,
+          hold: item.inventoryStock?.hold,
+        });
         const cost = toNum(item.cost ?? item.product.cost);
         const price = toNum(item.price ?? item.product.price);
         const margin = price > 0 ? ((price - cost) / price) * 100 : 0;
