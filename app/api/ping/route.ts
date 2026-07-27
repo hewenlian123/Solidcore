@@ -1,20 +1,23 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { prisma } from "@/lib/prisma";
 
 export async function GET() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
-  const { data, error } = await supabase
-    .from("pg_tables")
-    .select("*")
-    .limit(1);
-
-  return NextResponse.json({
-    success: !error,
-    error: error?.message ?? null,
-    data,
-  });
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    return NextResponse.json({
+      success: true,
+      error: null,
+      data: { database: "connected" },
+    });
+  } catch (error) {
+    console.error("Ping database error:", error);
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Database connectivity check failed.",
+        data: null,
+      },
+      { status: 503 },
+    );
+  }
 }

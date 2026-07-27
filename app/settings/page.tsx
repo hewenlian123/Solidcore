@@ -33,10 +33,11 @@ export default function SettingsPage() {
   const [templates, setTemplates] = useState<DescriptionTemplateRow[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
   const [templatesMessage, setTemplatesMessage] = useState("");
-  const [savingTemplateCategory, setSavingTemplateCategory] = useState<string | null>(null);
-  const [templateValidationByCategory, setTemplateValidationByCategory] = useState<
-    Record<string, TemplateValidation>
-  >({});
+  const [savingTemplateCategory, setSavingTemplateCategory] = useState<
+    string | null
+  >(null);
+  const [templateValidationByCategory, setTemplateValidationByCategory] =
+    useState<Record<string, TemplateValidation>>({});
   const [defaultTaxRate, setDefaultTaxRate] = useState("0");
   const [savingDefaultTaxRate, setSavingDefaultTaxRate] = useState(false);
   const [defaultTaxRateMessage, setDefaultTaxRateMessage] = useState("");
@@ -57,7 +58,9 @@ export default function SettingsPage() {
       if (!res.ok) throw new Error(payload.error ?? "Failed to load templates");
       setTemplates(payload.data ?? []);
     } catch (err) {
-      setTemplatesMessage(err instanceof Error ? err.message : "Failed to load templates");
+      setTemplatesMessage(
+        err instanceof Error ? err.message : "Failed to load templates",
+      );
     } finally {
       setTemplatesLoading(false);
     }
@@ -65,7 +68,6 @@ export default function SettingsPage() {
 
   useEffect(() => {
     void loadTemplates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
   useEffect(() => {
@@ -76,10 +78,15 @@ export default function SettingsPage() {
           headers: { "x-user-role": role },
         });
         const payload = await res.json();
-        if (!res.ok) throw new Error(payload.error ?? "Failed to load company settings");
+        if (!res.ok)
+          throw new Error(payload.error ?? "Failed to load company settings");
         setDefaultTaxRate(String(Number(payload.data?.defaultTaxRate ?? 0)));
       } catch (err) {
-        setDefaultTaxRateMessage(err instanceof Error ? err.message : "Failed to load default tax rate");
+        setDefaultTaxRateMessage(
+          err instanceof Error
+            ? err.message
+            : "Failed to load default tax rate",
+        );
       }
     };
     void loadCompanySettings();
@@ -95,11 +102,14 @@ export default function SettingsPage() {
         body: JSON.stringify({ defaultTaxRate: Number(defaultTaxRate || 0) }),
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to save default tax rate");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to save default tax rate");
       setDefaultTaxRate(String(Number(payload.data?.defaultTaxRate ?? 0)));
       setDefaultTaxRateMessage("Default tax rate saved.");
     } catch (err) {
-      setDefaultTaxRateMessage(err instanceof Error ? err.message : "Failed to save default tax rate");
+      setDefaultTaxRateMessage(
+        err instanceof Error ? err.message : "Failed to save default tax rate",
+      );
     } finally {
       setSavingDefaultTaxRate(false);
     }
@@ -155,7 +165,9 @@ export default function SettingsPage() {
     patch: Partial<Pick<DescriptionTemplateRow, "templateJson" | "enabled">>,
   ) => {
     setTemplates((prev) =>
-      prev.map((row) => (row.category === category ? { ...row, ...patch } : row)),
+      prev.map((row) =>
+        row.category === category ? { ...row, ...patch } : row,
+      ),
     );
   };
 
@@ -180,7 +192,9 @@ export default function SettingsPage() {
       setTemplatesMessage(`Saved template: ${row.category}`);
       await loadTemplates();
     } catch (err) {
-      setTemplatesMessage(err instanceof Error ? err.message : "Failed to save template");
+      setTemplatesMessage(
+        err instanceof Error ? err.message : "Failed to save template",
+      );
     } finally {
       setSavingTemplateCategory(null);
     }
@@ -188,7 +202,10 @@ export default function SettingsPage() {
 
   const validateTemplateJson = (category: string, templateJson: string) => {
     try {
-      const parsed = JSON.parse(templateJson) as { lines?: unknown; titleStyle?: unknown };
+      const parsed = JSON.parse(templateJson) as {
+        lines?: unknown;
+        titleStyle?: unknown;
+      };
       if (!parsed || typeof parsed !== "object") {
         setTemplateValidationByCategory((prev) => ({
           ...prev,
@@ -206,10 +223,16 @@ export default function SettingsPage() {
       }
       const invalidLineIndex = lines.findIndex((line) => {
         if (!line || typeof line !== "object") return true;
-        const row = line as { key?: unknown; format?: unknown; label?: unknown };
+        const row = line as {
+          key?: unknown;
+          format?: unknown;
+          label?: unknown;
+        };
         const hasKey = typeof row.key === "string" && row.key.trim().length > 0;
-        const hasFormat = typeof row.format === "string" && row.format.trim().length > 0;
-        const labelValid = row.label === undefined || typeof row.label === "string";
+        const hasFormat =
+          typeof row.format === "string" && row.format.trim().length > 0;
+        const labelValid =
+          row.label === undefined || typeof row.label === "string";
         return (!hasKey && !hasFormat) || !labelValid;
       });
       if (invalidLineIndex >= 0) {
@@ -243,12 +266,18 @@ export default function SettingsPage() {
   return (
     <section className="space-y-8">
       <div className="linear-card p-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">System Settings</h1>
-        <p className="mt-2 text-sm text-slate-500">Backup and year-end rollover tools.</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          System Settings
+        </h1>
+        <p className="mt-2 text-sm text-slate-500">
+          Backup and year-end rollover tools.
+        </p>
       </div>
 
       <div className="linear-card p-8">
-        <h2 className="text-base font-semibold text-slate-900">Data Backup Export</h2>
+        <h2 className="text-base font-semibold text-slate-900">
+          Data Backup Export
+        </h2>
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
@@ -274,7 +303,9 @@ export default function SettingsPage() {
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <label className="block">
-            <span className="mb-1 block text-xs text-slate-500">Default Tax Rate (%)</span>
+            <span className="mb-1 block text-xs text-slate-500">
+              Default Tax Rate (%)
+            </span>
             <input
               type="number"
               min="0"
@@ -293,27 +324,48 @@ export default function SettingsPage() {
             {savingDefaultTaxRate ? "Saving..." : "Save Default Tax Rate"}
           </button>
         </div>
-        {defaultTaxRateMessage ? <p className="mt-2 text-sm text-slate-600">{defaultTaxRateMessage}</p> : null}
+        {defaultTaxRateMessage ? (
+          <p className="mt-2 text-sm text-slate-600">{defaultTaxRateMessage}</p>
+        ) : null}
       </div>
 
       <div className="linear-card p-8">
-        <h2 className="text-base font-semibold text-slate-900">Year-End Rollover</h2>
-        <p className="mt-1 text-sm text-slate-500">Archive completed orders before selected year to improve system performance.</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <input
-            value={year}
-            onChange={(e) => setYear(e.target.value)}
-            className="ios-input h-12 w-36"
-          />
-          <button type="button" onClick={archiveYear} className="ios-primary-btn h-12">
+        <h2 className="text-base font-semibold text-slate-900">
+          Year-End Rollover
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Archive completed orders before selected year to improve system
+          performance.
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="block">
+            <span className="mb-1 block text-xs text-slate-500">
+              Archive before year
+            </span>
+            <input
+              inputMode="numeric"
+              value={year}
+              onChange={(e) => setYear(e.target.value)}
+              className="ios-input h-12 w-36"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={archiveYear}
+            className="ios-primary-btn h-12"
+          >
             Run Rollover
           </button>
         </div>
-        {message ? <p className="mt-2 text-sm text-slate-600">{message}</p> : null}
+        {message ? (
+          <p className="mt-2 text-sm text-slate-600">{message}</p>
+        ) : null}
       </div>
 
       <div className="linear-card p-8">
-        <h2 className="text-base font-semibold text-slate-900">System Connectivity Check</h2>
+        <h2 className="text-base font-semibold text-slate-900">
+          System Connectivity Check
+        </h2>
         <p className="mt-1 text-sm text-slate-500">
           Verify Supabase/API connectivity using <code>/api/ping</code>.
         </p>
@@ -339,36 +391,54 @@ export default function SettingsPage() {
           ) : null}
         </div>
         {pingLatencyMs !== null ? (
-          <p className="mt-2 text-sm text-slate-600">Response time: {pingLatencyMs} ms</p>
+          <p className="mt-2 text-sm text-slate-600">
+            Response time: {pingLatencyMs} ms
+          </p>
         ) : null}
         {pingResult?.error ? (
-          <p className="mt-1 text-sm text-rose-700">Error: {pingResult.error}</p>
+          <p className="mt-1 text-sm text-rose-700">
+            Error: {pingResult.error}
+          </p>
         ) : null}
         {lastCheckedAt ? (
-          <p className="mt-1 text-xs text-slate-500">Last checked (UTC): {lastCheckedAt}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Last checked (UTC): {lastCheckedAt}
+          </p>
         ) : null}
       </div>
 
       <div className="linear-card p-8">
-        <h2 className="text-base font-semibold text-slate-900">Description Templates</h2>
+        <h2 className="text-base font-semibold text-slate-900">
+          Description Templates
+        </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Category-based structured description template JSON. Product name remains clean.
+          Category-based structured description template JSON. Product name
+          remains clean.
         </p>
-        {templatesMessage ? <p className="mt-2 text-sm text-slate-600">{templatesMessage}</p> : null}
+        {templatesMessage ? (
+          <p className="mt-2 text-sm text-slate-600">{templatesMessage}</p>
+        ) : null}
         {templatesLoading ? (
           <p className="mt-3 text-sm text-slate-500">Loading templates...</p>
         ) : (
           <div className="mt-4 space-y-4">
             {templates.map((row) => (
-              <div key={row.id} className="rounded-xl border border-slate-100 p-3">
+              <div
+                key={row.id}
+                className="rounded-xl border border-slate-100 p-3"
+              >
                 <div className="mb-2 flex items-center justify-between">
-                  <p className="text-sm font-semibold text-slate-900">{row.category}</p>
-                  <label className="inline-flex items-center gap-2 text-xs text-slate-600">
+                  <p className="text-sm font-semibold text-slate-900">
+                    {row.category}
+                  </p>
+                  <label className="inline-flex min-h-11 items-center gap-2 text-xs text-slate-600">
                     <input
                       type="checkbox"
                       checked={row.enabled}
                       onChange={(event) =>
-                        updateTemplateLocal(row.category, { enabled: event.target.checked })
+                        updateTemplateLocal(row.category, {
+                          enabled: event.target.checked,
+                        })
                       }
                     />
                     Enabled
@@ -377,14 +447,19 @@ export default function SettingsPage() {
                 <textarea
                   value={row.templateJson}
                   onChange={(event) =>
-                    updateTemplateLocal(row.category, { templateJson: event.target.value })
+                    updateTemplateLocal(row.category, {
+                      templateJson: event.target.value,
+                    })
                   }
                   className="h-48 w-full rounded-xl border border-slate-100 p-3 font-mono text-xs outline-none focus:ring-2 focus:ring-slate-200"
                 />
                 <div className="mt-2 flex items-center justify-between">
                   <div className="space-y-1">
                     <p className="text-xs text-slate-500">
-                      Updated: {new Date(row.updatedAt).toLocaleString("en-US", { timeZone: "UTC" })}
+                      Updated:{" "}
+                      {new Date(row.updatedAt).toLocaleString("en-US", {
+                        timeZone: "UTC",
+                      })}
                     </p>
                     {templateValidationByCategory[row.category] ? (
                       <p
@@ -401,7 +476,9 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => validateTemplateJson(row.category, row.templateJson)}
+                      onClick={() =>
+                        validateTemplateJson(row.category, row.templateJson)
+                      }
                       className="ios-secondary-btn h-9 px-3 text-xs"
                     >
                       Validate JSON
@@ -412,7 +489,9 @@ export default function SettingsPage() {
                       disabled={savingTemplateCategory === row.category}
                       className="ios-primary-btn h-9 px-3 text-xs disabled:opacity-60"
                     >
-                      {savingTemplateCategory === row.category ? "Saving..." : "Save Template"}
+                      {savingTemplateCategory === row.category
+                        ? "Saving..."
+                        : "Save Template"}
                     </button>
                   </div>
                 </div>

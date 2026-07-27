@@ -2,14 +2,21 @@ import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import { denyProductionSystemTooling } from "@/lib/system-tooling";
 
 const TEST_PREFIX = "[TEST-FEATURE] ";
 
-type TestResult = { name: string; status: "passed" | "failed"; message?: string };
+type TestResult = {
+  name: string;
+  status: "passed" | "failed";
+  message?: string;
+};
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const unavailable = denyProductionSystemTooling();
+  if (unavailable) return unavailable;
   const role = getRequestRole(request);
   if (!hasOneOf(role, ["ADMIN"])) return deny();
 
@@ -20,9 +27,18 @@ export async function POST(request: NextRequest) {
 
   async function cleanup() {
     try {
-      if (createdOrderId) await prisma.salesOrder.delete({ where: { id: createdOrderId } }).catch(() => {});
-      if (createdProductId) await prisma.salesProduct.delete({ where: { id: createdProductId } }).catch(() => {});
-      if (createdCustomerId) await prisma.salesCustomer.delete({ where: { id: createdCustomerId } }).catch(() => {});
+      if (createdOrderId)
+        await prisma.salesOrder
+          .delete({ where: { id: createdOrderId } })
+          .catch(() => {});
+      if (createdProductId)
+        await prisma.salesProduct
+          .delete({ where: { id: createdProductId } })
+          .catch(() => {});
+      if (createdCustomerId)
+        await prisma.salesCustomer
+          .delete({ where: { id: createdCustomerId } })
+          .catch(() => {});
     } catch {
       // ignore
     }
@@ -41,7 +57,11 @@ export async function POST(request: NextRequest) {
     createdProductId = product.id;
     results.push({ name: "createProduct", status: "passed" });
   } catch (e) {
-    results.push({ name: "createProduct", status: "failed", message: e instanceof Error ? e.message : "Create failed" });
+    results.push({
+      name: "createProduct",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Create failed",
+    });
   }
 
   // 2. Create customer (SalesCustomer)
@@ -55,7 +75,11 @@ export async function POST(request: NextRequest) {
     createdCustomerId = customer.id;
     results.push({ name: "createCustomer", status: "passed" });
   } catch (e) {
-    results.push({ name: "createCustomer", status: "failed", message: e instanceof Error ? e.message : "Create failed" });
+    results.push({
+      name: "createCustomer",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Create failed",
+    });
   }
 
   // 3. Create order (SalesOrder + item) - need customer
@@ -85,10 +109,18 @@ export async function POST(request: NextRequest) {
       createdOrderId = order.id;
       results.push({ name: "createOrder", status: "passed" });
     } catch (e) {
-      results.push({ name: "createOrder", status: "failed", message: e instanceof Error ? e.message : "Create failed" });
+      results.push({
+        name: "createOrder",
+        status: "failed",
+        message: e instanceof Error ? e.message : "Create failed",
+      });
     }
   } else {
-    results.push({ name: "createOrder", status: "failed", message: "Skip: no customer" });
+    results.push({
+      name: "createOrder",
+      status: "failed",
+      message: "Skip: no customer",
+    });
   }
 
   // 4. Update order
@@ -100,10 +132,18 @@ export async function POST(request: NextRequest) {
       });
       results.push({ name: "updateOrder", status: "passed" });
     } catch (e) {
-      results.push({ name: "updateOrder", status: "failed", message: e instanceof Error ? e.message : "Update failed" });
+      results.push({
+        name: "updateOrder",
+        status: "failed",
+        message: e instanceof Error ? e.message : "Update failed",
+      });
     }
   } else {
-    results.push({ name: "updateOrder", status: "failed", message: "Skip: no order" });
+    results.push({
+      name: "updateOrder",
+      status: "failed",
+      message: "Skip: no order",
+    });
   }
 
   // 5. Delete record (delete the test product)
@@ -113,10 +153,18 @@ export async function POST(request: NextRequest) {
       createdProductId = null;
       results.push({ name: "deleteRecord", status: "passed" });
     } catch (e) {
-      results.push({ name: "deleteRecord", status: "failed", message: e instanceof Error ? e.message : "Delete failed" });
+      results.push({
+        name: "deleteRecord",
+        status: "failed",
+        message: e instanceof Error ? e.message : "Delete failed",
+      });
     }
   } else {
-    results.push({ name: "deleteRecord", status: "failed", message: "Skip: no product" });
+    results.push({
+      name: "deleteRecord",
+      status: "failed",
+      message: "Skip: no product",
+    });
   }
 
   await cleanup();

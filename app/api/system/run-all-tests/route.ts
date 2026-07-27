@@ -5,14 +5,25 @@ import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { getSessionFromRequest } from "@/lib/auth-session";
 import { canViewPath, normalizeRole } from "@/lib/rbac";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { denyProductionSystemTooling } from "@/lib/system-tooling";
 
-const REQUIRED_ENV = ["DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"] as const;
+const REQUIRED_ENV = [
+  "DATABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+] as const;
 
-type TestResult = { name: string; status: "passed" | "failed"; message?: string };
+type TestResult = {
+  name: string;
+  status: "passed" | "failed";
+  message?: string;
+};
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const unavailable = denyProductionSystemTooling();
+  if (unavailable) return unavailable;
   const role = getRequestRole(request);
   if (!hasOneOf(role, ["ADMIN"])) return deny();
 
@@ -26,7 +37,11 @@ export async function POST(request: NextRequest) {
     await prisma.$queryRaw`SELECT 1`;
     results.push({ name: "database", status: "passed" });
   } catch (e) {
-    results.push({ name: "database", status: "failed", message: e instanceof Error ? e.message : "Connection failed" });
+    results.push({
+      name: "database",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Connection failed",
+    });
   }
 
   // 3. API availability
@@ -35,15 +50,25 @@ export async function POST(request: NextRequest) {
   // 4. Auth system (session verify + normalizeRole)
   try {
     const user = getSessionFromRequest(request);
-    const secret = process.env.AUTH_SESSION_SECRET ?? "solidcore-dev-session-secret-change-me";
+    const secret =
+      process.env.AUTH_SESSION_SECRET ??
+      "solidcore-dev-session-secret-change-me";
     if (!secret || secret.length < 16) {
-      results.push({ name: "auth", status: "failed", message: "AUTH_SESSION_SECRET not configured" });
+      results.push({
+        name: "auth",
+        status: "failed",
+        message: "AUTH_SESSION_SECRET not configured",
+      });
     } else {
       normalizeRole(user?.role ?? "");
       results.push({ name: "auth", status: "passed" });
     }
   } catch (e) {
-    results.push({ name: "auth", status: "failed", message: e instanceof Error ? e.message : "Auth check failed" });
+    results.push({
+      name: "auth",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Auth check failed",
+    });
   }
 
   // 5. Sales Orders table
@@ -51,7 +76,11 @@ export async function POST(request: NextRequest) {
     await prisma.salesOrder.findFirst({ select: { id: true } });
     results.push({ name: "salesOrders", status: "passed" });
   } catch (e) {
-    results.push({ name: "salesOrders", status: "failed", message: e instanceof Error ? e.message : "Access failed" });
+    results.push({
+      name: "salesOrders",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Access failed",
+    });
   }
 
   // 6. Inventory table
@@ -59,7 +88,11 @@ export async function POST(request: NextRequest) {
     await prisma.inventoryStock.findFirst({ select: { id: true } });
     results.push({ name: "inventory", status: "passed" });
   } catch (e) {
-    results.push({ name: "inventory", status: "failed", message: e instanceof Error ? e.message : "Access failed" });
+    results.push({
+      name: "inventory",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Access failed",
+    });
   }
 
   // 7. Warehouse table
@@ -67,7 +100,11 @@ export async function POST(request: NextRequest) {
     await prisma.warehouse.findFirst({ select: { id: true } });
     results.push({ name: "warehouse", status: "passed" });
   } catch (e) {
-    results.push({ name: "warehouse", status: "failed", message: e instanceof Error ? e.message : "Access failed" });
+    results.push({
+      name: "warehouse",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Access failed",
+    });
   }
 
   // 8. Finance tables (Invoice, SalesOrderPayment)
@@ -76,7 +113,11 @@ export async function POST(request: NextRequest) {
     await prisma.salesOrderPayment.findFirst({ select: { id: true } });
     results.push({ name: "finance", status: "passed" });
   } catch (e) {
-    results.push({ name: "finance", status: "failed", message: e instanceof Error ? e.message : "Access failed" });
+    results.push({
+      name: "finance",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Access failed",
+    });
   }
 
   // 9. File upload (Supabase storage connectivity)
@@ -85,24 +126,58 @@ export async function POST(request: NextRequest) {
     const { error } = await supabase.storage.listBuckets();
     if (error) {
       const msg = error.message?.toLowerCase() ?? "";
-      const isJwtError = msg.includes("compact jws") || msg.includes("jwt") || (msg.includes("invalid") && msg.includes("key"));
-      if (msg.includes("bucket") || msg.includes("policy") || msg.includes("permission")) {
-        results.push({ name: "fileUpload", status: "passed", message: "Storage reachable (list restricted)" });
+      const isJwtError =
+        msg.includes("compact jws") ||
+        msg.includes("jwt") ||
+        (msg.includes("invalid") && msg.includes("key"));
+      if (
+        msg.includes("bucket") ||
+        msg.includes("policy") ||
+        msg.includes("permission")
+      ) {
+        results.push({
+          name: "fileUpload",
+          status: "passed",
+          message: "Storage reachable (list restricted)",
+        });
       } else if (isJwtError) {
-        results.push({ name: "fileUpload", status: "passed", message: "Supabase OK. Use Project Settings → API → anon public (JWT) key." });
+        results.push({
+          name: "fileUpload",
+          status: "passed",
+          message:
+            "Supabase OK. Use Project Settings → API → anon public (JWT) key.",
+        });
       } else {
-        results.push({ name: "fileUpload", status: "failed", message: error.message });
+        results.push({
+          name: "fileUpload",
+          status: "failed",
+          message: error.message,
+        });
       }
     } else {
       results.push({ name: "fileUpload", status: "passed" });
     }
   } catch (e) {
-    const msg = (e instanceof Error ? e.message : "Storage check failed").toLowerCase();
-    const isJwtError = msg.includes("compact jws") || msg.includes("invalid compact jws") || (msg.includes("jwt") && msg.includes("invalid"));
+    const msg = (
+      e instanceof Error ? e.message : "Storage check failed"
+    ).toLowerCase();
+    const isJwtError =
+      msg.includes("compact jws") ||
+      msg.includes("invalid compact jws") ||
+      (msg.includes("jwt") && msg.includes("invalid"));
     if (isJwtError) {
-      results.push({ name: "fileUpload", status: "passed", message: "Supabase OK. Set NEXT_PUBLIC_SUPABASE_ANON_KEY to the JWT from Project Settings → API." });
+      results.push({
+        name: "fileUpload",
+        status: "passed",
+        message:
+          "Supabase OK. Set NEXT_PUBLIC_SUPABASE_ANON_KEY to the JWT from Project Settings → API.",
+      });
     } else {
-      results.push({ name: "fileUpload", status: "failed", message: e instanceof Error ? e.message : "Storage check failed" });
+      results.push({
+        name: "fileUpload",
+        status: "failed",
+        message: e instanceof Error ? e.message : "Storage check failed",
+      });
     }
   }
 
@@ -114,10 +189,18 @@ export async function POST(request: NextRequest) {
     if (adminOk && salesOk && salesDenied) {
       results.push({ name: "permissions", status: "passed" });
     } else {
-      results.push({ name: "permissions", status: "failed", message: "RBAC check unexpected" });
+      results.push({
+        name: "permissions",
+        status: "failed",
+        message: "RBAC check unexpected",
+      });
     }
   } catch (e) {
-    results.push({ name: "permissions", status: "failed", message: e instanceof Error ? e.message : "RBAC failed" });
+    results.push({
+      name: "permissions",
+      status: "failed",
+      message: e instanceof Error ? e.message : "RBAC failed",
+    });
   }
 
   const passed = results.filter((t) => t.status === "passed").length;

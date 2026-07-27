@@ -19,7 +19,10 @@ export function normalizeRole(input: string | null | undefined): Role {
 }
 
 export function canViewPath(role: Role, path: string) {
-  if (role === "ADMIN") return true; // ADMIN includes /system
+  if (path.startsWith("/system")) {
+    return role === "ADMIN" && process.env.NODE_ENV !== "production";
+  }
+  if (role === "ADMIN") return true;
   if (role === "SALES")
     return (
       path.startsWith("/dashboard") ||
@@ -51,7 +54,8 @@ export function canViewPath(role: Role, path: string) {
       path.startsWith("/fulfillment") ||
       path.startsWith("/outbound") ||
       path.startsWith("/delivery") ||
-      path.startsWith("/special-orders")
+      path.startsWith("/purchasing/receiving") ||
+      path.startsWith("/purchasing/orders/")
     );
   return false;
 }

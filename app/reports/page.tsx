@@ -2,7 +2,15 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 import { useRole } from "@/components/layout/role-provider";
 import {
   Table,
@@ -163,7 +171,9 @@ export default function ReportsPage() {
   const [end, setEnd] = useState("");
   const [salesperson, setSalesperson] = useState("");
   const [status, setStatus] = useState("");
-  const [outboundSort, setOutboundSort] = useState<"date_asc" | "date_desc" | "status">("date_asc");
+  const [outboundSort, setOutboundSort] = useState<
+    "date_asc" | "date_desc" | "status"
+  >("date_asc");
 
   const load = async () => {
     setLoading(true);
@@ -197,7 +207,6 @@ export default function ReportsPage() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, preset, salesperson, status]);
 
   const overdueSet = useMemo(() => {
@@ -221,12 +230,14 @@ export default function ReportsPage() {
     } else if (outboundSort === "date_desc") {
       rows.sort(
         (a, b) =>
-          new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime(),
+          new Date(b.scheduledDate).getTime() -
+          new Date(a.scheduledDate).getTime(),
       );
     } else {
       rows.sort(
         (a, b) =>
-          new Date(a.scheduledDate).getTime() - new Date(b.scheduledDate).getTime(),
+          new Date(a.scheduledDate).getTime() -
+          new Date(b.scheduledDate).getTime(),
       );
     }
     return rows;
@@ -235,9 +246,12 @@ export default function ReportsPage() {
   return (
     <section className="space-y-8">
       <div className="linear-card p-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Reports</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
+          Reports
+        </h1>
         <p className="mt-2 text-sm text-slate-500">
-          Store sales, cash, AR, outbound, and special-order KPIs with drill-down details.
+          Store sales, cash, AR, outbound, and special-order KPIs with
+          drill-down details.
         </p>
       </div>
 
@@ -249,7 +263,9 @@ export default function ReportsPage() {
               type="button"
               onClick={() => setPreset(p.key)}
               className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
-                preset === p.key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-600"
+                preset === p.key
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-600"
               }`}
             >
               {p.label}
@@ -305,7 +321,11 @@ export default function ReportsPage() {
             </select>
           </label>
           <div className="flex items-end">
-            <button type="button" onClick={load} className="ios-primary-btn h-10 w-full text-sm">
+            <button
+              type="button"
+              onClick={load}
+              className="ios-primary-btn h-10 w-full text-sm"
+            >
               Apply Filters
             </button>
           </div>
@@ -319,15 +339,20 @@ export default function ReportsPage() {
       ) : null}
 
       {loading || !data ? (
-        <div className="linear-card p-8 text-sm text-slate-500">Loading reports...</div>
+        <div className="linear-card p-8 text-sm text-slate-500">
+          Loading reports...
+        </div>
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
             <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Total Sales</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">${data.kpis.sales.totalSales.toFixed(2)}</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900">
+                ${data.kpis.sales.totalSales.toFixed(2)}
+              </p>
               <p className="mt-1 text-xs text-slate-500">
-                {data.kpis.sales.salesOrderCount} orders · Avg ${data.kpis.sales.avgOrderValue.toFixed(2)}
+                {data.kpis.sales.salesOrderCount} orders · Avg $
+                {data.kpis.sales.avgOrderValue.toFixed(2)}
               </p>
             </article>
             <article className="linear-card p-4">
@@ -336,27 +361,39 @@ export default function ReportsPage() {
                 ${data.kpis.cashCollected.totalCollected.toFixed(2)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                {data.kpis.cashCollected.postedPaymentsCount} payments · Voided {data.kpis.cashCollected.voidedPaymentsCount} (
-                ${data.kpis.cashCollected.voidedPaymentsTotal.toFixed(2)})
+                {data.kpis.cashCollected.postedPaymentsCount} payments · Voided{" "}
+                {data.kpis.cashCollected.voidedPaymentsCount} ( $
+                {data.kpis.cashCollected.voidedPaymentsTotal.toFixed(2)})
               </p>
             </article>
             <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Accounts Receivable</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">${data.kpis.ar.outstandingBalance.toFixed(2)}</p>
-              <p className="mt-1 text-xs text-slate-500">{data.kpis.ar.unpaidOrPartialCount} unpaid/partial orders</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900">
+                ${data.kpis.ar.outstandingBalance.toFixed(2)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {data.kpis.ar.unpaidOrPartialCount} unpaid/partial orders
+              </p>
             </article>
             <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Operational</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">{data.kpis.operational.outboundPendingCount}</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900">
+                {data.kpis.operational.outboundPendingCount}
+              </p>
               <p className="mt-1 text-xs text-slate-500">
-                Pending queue · In progress {data.kpis.operational.outboundInProgressCount} · Ready {data.kpis.operational.readyOrInProgressOrdersCount}
+                Pending queue · In progress{" "}
+                {data.kpis.operational.outboundInProgressCount} · Ready{" "}
+                {data.kpis.operational.readyOrInProgressOrdersCount}
               </p>
             </article>
             <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Special Orders</p>
-              <p className="mt-2 text-xl font-semibold text-slate-900">{data.kpis.specialOrders.specialOrdersCount}</p>
+              <p className="mt-2 text-xl font-semibold text-slate-900">
+                {data.kpis.specialOrders.specialOrdersCount}
+              </p>
               <p className="mt-1 text-xs text-slate-500">
-                Overdue {data.kpis.specialOrders.overdueEtaCount} · Arriving soon {data.kpis.specialOrders.arrivingSoonCount}
+                Overdue {data.kpis.specialOrders.overdueEtaCount} · Arriving
+                soon {data.kpis.specialOrders.arrivingSoonCount}
               </p>
             </article>
           </div>
@@ -365,7 +402,8 @@ export default function ReportsPage() {
             <article className="linear-card p-4">
               <p className="text-xs text-slate-500">Revenue</p>
               <p className="mt-2 text-xl font-semibold text-slate-900">
-                ${Number(data.summaries?.revenueVsCost?.revenue ?? 0).toFixed(2)}
+                $
+                {Number(data.summaries?.revenueVsCost?.revenue ?? 0).toFixed(2)}
               </p>
             </article>
             <article className="linear-card p-4">
@@ -380,23 +418,42 @@ export default function ReportsPage() {
                 ${Number(data.summaries?.revenueVsCost?.margin ?? 0).toFixed(2)}
               </p>
               <p className="mt-1 text-xs text-slate-500">
-                Margin Rate {Number(data.summaries?.revenueVsCost?.marginRate ?? 0).toFixed(2)}%
+                Margin Rate{" "}
+                {Number(data.summaries?.revenueVsCost?.marginRate ?? 0).toFixed(
+                  2,
+                )}
+                %
               </p>
             </article>
           </div>
 
           <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
             <article className="linear-card p-4">
-              <h2 className="text-base font-semibold text-slate-900">Daily Collected ($)</h2>
+              <h2 className="text-base font-semibold text-slate-900">
+                Daily Collected ($)
+              </h2>
               <div className="mt-3 min-h-[180px] h-[240px]">
                 {mounted ? (
-                  <ResponsiveContainer width="100%" height={180} minHeight={180} minWidth={0}>
+                  <ResponsiveContainer
+                    width="100%"
+                    height={180}
+                    minHeight={180}
+                    minWidth={0}
+                  >
                     <BarChart data={data.charts.dailyCollected}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(v: number | string | undefined) => `$${Number(v ?? 0).toFixed(2)}`} />
-                      <Bar dataKey="amount" fill="#0f766e" radius={[6, 6, 0, 0]} />
+                      <Tooltip
+                        formatter={(v: number | string | undefined) =>
+                          `$${Number(v ?? 0).toFixed(2)}`
+                        }
+                      />
+                      <Bar
+                        dataKey="amount"
+                        fill="#0f766e"
+                        radius={[6, 6, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -405,16 +462,31 @@ export default function ReportsPage() {
               </div>
             </article>
             <article className="linear-card p-4">
-              <h2 className="text-base font-semibold text-slate-900">Daily Sales ($)</h2>
+              <h2 className="text-base font-semibold text-slate-900">
+                Daily Sales ($)
+              </h2>
               <div className="mt-3 min-h-[180px] h-[240px]">
                 {mounted ? (
-                  <ResponsiveContainer width="100%" height={180} minHeight={180} minWidth={0}>
+                  <ResponsiveContainer
+                    width="100%"
+                    height={180}
+                    minHeight={180}
+                    minWidth={0}
+                  >
                     <BarChart data={data.charts.dailySales}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip formatter={(v: number | string | undefined) => `$${Number(v ?? 0).toFixed(2)}`} />
-                      <Bar dataKey="amount" fill="#1e293b" radius={[6, 6, 0, 0]} />
+                      <Tooltip
+                        formatter={(v: number | string | undefined) =>
+                          `$${Number(v ?? 0).toFixed(2)}`
+                        }
+                      />
+                      <Bar
+                        dataKey="amount"
+                        fill="#1e293b"
+                        radius={[6, 6, 0, 0]}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : (
@@ -425,7 +497,9 @@ export default function ReportsPage() {
           </div>
 
           <div className="linear-card p-4">
-            <h3 className="text-sm font-semibold text-slate-900">Sales by Date Range Summary</h3>
+            <h3 className="text-sm font-semibold text-slate-900">
+              Sales by Date Range Summary
+            </h3>
             <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="rounded-xl border border-slate-100 bg-white p-3">
                 <p className="text-xs text-slate-500">Daily Buckets</p>
@@ -450,7 +524,9 @@ export default function ReportsPage() {
 
           <div className="linear-card overflow-hidden p-0">
             <div className="border-b border-slate-100 px-6 py-4">
-              <h3 className="text-sm font-semibold text-slate-900">Top Outstanding Orders (AR)</h3>
+              <h3 className="text-sm font-semibold text-slate-900">
+                Top Outstanding Orders (AR)
+              </h3>
             </div>
             <Table>
               <TableHeader>
@@ -468,15 +544,24 @@ export default function ReportsPage() {
               <TableBody>
                 {data.tables.topOutstanding.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="font-semibold">{row.orderNumber}</TableCell>
+                    <TableCell className="font-semibold">
+                      {row.orderNumber}
+                    </TableCell>
                     <TableCell>{row.customer.name}</TableCell>
                     <TableCell>${Number(row.total).toFixed(2)}</TableCell>
                     <TableCell>${Number(row.paidAmount).toFixed(2)}</TableCell>
                     <TableCell>${Number(row.balanceDue).toFixed(2)}</TableCell>
                     <TableCell>{row.status}</TableCell>
-                    <TableCell>{new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}</TableCell>
                     <TableCell>
-                      <Link href={`/orders/${row.id}`} className="ios-secondary-btn h-8 px-2 py-1 text-xs">
+                      {new Date(row.createdAt).toLocaleDateString("en-US", {
+                        timeZone: "UTC",
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/orders/${row.id}`}
+                        className="ios-secondary-btn h-8 px-2 py-1 text-xs"
+                      >
                         View
                       </Link>
                     </TableCell>
@@ -488,7 +573,9 @@ export default function ReportsPage() {
 
           <div className="linear-card overflow-hidden p-0">
             <div className="border-b border-slate-100 px-6 py-4">
-              <h3 className="text-sm font-semibold text-slate-900">Recent Payments</h3>
+              <h3 className="text-sm font-semibold text-slate-900">
+                Recent Payments
+              </h3>
             </div>
             <Table>
               <TableHeader>
@@ -506,7 +593,11 @@ export default function ReportsPage() {
               <TableBody>
                 {data.tables.recentPayments.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell>{new Date(row.receivedAt).toLocaleString("en-US", { timeZone: "UTC" })}</TableCell>
+                    <TableCell>
+                      {new Date(row.receivedAt).toLocaleString("en-US", {
+                        timeZone: "UTC",
+                      })}
+                    </TableCell>
                     <TableCell>{row.salesOrder.orderNumber}</TableCell>
                     <TableCell>{row.salesOrder.customer.name}</TableCell>
                     <TableCell>{row.method}</TableCell>
@@ -532,10 +623,16 @@ export default function ReportsPage() {
           <div className="linear-card overflow-hidden p-0">
             <div className="border-b border-slate-100 px-6 py-4">
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-slate-900">Outbound Queue Snapshot</h3>
+                <h3 className="text-sm font-semibold text-slate-900">
+                  Outbound Queue Snapshot
+                </h3>
                 <select
                   value={outboundSort}
-                  onChange={(e) => setOutboundSort(e.target.value as "date_asc" | "date_desc" | "status")}
+                  onChange={(e) =>
+                    setOutboundSort(
+                      e.target.value as "date_asc" | "date_desc" | "status",
+                    )
+                  }
                   className="ios-input h-9 w-44 bg-white px-2 text-xs"
                 >
                   <option value="date_asc">Sort: Date (Oldest)</option>
@@ -561,10 +658,17 @@ export default function ReportsPage() {
                     <TableCell>{row.salesOrder.orderNumber}</TableCell>
                     <TableCell>{row.salesOrder.customer.name}</TableCell>
                     <TableCell>{row.type}</TableCell>
-                    <TableCell>{new Date(row.scheduledDate).toLocaleDateString("en-US", { timeZone: "UTC" })}</TableCell>
+                    <TableCell>
+                      {new Date(row.scheduledDate).toLocaleDateString("en-US", {
+                        timeZone: "UTC",
+                      })}
+                    </TableCell>
                     <TableCell>{row.status}</TableCell>
                     <TableCell>
-                      <Link href={`/orders/${row.salesOrderId}`} className="ios-secondary-btn h-8 px-2 py-1 text-xs">
+                      <Link
+                        href={`/orders/${row.salesOrderId}`}
+                        className="ios-secondary-btn h-8 px-2 py-1 text-xs"
+                      >
                         Open
                       </Link>
                     </TableCell>
@@ -576,7 +680,9 @@ export default function ReportsPage() {
 
           <div className="linear-card overflow-hidden p-0">
             <div className="border-b border-slate-100 px-6 py-4">
-              <h3 className="text-sm font-semibold text-slate-900">Special Orders Watchlist</h3>
+              <h3 className="text-sm font-semibold text-slate-900">
+                Special Orders Watchlist
+              </h3>
             </div>
             <Table>
               <TableHeader>
@@ -592,19 +698,27 @@ export default function ReportsPage() {
               </TableHeader>
               <TableBody>
                 {data.tables.specialOrdersWatchlist.map((row) => (
-                  <TableRow key={row.id} className={overdueSet.has(row.id) ? "bg-rose-50/60" : ""}>
+                  <TableRow
+                    key={row.id}
+                    className={overdueSet.has(row.id) ? "bg-rose-50/60" : ""}
+                  >
                     <TableCell>{row.orderNumber}</TableCell>
                     <TableCell>{row.customer.name}</TableCell>
                     <TableCell>{row.supplier?.name ?? "-"}</TableCell>
                     <TableCell>
                       {row.etaDate
-                        ? new Date(row.etaDate).toLocaleDateString("en-US", { timeZone: "UTC" })
+                        ? new Date(row.etaDate).toLocaleDateString("en-US", {
+                            timeZone: "UTC",
+                          })
                         : "-"}
                     </TableCell>
                     <TableCell>{row.specialOrderStatus ?? "-"}</TableCell>
                     <TableCell>{row.supplierNotes ?? "-"}</TableCell>
                     <TableCell>
-                      <Link href={`/orders/${row.id}`} className="ios-secondary-btn h-8 px-2 py-1 text-xs">
+                      <Link
+                        href={`/orders/${row.id}`}
+                        className="ios-secondary-btn h-8 px-2 py-1 text-xs"
+                      >
                         Open
                       </Link>
                     </TableCell>
@@ -616,7 +730,9 @@ export default function ReportsPage() {
 
           <div className="linear-card overflow-hidden p-0">
             <div className="border-b border-slate-100 px-6 py-4">
-              <h3 className="text-sm font-semibold text-slate-900">Inventory by Group</h3>
+              <h3 className="text-sm font-semibold text-slate-900">
+                Inventory by Group
+              </h3>
             </div>
             <Table>
               <TableHeader>
@@ -630,7 +746,10 @@ export default function ReportsPage() {
               <TableBody>
                 {data.tables.groupSummary.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center text-slate-500">
+                    <TableCell
+                      colSpan={4}
+                      className="text-center text-slate-500"
+                    >
                       No inventory data.
                     </TableCell>
                   </TableRow>
@@ -650,7 +769,9 @@ export default function ReportsPage() {
 
           <div className="linear-card overflow-hidden p-0">
             <div className="border-b border-slate-100 px-6 py-4">
-              <h3 className="text-sm font-semibold text-slate-900">Sales by Category</h3>
+              <h3 className="text-sm font-semibold text-slate-900">
+                Sales by Category
+              </h3>
             </div>
             <Table>
               <TableHeader>
@@ -665,7 +786,10 @@ export default function ReportsPage() {
               <TableBody>
                 {(data.tables.salesByCategory ?? []).length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center text-slate-500">
+                    <TableCell
+                      colSpan={5}
+                      className="text-center text-slate-500"
+                    >
                       No sales category data.
                     </TableCell>
                   </TableRow>
@@ -686,7 +810,9 @@ export default function ReportsPage() {
 
           <div className="linear-card overflow-hidden p-0">
             <div className="border-b border-slate-100 px-6 py-4">
-              <h3 className="text-sm font-semibold text-slate-900">Sales by Product</h3>
+              <h3 className="text-sm font-semibold text-slate-900">
+                Sales by Product
+              </h3>
             </div>
             <Table>
               <TableHeader>
@@ -703,22 +829,27 @@ export default function ReportsPage() {
               <TableBody>
                 {(data.tables.salesByProduct ?? []).length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-slate-500">
+                    <TableCell
+                      colSpan={7}
+                      className="text-center text-slate-500"
+                    >
                       No sales product data.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  (data.tables.salesByProduct ?? []).slice(0, 20).map((row, idx) => (
-                    <TableRow key={`${row.productId ?? "product"}-${idx}`}>
-                      <TableCell>{row.sku}</TableCell>
-                      <TableCell>{row.title}</TableCell>
-                      <TableCell>{row.category}</TableCell>
-                      <TableCell>{Number(row.qty).toFixed(2)}</TableCell>
-                      <TableCell>${Number(row.revenue).toFixed(2)}</TableCell>
-                      <TableCell>${Number(row.cost).toFixed(2)}</TableCell>
-                      <TableCell>${Number(row.margin).toFixed(2)}</TableCell>
-                    </TableRow>
-                  ))
+                  (data.tables.salesByProduct ?? [])
+                    .slice(0, 20)
+                    .map((row, idx) => (
+                      <TableRow key={`${row.productId ?? "product"}-${idx}`}>
+                        <TableCell>{row.sku}</TableCell>
+                        <TableCell>{row.title}</TableCell>
+                        <TableCell>{row.category}</TableCell>
+                        <TableCell>{Number(row.qty).toFixed(2)}</TableCell>
+                        <TableCell>${Number(row.revenue).toFixed(2)}</TableCell>
+                        <TableCell>${Number(row.cost).toFixed(2)}</TableCell>
+                        <TableCell>${Number(row.margin).toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))
                 )}
               </TableBody>
             </Table>

@@ -16,7 +16,16 @@ const SESSION_COOKIE_NAME = "solidcore_session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
 function getSessionSecret() {
-  return process.env.AUTH_SESSION_SECRET || "solidcore-dev-session-secret-change-me";
+  const configured = process.env.AUTH_SESSION_SECRET;
+  if (process.env.NODE_ENV === "production") {
+    if (!configured || configured.length < 32) {
+      throw new Error(
+        "AUTH_SESSION_SECRET must be configured with at least 32 characters.",
+      );
+    }
+    return configured;
+  }
+  return configured || "solidcore-dev-session-secret-change-me";
 }
 
 function toBase64Url(text: string) {
@@ -28,7 +37,9 @@ function fromBase64Url(text: string) {
 }
 
 function sign(value: string) {
-  return createHmac("sha256", getSessionSecret()).update(value).digest("base64url");
+  return createHmac("sha256", getSessionSecret())
+    .update(value)
+    .digest("base64url");
 }
 
 export function createSessionToken(user: SessionUser) {
@@ -39,7 +50,9 @@ export function createSessionToken(user: SessionUser) {
   return `${payloadEncoded}.${signature}`;
 }
 
-export function verifySessionToken(token: string | null | undefined): SessionUser | null {
+export function verifySessionToken(
+  token: string | null | undefined,
+): SessionUser | null {
   if (!token) return null;
   const parts = token.split(".");
   if (parts.length !== 2) return null;
@@ -47,11 +60,15 @@ export function verifySessionToken(token: string | null | undefined): SessionUse
   const expected = sign(payloadEncoded);
   const given = Buffer.from(signature);
   const wanted = Buffer.from(expected);
-  if (given.length !== wanted.length || !timingSafeEqual(given, wanted)) return null;
+  if (given.length !== wanted.length || !timingSafeEqual(given, wanted))
+    return null;
   try {
-    const payload = JSON.parse(fromBase64Url(payloadEncoded)) as Partial<SessionPayload>;
+    const payload = JSON.parse(
+      fromBase64Url(payloadEncoded),
+    ) as Partial<SessionPayload>;
     const exp = Number(payload.exp ?? 0);
-    if (!Number.isFinite(exp) || exp <= Math.floor(Date.now() / 1000)) return null;
+    if (!Number.isFinite(exp) || exp <= Math.floor(Date.now() / 1000))
+      return null;
     const role = normalizeRole(String(payload.role ?? ""));
     const userId = String(payload.userId ?? "").trim();
     const name = String(payload.name ?? "").trim();
@@ -66,7 +83,10 @@ export function getSessionCookieName() {
   return SESSION_COOKIE_NAME;
 }
 
-export function getSessionFromRequest(request: NextRequest): SessionUser | null {
-  return verifySessionToken(request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null);
+export function getSessionFromRequest(
+  request: NextRequest,
+): SessionUser | null {
+  return verifySessionToken(
+    request.cookies.get(SESSION_COOKIE_NAME)?.value ?? null,
+  );
 }
-

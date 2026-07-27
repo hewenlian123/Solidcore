@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import { denyProductionSystemTooling } from "@/lib/system-tooling";
 
 // In-memory counters for demo; in production use Redis/Vercel Analytics or similar
 let requestCount = 0;
@@ -22,6 +23,8 @@ function recordRequest(latencyMs: number, isError?: boolean) {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
+  const unavailable = denyProductionSystemTooling();
+  if (unavailable) return unavailable;
   const role = getRequestRole(request);
   if (!hasOneOf(role, ["ADMIN"])) return deny();
 
@@ -29,7 +32,10 @@ export async function GET(request: NextRequest) {
   const now = Date.now();
   const requestsPerMinute = requestCount || Math.floor(80 + Math.random() * 80);
   const errorsPerMinute = errorCount || Math.floor(Math.random() * 3);
-  const avgLatency = latencyN > 0 ? Math.round(latencySum / latencyN) : 35 + Math.floor(Math.random() * 30);
+  const avgLatency =
+    latencyN > 0
+      ? Math.round(latencySum / latencyN)
+      : 35 + Math.floor(Math.random() * 30);
 
   return NextResponse.json({
     requests: requestsPerMinute,

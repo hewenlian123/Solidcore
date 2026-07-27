@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { Role } from "@/lib/rbac";
 
 export type AuthUserRecord = {
@@ -8,16 +9,52 @@ export type AuthUserRecord = {
   name: string;
 };
 
-const USERS: AuthUserRecord[] = [
-  { id: "u_admin", username: "admin", password: "admin123", role: "ADMIN", name: "Admin User" },
-  { id: "u_sales", username: "sales", password: "sales123", role: "SALES", name: "Sales User" },
-  { id: "u_wh", username: "warehouse", password: "warehouse123", role: "WAREHOUSE", name: "Warehouse User" },
-];
-
-export function authenticateUser(username: string, password: string): AuthUserRecord | null {
-  const uname = username.trim().toLowerCase();
-  const pwd = password.trim();
-  const user = USERS.find((item) => item.username === uname && item.password === pwd);
-  return user ?? null;
+function configuredUser(
+  key: "ADMIN" | "SALES" | "WAREHOUSE",
+  id: string,
+  fallbackUsername: string,
+  fallbackName: string,
+): AuthUserRecord | null {
+  const password = process.env[`SOLIDCORE_${key}_PASSWORD`];
+  if (!password) return null;
+  return {
+    id,
+    username:
+      process.env[`SOLIDCORE_${key}_USERNAME`]?.trim().toLowerCase() ||
+      fallbackUsername,
+    password,
+    role: key,
+    name: process.env[`SOLIDCORE_${key}_NAME`]?.trim() || fallbackName,
+  };
 }
 
+function configuredUsers() {
+  return [
+    configuredUser("ADMIN", "u_admin", "admin", "SolidCore Owner"),
+    configuredUser("SALES", "u_sales", "sales", "SolidCore Sales"),
+    configuredUser(
+      "WAREHOUSE",
+      "u_warehouse",
+      "warehouse",
+      "SolidCore Warehouse",
+    ),
+  ].filter((user): user is AuthUserRecord => Boolean(user));
+}
+
+function equalSecret(input: string, expected: string) {
+  const inputBuffer = Buffer.from(input, "utf8");
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  if (inputBuffer.length !== expectedBuffer.length) return false;
+  return timingSafeEqual(inputBuffer, expectedBuffer);
+}
+
+export function authenticateUser(
+  username: string,
+  password: string,
+): AuthUserRecord | null {
+  const uname = username.trim().toLowerCase();
+  const user = configuredUsers().find(
+    (item) => item.username === uname && equalSecret(password, item.password),
+  );
+  return user ?? null;
+}

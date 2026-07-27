@@ -2,14 +2,25 @@ import { NextResponse } from "next/server";
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import { denyProductionSystemTooling } from "@/lib/system-tooling";
 
-const REQUIRED_ENV = ["DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"] as const;
+const REQUIRED_ENV = [
+  "DATABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+] as const;
 
-type TestResult = { name: string; status: "passed" | "failed"; message?: string };
+type TestResult = {
+  name: string;
+  status: "passed" | "failed";
+  message?: string;
+};
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  const unavailable = denyProductionSystemTooling();
+  if (unavailable) return unavailable;
   const role = getRequestRole(request);
   if (!hasOneOf(role, ["ADMIN"])) return deny();
 
@@ -20,7 +31,11 @@ export async function POST(request: NextRequest) {
     await prisma.$queryRaw`SELECT 1`;
     results.push({ name: "database", status: "passed" });
   } catch (e) {
-    results.push({ name: "database", status: "failed", message: e instanceof Error ? e.message : "Connection failed" });
+    results.push({
+      name: "database",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Connection failed",
+    });
   }
 
   // 2. API availability (we're inside the API, so it's available)
@@ -31,7 +46,11 @@ export async function POST(request: NextRequest) {
   if (missing.length === 0) {
     results.push({ name: "environment", status: "passed" });
   } else {
-    results.push({ name: "environment", status: "failed", message: `Missing: ${missing.join(", ")}` });
+    results.push({
+      name: "environment",
+      status: "failed",
+      message: `Missing: ${missing.join(", ")}`,
+    });
   }
 
   // 4. SalesOrder table access
@@ -39,7 +58,11 @@ export async function POST(request: NextRequest) {
     await prisma.salesOrder.findFirst({ select: { id: true } });
     results.push({ name: "sales_orders", status: "passed" });
   } catch (e) {
-    results.push({ name: "sales_orders", status: "failed", message: e instanceof Error ? e.message : "Access failed" });
+    results.push({
+      name: "sales_orders",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Access failed",
+    });
   }
 
   // 5. Inventory table access
@@ -47,7 +70,11 @@ export async function POST(request: NextRequest) {
     await prisma.inventoryStock.findFirst({ select: { id: true } });
     results.push({ name: "inventory", status: "passed" });
   } catch (e) {
-    results.push({ name: "inventory", status: "failed", message: e instanceof Error ? e.message : "Access failed" });
+    results.push({
+      name: "inventory",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Access failed",
+    });
   }
 
   // 6. Warehouse table access
@@ -55,7 +82,11 @@ export async function POST(request: NextRequest) {
     await prisma.warehouse.findFirst({ select: { id: true } });
     results.push({ name: "warehouse", status: "passed" });
   } catch (e) {
-    results.push({ name: "warehouse", status: "failed", message: e instanceof Error ? e.message : "Access failed" });
+    results.push({
+      name: "warehouse",
+      status: "failed",
+      message: e instanceof Error ? e.message : "Access failed",
+    });
   }
 
   const allPassed = results.every((t) => t.status === "passed");

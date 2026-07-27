@@ -1,11 +1,11 @@
 {
-  "name": "Solidcore Webapp",
-  "short_name": "Solidcore Webapp",
-  "description": "Integrated Building Materials Platform",
+  "name": "SolidCore",
+  "short_name": "SolidCore",
+  "description": "SolidCore Building Supply operations",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#F8FAFC",
-  "theme_color": "#0F172A",
+  "background_color": "#F6F4EF",
+  "theme_color": "#F6F4EF",
   "icons": [
     {
       "src": "/icons/icon-192.svg",
