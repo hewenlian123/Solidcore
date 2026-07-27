@@ -1,23 +1,26 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { inspectSystemHealth } from "@/lib/system-health";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    return NextResponse.json({
-      success: true,
-      error: null,
-      data: { database: "connected" },
-    });
-  } catch (error) {
-    console.error("Ping database error:", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Database connectivity check failed.",
-        data: null,
+  const result = await inspectSystemHealth();
+
+  return NextResponse.json(
+    {
+      success: result.ready,
+      error: result.error,
+      data: {
+        application: result.services.server,
+        database: result.services.database,
+        migrations: result.services.migrations,
+        schema: result.services.schema,
+        optionalDependencies: {
+          supabase: result.services.supabase,
+        },
       },
-      { status: 503 },
-    );
-  }
+    },
+    { status: result.ready ? 200 : 503 },
+  );
 }
