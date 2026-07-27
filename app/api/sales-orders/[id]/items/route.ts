@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { renderDescription } from "@/lib/description/renderDescription";
 import { ensureDescriptionTemplateSeeds } from "@/lib/description/templates";
 import { formatLineItemTitle } from "@/lib/display";
+import { calculateAvailable } from "@/lib/inventory-availability";
 import { getEffectiveSpecs, getInternalSpecLine } from "@/lib/specs/glass";
 import { formatFlooringSubtitle } from "@/lib/specs/effective";
 import {
@@ -51,85 +52,85 @@ export async function POST(request: NextRequest, { params }: Params) {
     const lineDiscount = toNumber(payload.lineDiscount, 0);
     const variantId = payload.variantId ? String(payload.variantId) : null;
     if (quantity <= 0) {
-      return NextResponse.json({ error: "Quantity must be greater than 0." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Quantity must be greater than 0." },
+        { status: 400 },
+      );
     }
     await ensureDescriptionTemplateSeeds();
 
     await prisma.$transaction(async (tx) => {
       const productId = payload.productId ? String(payload.productId) : null;
-      const variant =
-        variantId
-          ? await tx.productVariant.findUnique({
-              where: { id: variantId },
-              include: {
-                product: {
-                  select: {
-                    id: true,
-                    name: true,
-                    title: true,
-                    defaultDescription: true,
-                    unit: true,
-                  },
-                },
-                inventoryStock: {
-                  select: { onHand: true, reserved: true },
+      const variant = variantId
+        ? await tx.productVariant.findUnique({
+            where: { id: variantId },
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  title: true,
+                  defaultDescription: true,
+                  unit: true,
                 },
               },
-            })
-          : null;
+              inventoryStock: {
+                select: { onHand: true, reserved: true, hold: true },
+              },
+            },
+          })
+        : null;
       if (variantId && !variant) throw new Error("VARIANT_NOT_FOUND");
       const selectedProductUnit =
         variant?.product?.unit ??
         (productId
-          ? (
+          ? ((
               await tx.salesProduct.findUnique({
                 where: { id: productId },
                 select: { unit: true },
               })
-            )?.unit ??
-            null
+            )?.unit ?? null)
           : null);
-      const productMeta =
-        variant?.productId
-          ? await tx.product.findUnique({
-              where: { id: variant.productId },
-              select: {
-                category: true,
-                material: true,
-                color: true,
-                sizeW: true,
-                sizeH: true,
-                glass: true,
-                glassTypeDefault: true,
-                glassCoatingDefault: true,
-                glassThicknessMmDefault: true,
-                glassFinishDefault: true,
-                screenDefault: true,
-                openingTypeDefault: true,
-                frameMaterialDefault: true,
-                slidingConfigDefault: true,
-                flooringMaterial: true,
-                flooringWearLayer: true,
-                flooringThicknessMm: true,
-                flooringPlankLengthIn: true,
-                flooringPlankWidthIn: true,
-                flooringCoreThicknessMm: true,
-                flooringInstallation: true,
-                flooringUnderlayment: true,
-                flooringUnderlaymentType: true,
-                flooringUnderlaymentMm: true,
-                flooringBoxCoverageSqft: true,
-                type: true,
-                style: true,
-                rating: true,
-                finish: true,
-                swing: true,
-                handing: true,
-                name: true,
-                thicknessMm: true,
-              },
-            })
-          : null;
+      const productMeta = variant?.productId
+        ? await tx.product.findUnique({
+            where: { id: variant.productId },
+            select: {
+              category: true,
+              material: true,
+              color: true,
+              sizeW: true,
+              sizeH: true,
+              glass: true,
+              glassTypeDefault: true,
+              glassCoatingDefault: true,
+              glassThicknessMmDefault: true,
+              glassFinishDefault: true,
+              screenDefault: true,
+              openingTypeDefault: true,
+              frameMaterialDefault: true,
+              slidingConfigDefault: true,
+              flooringMaterial: true,
+              flooringWearLayer: true,
+              flooringThicknessMm: true,
+              flooringPlankLengthIn: true,
+              flooringPlankWidthIn: true,
+              flooringCoreThicknessMm: true,
+              flooringInstallation: true,
+              flooringUnderlayment: true,
+              flooringUnderlaymentType: true,
+              flooringUnderlaymentMm: true,
+              flooringBoxCoverageSqft: true,
+              type: true,
+              style: true,
+              rating: true,
+              finish: true,
+              swing: true,
+              handing: true,
+              name: true,
+              thicknessMm: true,
+            },
+          })
+        : null;
       const categoryName =
         productMeta?.category === "WINDOW"
           ? "Windows"
@@ -140,13 +141,12 @@ export async function POST(request: NextRequest, { params }: Params) {
               : productMeta?.category === "MIRROR"
                 ? "Mirrors"
                 : String(productMeta?.category ?? "");
-      const templateRow =
-        categoryName
-          ? await tx.descriptionTemplate.findUnique({
-              where: { category: categoryName },
-              select: { templateJson: true },
-            })
-          : null;
+      const templateRow = categoryName
+        ? await tx.descriptionTemplate.findUnique({
+            where: { category: categoryName },
+            select: { templateJson: true },
+          })
+        : null;
       const generatedDescription =
         variant && productMeta
           ? productMeta.category === "WINDOW"
@@ -168,11 +168,17 @@ export async function POST(request: NextRequest, { params }: Params) {
                 flooringMaterial: productMeta.flooringMaterial,
                 flooringWearLayer: productMeta.flooringWearLayer,
                 flooringThicknessMm:
-                  productMeta.flooringThicknessMm != null ? Number(productMeta.flooringThicknessMm) : null,
+                  productMeta.flooringThicknessMm != null
+                    ? Number(productMeta.flooringThicknessMm)
+                    : null,
                 flooringPlankLengthIn:
-                  productMeta.flooringPlankLengthIn != null ? Number(productMeta.flooringPlankLengthIn) : null,
+                  productMeta.flooringPlankLengthIn != null
+                    ? Number(productMeta.flooringPlankLengthIn)
+                    : null,
                 flooringPlankWidthIn:
-                  productMeta.flooringPlankWidthIn != null ? Number(productMeta.flooringPlankWidthIn) : null,
+                  productMeta.flooringPlankWidthIn != null
+                    ? Number(productMeta.flooringPlankWidthIn)
+                    : null,
                 flooringCoreThicknessMm:
                   productMeta.flooringCoreThicknessMm != null
                     ? Number(productMeta.flooringCoreThicknessMm)
@@ -209,7 +215,12 @@ export async function POST(request: NextRequest, { params }: Params) {
           : lineDescription || null;
       const lineItemTitle = variant
         ? productMeta?.category === "FLOOR"
-          ? String(variant.displayName ?? variant.description ?? variant.product?.name ?? "").trim() || null
+          ? String(
+              variant.displayName ??
+                variant.description ??
+                variant.product?.name ??
+                "",
+            ).trim() || null
           : formatLineItemTitle({
               productName: variant.product?.name ?? null,
               variant: {
@@ -225,10 +236,15 @@ export async function POST(request: NextRequest, { params }: Params) {
       const isFlooringProduct =
         String(productMeta?.category ?? "").toUpperCase() === "FLOOR" ||
         Number(productMeta?.flooringBoxCoverageSqft ?? 0) > 0;
-      const sellingUnit = resolveSellingUnit(isFlooringProduct ? "FLOOR" : null, selectedProductUnit);
+      const sellingUnit = resolveSellingUnit(
+        isFlooringProduct ? "FLOOR" : null,
+        selectedProductUnit,
+      );
       const incomingUnit =
         payload.uomSnapshot !== undefined
-          ? String(payload.uomSnapshot ?? "").trim().toUpperCase()
+          ? String(payload.uomSnapshot ?? "")
+              .trim()
+              .toUpperCase()
           : "";
       if (incomingUnit && incomingUnit !== sellingUnit) {
         throw new Error(`UNIT_MISMATCH:${sellingUnit}`);
@@ -237,8 +253,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         const sqftPerBox = Number(productMeta?.flooringBoxCoverageSqft ?? 0);
         const plan = getFlooringShipmentPlan(quantity * sqftPerBox, sqftPerBox);
         if (plan) {
-          const boxesAvailable =
-            Number(variant?.inventoryStock?.onHand ?? 0) - Number(variant?.inventoryStock?.reserved ?? 0);
+          const boxesAvailable = calculateAvailable(variant?.inventoryStock);
           if (plan.requiredBoxes > boxesAvailable) {
             throw new Error(
               `FLOORING_OVRSELL:${plan.requiredBoxes}:${Math.max(0, Math.floor(boxesAvailable))}`,
@@ -251,13 +266,14 @@ export async function POST(request: NextRequest, { params }: Params) {
           salesOrderId: id,
           productId: variant?.productId ?? productId,
           variantId: variant?.id ?? variantId,
-          productSku: payload.productSku ? String(payload.productSku) : variant?.sku ?? null,
-          productTitle:
-            variant
-              ? lineItemTitle ?? null
-              : payload.productTitle
-                ? String(payload.productTitle)
-                : null,
+          productSku: payload.productSku
+            ? String(payload.productSku)
+            : (variant?.sku ?? null),
+          productTitle: variant
+            ? (lineItemTitle ?? null)
+            : payload.productTitle
+              ? String(payload.productTitle)
+              : null,
           skuSnapshot:
             payload.skuSnapshot !== undefined
               ? payload.skuSnapshot
@@ -265,7 +281,7 @@ export async function POST(request: NextRequest, { params }: Params) {
                 : null
               : payload.productSku
                 ? String(payload.productSku)
-                : variant?.sku ?? null,
+                : (variant?.sku ?? null),
           titleSnapshot:
             payload.titleSnapshot !== undefined
               ? payload.titleSnapshot
@@ -274,10 +290,9 @@ export async function POST(request: NextRequest, { params }: Params) {
               : payload.productTitle
                 ? String(payload.productTitle)
                 : variant
-                  ? lineItemTitle ?? null
+                  ? (lineItemTitle ?? null)
                   : null,
-          uomSnapshot:
-            sellingUnit,
+          uomSnapshot: sellingUnit,
           costSnapshot:
             payload.costSnapshot !== undefined
               ? toNumber(payload.costSnapshot, Number(variant?.cost ?? 0))
@@ -323,12 +338,20 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ data }, { status: 201 });
   } catch (error) {
     if (error instanceof Error && error.message === "VARIANT_NOT_FOUND") {
-      return NextResponse.json({ error: "Variant not found." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Variant not found." },
+        { status: 404 },
+      );
     }
-    if (error instanceof Error && error.message.startsWith("FLOORING_OVRSELL:")) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("FLOORING_OVRSELL:")
+    ) {
       const [, need, available] = error.message.split(":");
       return NextResponse.json(
-        { error: `Insufficient stock: need ${need} boxes, available ${available} boxes.` },
+        {
+          error: `Insufficient stock: need ${need} boxes, available ${available} boxes.`,
+        },
         { status: 400 },
       );
     }

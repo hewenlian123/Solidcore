@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sumSignedPaymentAmount } from "@/lib/payment-ledger";
 import { prisma } from "@/lib/prisma";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
+import { calculateAvailable } from "@/lib/inventory-availability";
 
 const categoryKeys: ProductCategory[] = ["WINDOW", "FLOOR", "MIRROR", "DOOR"];
 
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
     const todayStart = startOfTodayUtc();
     const todayEnd = endOfTodayUtc();
 
-    const [orders, lowStockVariantRows, todayDeliveriesRows, todayPickupsRows, outForDelivery, overdueDeliveriesRows, pendingFulfillmentOrderIds, todayRevenueAgg, receivableAgg, unpaidTopOrders, specialOrdersInProgress, delayedSpecialOrders, specialFollowupRows] = await Promise.all([
+    const [orders, lowStockVariantRows, todayDeliveriesRows, todayPickupsRows, outForDelivery, overdueDeliveriesRows, pendingFulfillmentOrderIds, todayRevenueAgg, receivableAgg, unpaidTopOrders, specialOrdersInProgress, delayedSpecialOrders, specialFollowupRows, recentDraftOrders, readySalesOrders] = await Promise.all([
       prisma.order.findMany({
         where: { createdAt: { gte: startDate } },
         select: {
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
       prisma.productVariant.findMany({
         select: {
           reorderLevel: true,
-          inventoryStock: { select: { onHand: true, reserved: true } },
+          inventoryStock: { select: { onHand: true, reserved: true, hold: true } },
         },
       }),
       prisma.salesOrderFulfillment.findMany({
@@ -197,6 +198,42 @@ export async function GET(request: NextRequest) {
         orderBy: { specialFollowupDate: "asc" },
         take: 20,
       }),
+      prisma.salesOrder.findMany({
+        where: {
+          docType: "SALES_ORDER",
+          status: "DRAFT",
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 5,
+        select: {
+          id: true,
+          orderNumber: true,
+          projectName: true,
+          total: true,
+          updatedAt: true,
+          customer: { select: { name: true } },
+          _count: { select: { items: true } },
+        },
+      }),
+      prisma.salesOrder.findMany({
+        where: {
+          docType: "SALES_ORDER",
+          status: { in: ["READY", "PARTIALLY_FULFILLED"] },
+        },
+        orderBy: { updatedAt: "asc" },
+        take: 8,
+        select: {
+          id: true,
+          orderNumber: true,
+          projectName: true,
+          total: true,
+          status: true,
+          fulfillmentMethod: true,
+          updatedAt: true,
+          customer: { select: { name: true } },
+          _count: { select: { items: true } },
+        },
+      }),
     ]);
 
     const dailyMap = new Map<string, number>();
@@ -262,7 +299,11 @@ export async function GET(request: NextRequest) {
     const lowStockCount = lowStockVariantRows.filter((row) => {
       const onHand = Number(row.inventoryStock?.onHand ?? 0);
       const reserved = Number(row.inventoryStock?.reserved ?? 0);
-      const available = onHand - reserved;
+      const available = calculateAvailable({
+        onHand,
+        reserved,
+        hold: row.inventoryStock?.hold,
+      });
       return available <= Number(row.reorderLevel ?? 0);
     }).length;
 
@@ -376,6 +417,26 @@ export async function GET(request: NextRequest) {
             balanceDue: Number(row.balanceDue),
             status: row.status,
           })),
+          recentDraftOrders: recentDraftOrders.map((row) => ({
+            id: row.id,
+            orderNumber: row.orderNumber,
+            projectName: row.projectName,
+            customer: row.customer.name,
+            total: Number(row.total),
+            itemCount: row._count.items,
+            updatedAt: row.updatedAt,
+          })),
+          readySalesOrders: readySalesOrders.map((row) => ({
+            id: row.id,
+            orderNumber: row.orderNumber,
+            projectName: row.projectName,
+            customer: row.customer.name,
+            total: Number(row.total),
+            status: row.status,
+            fulfillmentMethod: row.fulfillmentMethod,
+            itemCount: row._count.items,
+            updatedAt: row.updatedAt,
+          })),
         },
       },
       { status: 200 },
@@ -397,6 +458,8 @@ export async function GET(request: NextRequest) {
           todayPickups: [],
           overdueDeliveries: [],
           topUnpaidOrders: [],
+          recentDraftOrders: [],
+          readySalesOrders: [],
         },
       },
       { status: 500 },

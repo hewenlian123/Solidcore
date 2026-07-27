@@ -5,7 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useRole } from "@/components/layout/role-provider";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { TableSkeletonRows } from "@/components/ui/table-skeleton";
 import {
   SALES_ORDER_STATUSES,
@@ -47,10 +54,13 @@ export default function SalesOrdersPage() {
         headers: { "x-user-role": role },
       });
       const payload = await res.json();
-      if (!res.ok) throw new Error(payload.error ?? "Failed to fetch sales orders");
+      if (!res.ok)
+        throw new Error(payload.error ?? "Failed to fetch sales orders");
       setRows(payload.data ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to fetch sales orders");
+      setError(
+        err instanceof Error ? err.message : "Failed to fetch sales orders",
+      );
     } finally {
       setLoading(false);
     }
@@ -58,7 +68,6 @@ export default function SalesOrdersPage() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, statusFilter]);
 
   useEffect(() => {
@@ -66,7 +75,6 @@ export default function SalesOrdersPage() {
       load();
     }, 250);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
   const statuses = useMemo(() => ["ALL", ...SALES_ORDER_STATUSES], []);
@@ -81,7 +89,9 @@ export default function SalesOrdersPage() {
       <div className="linear-card p-8">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-white">Sales Orders</h1>
+            <h1 className="text-2xl font-semibold tracking-tight text-white">
+              Sales Orders
+            </h1>
             <p className="mt-2 text-sm txt-secondary">
               Manage building-supply sales orders, payments, and balances.
             </p>
@@ -124,9 +134,7 @@ export default function SalesOrdersPage() {
                 type="button"
                 onClick={() => setStatusFilter(status)}
                 className={`rounded-xl px-3 py-1.5 text-xs font-semibold ${
-                  statusFilter === status
-                    ? "so-chip-active"
-                    : "so-chip"
+                  statusFilter === status ? "so-chip-active" : "so-chip"
                 }`}
               >
                 {status === "ALL" ? "All" : getSalesOrderStatusLabel(status)}
@@ -219,7 +227,9 @@ export default function SalesOrdersPage() {
                     </span>
                   </TableCell>
                   <TableCell>
-                    {new Date(row.createdAt).toLocaleDateString("en-US", { timeZone: "UTC" })}
+                    {new Date(row.createdAt).toLocaleDateString("en-US", {
+                      timeZone: "UTC",
+                    })}
                   </TableCell>
                   <TableCell className="text-right group-hover:rounded-r-lg">
                     <span

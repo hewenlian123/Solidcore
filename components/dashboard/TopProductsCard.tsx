@@ -1,4 +1,5 @@
 import { ArrowUpRight, Check } from "lucide-react";
+import Image from "next/image";
 import type { TopProductRow } from "@/components/dashboard/dashboardMock";
 
 function formatCurrency(value: number) {
@@ -13,9 +14,9 @@ function thumbSrc(seed: string) {
     ["#f3e8ff", "#c4b5fd"],
     ["#fee2e2", "#fca5a5"],
   ] as const;
-  const index = Math.abs(
-    seed.split("").reduce((sum, ch) => sum + ch.charCodeAt(0), 0),
-  ) % palettes.length;
+  const index =
+    Math.abs(seed.split("").reduce((sum, ch) => sum + ch.charCodeAt(0), 0)) %
+    palettes.length;
   const [c1, c2] = palettes[index];
   const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='56' height='56' viewBox='0 0 56 56'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='${c1}'/><stop offset='100%' stop-color='${c2}'/></linearGradient></defs><rect width='56' height='56' rx='14' fill='url(#g)'/><rect x='12' y='12' width='32' height='32' rx='8' fill='rgba(255,255,255,0.42)'/></svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
@@ -26,7 +27,10 @@ export function TopProductsCard({ rows }: { rows: TopProductRow[] }) {
     <article className="glass-card glass-card-moderate px-5 py-5">
       <div className="glass-card-content mb-4 flex items-center justify-between">
         <h3 className="text-[19px] font-semibold text-white">Top Products</h3>
-        <button type="button" className="text-xs font-medium text-slate-400 hover:text-white">
+        <button
+          type="button"
+          className="text-xs font-medium text-slate-400 hover:text-white"
+        >
           View All
         </button>
       </div>
@@ -39,16 +43,32 @@ export function TopProductsCard({ rows }: { rows: TopProductRow[] }) {
           <span />
         </div>
         {rows.map((row) => (
-          <div key={row.id} className="grid grid-cols-[minmax(0,1fr)_86px_100px_62px] items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
+          <div
+            key={row.id}
+            className="grid grid-cols-[minmax(0,1fr)_86px_100px_62px] items-center gap-2 rounded-2xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5"
+          >
             <div className="flex min-w-0 items-center gap-3">
-              <img src={thumbSrc(`${row.name}-${row.sku}`)} alt={row.name} className="h-11 w-11 rounded-xl object-cover ring-1 ring-white/10" />
+              <Image
+                src={thumbSrc(`${row.name}-${row.sku}`)}
+                alt={row.name}
+                width={44}
+                height={44}
+                unoptimized
+                className="h-11 w-11 rounded-xl object-cover ring-1 ring-white/10"
+              />
               <div className="min-w-0">
-                <p className="truncate text-[13px] font-medium text-white">{row.name}</p>
+                <p className="truncate text-[13px] font-medium text-white">
+                  {row.name}
+                </p>
                 <p className="text-xs text-slate-500">SKU {row.sku}</p>
               </div>
             </div>
-            <div className="text-right text-xs text-slate-500">Sales {row.sales.toLocaleString("en-US")}</div>
-            <div className="text-right text-[13px] font-semibold text-white">{formatCurrency(row.revenue)}</div>
+            <div className="text-right text-xs text-slate-500">
+              Sales {row.sales.toLocaleString("en-US")}
+            </div>
+            <div className="text-right text-[13px] font-semibold text-white">
+              {formatCurrency(row.revenue)}
+            </div>
             <span className="ml-2 inline-flex items-center justify-end gap-1 text-xs font-medium text-emerald-400">
               <Check className="h-3.5 w-3.5" />
               <ArrowUpRight className="h-3.5 w-3.5" />

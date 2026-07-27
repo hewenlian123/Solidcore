@@ -1,5 +1,10 @@
 import { Prisma, SalesOrderStatus } from "@prisma/client";
-import { centsToNumber, moneyToCents, sumSignedPaymentCents } from "@/lib/payment-ledger";
+import {
+  centsToNumber,
+  moneyToCents,
+  sumSignedPaymentCents,
+} from "@/lib/payment-ledger";
+import { calculateAvailable } from "@/lib/inventory-availability";
 
 function roundCurrency(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -16,7 +21,11 @@ export class FlooringAllocationError extends Error {
   requiredBoxes: number;
   availableBoxes: number;
 
-  constructor(args: { variantName: string; requiredBoxes: number; availableBoxes: number }) {
+  constructor(args: {
+    variantName: string;
+    requiredBoxes: number;
+    availableBoxes: number;
+  }) {
     super("FLOORING_ALLOCATION_FAILED");
     this.name = "FlooringAllocationError";
     this.variantName = args.variantName;
@@ -45,11 +54,23 @@ export class ReserveReleaseError extends Error {
   }
 }
 
-function normalizeReserveUnit(rawUnit: string | null | undefined, hasBoxCoverage: boolean) {
+function normalizeReserveUnit(
+  rawUnit: string | null | undefined,
+  hasBoxCoverage: boolean,
+) {
   if (hasBoxCoverage) return "box";
-  const unit = String(rawUnit ?? "").trim().toLowerCase();
-  if (unit.includes("sqft") || unit === "sf" || unit === "ft2" || unit === "sqm") return "sqft";
-  if (unit.includes("piece") || unit.includes("pcs") || unit === "pc") return "piece";
+  const unit = String(rawUnit ?? "")
+    .trim()
+    .toLowerCase();
+  if (
+    unit.includes("sqft") ||
+    unit === "sf" ||
+    unit === "ft2" ||
+    unit === "sqm"
+  )
+    return "sqft";
+  if (unit.includes("piece") || unit.includes("pcs") || unit === "pc")
+    return "piece";
   return unit || "piece";
 }
 
@@ -65,7 +86,8 @@ export function canTransitionSalesOrderStatus(
 ) {
   if (from === to) return true;
   if (from === "CANCELLED" || from === "FULFILLED") return false;
-  if (from === "DRAFT") return to === "QUOTED" || to === "CONFIRMED" || to === "CANCELLED";
+  if (from === "DRAFT")
+    return to === "QUOTED" || to === "CONFIRMED" || to === "CANCELLED";
   if (from === "QUOTED")
     return to === "CONFIRMED" || to === "DRAFT" || to === "CANCELLED";
   if (from === "CONFIRMED")
@@ -76,7 +98,9 @@ export function canTransitionSalesOrderStatus(
       to === "CANCELLED"
     );
   if (from === "READY")
-    return to === "PARTIALLY_FULFILLED" || to === "FULFILLED" || to === "CANCELLED";
+    return (
+      to === "PARTIALLY_FULFILLED" || to === "FULFILLED" || to === "CANCELLED"
+    );
   if (from === "PARTIALLY_FULFILLED")
     return to === "FULFILLED" || to === "CANCELLED";
   return false;
@@ -97,7 +121,10 @@ export async function generateNextSalesOrderNumber(
   return `${prefix}-${year}-${serial}`;
 }
 
-export async function recalculateSalesOrder(tx: Prisma.TransactionClient, salesOrderId: string) {
+export async function recalculateSalesOrder(
+  tx: Prisma.TransactionClient,
+  salesOrderId: string,
+) {
   const [order, items, payments] = await Promise.all([
     tx.salesOrder.findUnique({
       where: { id: salesOrderId },
@@ -125,8 +152,12 @@ export async function recalculateSalesOrder(tx: Prisma.TransactionClient, salesO
   const total = roundCurrency(subtotal - discount + tax);
   const paidCents = sumSignedPaymentCents(payments);
   const paidAmount = roundCurrency(centsToNumber(paidCents));
-  const balanceDue = roundCurrency(centsToNumber(moneyToCents(total) - paidCents));
-  const commissionAmount = roundCurrency(paidAmount * Number(order.commissionRate));
+  const balanceDue = roundCurrency(
+    centsToNumber(moneyToCents(total) - paidCents),
+  );
+  const commissionAmount = roundCurrency(
+    paidAmount * Number(order.commissionRate),
+  );
   const paymentStatus = getSalesPaymentStatusLabel(paidAmount, balanceDue);
 
   return tx.salesOrder.update({
@@ -142,7 +173,10 @@ export async function recalculateSalesOrder(tx: Prisma.TransactionClient, salesO
   });
 }
 
-export function getSalesPaymentStatusLabel(paidAmount: number, balanceDue: number) {
+export function getSalesPaymentStatusLabel(
+  paidAmount: number,
+  balanceDue: number,
+) {
   if (balanceDue <= 0) return "paid";
   if (paidAmount > 0) return "partial";
   return "unpaid";
@@ -244,7 +278,9 @@ export async function syncSalesOrderFulfillmentFromFulfillment(
   });
   const allFulfilled =
     updatedItems.length > 0 &&
-    updatedItems.every((item) => Number(item.fulfillQty) >= Number(item.quantity));
+    updatedItems.every(
+      (item) => Number(item.fulfillQty) >= Number(item.quantity),
+    );
   const anyFulfilled = updatedItems.some((item) => Number(item.fulfillQty) > 0);
 
   const order = await tx.salesOrder.findUnique({
@@ -256,19 +292,26 @@ export async function syncSalesOrderFulfillmentFromFulfillment(
   const hasFulfillment = !!(await tx.salesOrderFulfillment.findFirst({
     where: {
       salesOrderId,
-      status: { in: ["DRAFT", "SCHEDULED", "READY", "OUT_FOR_DELIVERY", "PARTIAL"] },
+      status: {
+        in: ["DRAFT", "SCHEDULED", "READY", "OUT_FOR_DELIVERY", "PARTIAL"],
+      },
     },
     select: { id: true },
   }));
 
   if (allFulfilled) {
-    await tx.salesOrder.update({ where: { id: salesOrderId }, data: { status: "FULFILLED" } });
+    await tx.salesOrder.update({
+      where: { id: salesOrderId },
+      data: { status: "FULFILLED" },
+    });
   } else if (anyFulfilled) {
     await tx.salesOrder.update({
       where: { id: salesOrderId },
       data: { status: "PARTIALLY_FULFILLED" },
     });
-  } else if (["READY", "PARTIALLY_FULFILLED", "FULFILLED"].includes(order.status)) {
+  } else if (
+    ["READY", "PARTIALLY_FULFILLED", "FULFILLED"].includes(order.status)
+  ) {
     await tx.salesOrder.update({
       where: { id: salesOrderId },
       data: { status: hasFulfillment ? "READY" : "CONFIRMED" },
@@ -300,13 +343,15 @@ export async function applyReservedForSalesOrder(
     },
   });
   if (!order) throw new ReserveApplyError("Sales order not found.", 404);
-  if (order.reservedAppliedAt) return { applied: false, reason: "already_applied" as const };
+  if (order.reservedAppliedAt)
+    return { applied: false, reason: "already_applied" as const };
 
   const claimed = await tx.salesOrder.updateMany({
     where: { id: salesOrderId, reservedAppliedAt: null },
     data: { reservedAppliedAt: new Date() },
   });
-  if (claimed.count === 0) return { applied: false, reason: "already_applied" as const };
+  if (claimed.count === 0)
+    return { applied: false, reason: "already_applied" as const };
 
   const variantIds = Array.from(
     new Set(order.items.map((item) => item.variantId).filter(Boolean)),
@@ -327,7 +372,10 @@ export async function applyReservedForSalesOrder(
     const qty = Number(item.quantity ?? 0);
     if (qty <= 0) continue;
     if (!item.variantId) {
-      throw new ReserveApplyError(`Item ${item.id} is missing variant_id.`, 400);
+      throw new ReserveApplyError(
+        `Item ${item.id} is missing variant_id.`,
+        400,
+      );
     }
 
     await tx.inventoryStock.upsert({
@@ -375,8 +423,10 @@ export async function releaseReservedForSalesOrder(
     },
   });
   if (!order) throw new ReserveReleaseError("Sales order not found.", 404);
-  if (!order.reservedAppliedAt) return { released: false, reason: "not_applied" as const };
-  if (order.reservedReleasedAt) return { released: false, reason: "already_released" as const };
+  if (!order.reservedAppliedAt)
+    return { released: false, reason: "not_applied" as const };
+  if (order.reservedReleasedAt)
+    return { released: false, reason: "already_released" as const };
 
   const claimed = await tx.salesOrder.updateMany({
     where: {
@@ -386,7 +436,8 @@ export async function releaseReservedForSalesOrder(
     },
     data: { reservedReleasedAt: new Date() },
   });
-  if (claimed.count === 0) return { released: false, reason: "already_released" as const };
+  if (claimed.count === 0)
+    return { released: false, reason: "already_released" as const };
 
   for (const item of order.items) {
     if (!item.variantId) continue;
@@ -419,7 +470,12 @@ export async function syncInventoryReservationForSalesOrder(
 ) {
   const items = await tx.salesOrderItem.findMany({
     where: { salesOrderId },
-    select: { variantId: true, productId: true, quantity: true, fulfillQty: true },
+    select: {
+      variantId: true,
+      productId: true,
+      quantity: true,
+      fulfillQty: true,
+    },
   });
 
   const variantIdsToSync = Array.from(
@@ -443,7 +499,12 @@ export async function syncInventoryReservationForSalesOrder(
       variantId: { in: variantIdsToSync },
       salesOrder: { status: { in: RESERVABLE_SALES_ORDER_STATUSES } },
     },
-    select: { variantId: true, productId: true, quantity: true, fulfillQty: true },
+    select: {
+      variantId: true,
+      productId: true,
+      quantity: true,
+      fulfillQty: true,
+    },
   });
   const productIds = Array.from(
     new Set(reservingItems.map((item) => item.productId).filter(Boolean)),
@@ -463,7 +524,10 @@ export async function syncInventoryReservationForSalesOrder(
     const productMeta = productMetaById.get(String(item.productId ?? ""));
     const isFlooring = productMeta?.category === "FLOOR";
     const reserved = isFlooring
-      ? toFlooringRequiredBoxes(qty, Number(productMeta?.flooringBoxCoverageSqft ?? 0))
+      ? toFlooringRequiredBoxes(
+          qty,
+          Number(productMeta?.flooringBoxCoverageSqft ?? 0),
+        )
       : Math.max(qty - fulfilled, 0);
     reservationByVariant.set(
       item.variantId,
@@ -478,6 +542,7 @@ export async function syncInventoryReservationForSalesOrder(
           variantId: true,
           onHand: true,
           reserved: true,
+          hold: true,
           variant: {
             select: {
               description: true,
@@ -494,7 +559,11 @@ export async function syncInventoryReservationForSalesOrder(
     const stock = stockByVariant.get(variantId);
     const onHand = Number(stock?.onHand ?? 0);
     const currentReserved = Number(stock?.reserved ?? 0);
-    const availableBoxes = onHand - currentReserved;
+    const availableBoxes = calculateAvailable({
+      onHand,
+      reserved: currentReserved,
+      hold: stock?.hold,
+    });
     const delta = targetReserved - currentReserved;
     if (delta > availableBoxes) {
       const variantName =
@@ -523,7 +592,9 @@ export async function applyFlooringFulfillmentDeduction(
     where: { salesOrderId },
     select: { variantId: true, productId: true, quantity: true },
   });
-  const productIds = Array.from(new Set(items.map((item) => item.productId).filter(Boolean))) as string[];
+  const productIds = Array.from(
+    new Set(items.map((item) => item.productId).filter(Boolean)),
+  ) as string[];
   const productMetaRows = productIds.length
     ? await tx.product.findMany({
         where: { id: { in: productIds } },
@@ -542,7 +613,10 @@ export async function applyFlooringFulfillmentDeduction(
       Number(productMeta.flooringBoxCoverageSqft ?? 0),
     );
     if (boxes <= 0) continue;
-    deductionByVariant.set(item.variantId, (deductionByVariant.get(item.variantId) ?? 0) + boxes);
+    deductionByVariant.set(
+      item.variantId,
+      (deductionByVariant.get(item.variantId) ?? 0) + boxes,
+    );
   }
 
   for (const [variantId, boxes] of deductionByVariant.entries()) {
@@ -551,12 +625,14 @@ export async function applyFlooringFulfillmentDeduction(
       select: {
         onHand: true,
         reserved: true,
+        hold: true,
         variant: { select: { description: true, sku: true } },
       },
     });
     const onHand = Number(stock?.onHand ?? 0);
     const reserved = Number(stock?.reserved ?? 0);
-    if (boxes > onHand) {
+    const usableOnHand = Math.max(onHand - Number(stock?.hold ?? 0), 0);
+    if (boxes > usableOnHand) {
       const variantName =
         String(stock?.variant?.description ?? "").trim() ||
         String(stock?.variant?.sku ?? "").trim() ||
@@ -564,7 +640,7 @@ export async function applyFlooringFulfillmentDeduction(
       throw new FlooringAllocationError({
         variantName,
         requiredBoxes: boxes,
-        availableBoxes: Math.max(0, Math.floor(onHand)),
+        availableBoxes: Math.max(0, Math.floor(usableOnHand)),
       });
     }
     await tx.inventoryStock.upsert({
@@ -582,6 +658,10 @@ export async function applyFlooringFulfillmentDeduction(
   }
 }
 
-export function computeLineTotal(quantity: number, unitPrice: number, lineDiscount: number) {
+export function computeLineTotal(
+  quantity: number,
+  unitPrice: number,
+  lineDiscount: number,
+) {
   return quantity * unitPrice - lineDiscount;
 }

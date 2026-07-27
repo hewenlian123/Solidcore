@@ -11,6 +11,7 @@ import {
 } from "@/lib/sales-orders";
 import { deny, getRequestRole, hasOneOf } from "@/lib/server-role";
 import { formatLineItemTitle } from "@/lib/display";
+import { calculateAvailable } from "@/lib/inventory-availability";
 import { getEffectiveSpecs, getInternalSpecLine } from "@/lib/specs/glass";
 import { formatFlooringSubtitle } from "@/lib/specs/effective";
 import { parsePositiveQuantity } from "@/lib/sales-order-quantity";
@@ -48,27 +49,39 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     const payload = await request.json();
     if (payload.fulfillQty !== undefined) {
       return NextResponse.json(
-        { error: "Fulfilled quantity must be updated from the fulfillment workflow." },
+        {
+          error:
+            "Fulfilled quantity must be updated from the fulfillment workflow.",
+        },
         { status: 409 },
       );
     }
     if (payload.quantity !== undefined) {
       if (parsePositiveQuantity(payload.quantity) === null) {
-        return NextResponse.json({ error: "Quantity must be greater than 0." }, { status: 400 });
+        return NextResponse.json(
+          { error: "Quantity must be greater than 0." },
+          { status: 400 },
+        );
       }
     }
     await ensureDescriptionTemplateSeeds();
 
     await prisma.$transaction(async (tx) => {
-      const existing = await tx.salesOrderItem.findUnique({ where: { id: itemId } });
+      const existing = await tx.salesOrderItem.findUnique({
+        where: { id: itemId },
+      });
       if (!existing || existing.salesOrderId !== id) {
         throw new Error("ITEM_NOT_FOUND");
       }
       let quantity =
         payload.quantity !== undefined
-          ? parsePositiveQuantity(payload.quantity) ?? Number(existing.quantity)
+          ? (parsePositiveQuantity(payload.quantity) ??
+            Number(existing.quantity))
           : Number(existing.quantity);
-      const unitPrice = payload.unitPrice !== undefined ? toNumber(payload.unitPrice, Number(existing.unitPrice)) : Number(existing.unitPrice);
+      const unitPrice =
+        payload.unitPrice !== undefined
+          ? toNumber(payload.unitPrice, Number(existing.unitPrice))
+          : Number(existing.unitPrice);
       const lineDiscount =
         payload.lineDiscount !== undefined
           ? toNumber(payload.lineDiscount, Number(existing.lineDiscount))
@@ -93,20 +106,25 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             ? String(payload.variantId)
             : null
           : existing.variantId;
-      const variant =
-        nextVariantId
-          ? await tx.productVariant.findUnique({
-              where: { id: nextVariantId },
-              include: {
-                product: {
-                  select: { id: true, name: true, title: true, defaultDescription: true, unit: true },
-                },
-                inventoryStock: {
-                  select: { onHand: true, reserved: true },
+      const variant = nextVariantId
+        ? await tx.productVariant.findUnique({
+            where: { id: nextVariantId },
+            include: {
+              product: {
+                select: {
+                  id: true,
+                  name: true,
+                  title: true,
+                  defaultDescription: true,
+                  unit: true,
                 },
               },
-            })
-          : null;
+              inventoryStock: {
+                select: { onHand: true, reserved: true, hold: true },
+              },
+            },
+          })
+        : null;
       if (!variant) {
         throw new Error("VARIANT_REQUIRED");
       }
@@ -192,11 +210,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
               flooringMaterial: productMeta?.flooringMaterial,
               flooringWearLayer: productMeta?.flooringWearLayer,
               flooringThicknessMm:
-                productMeta?.flooringThicknessMm != null ? Number(productMeta.flooringThicknessMm) : null,
+                productMeta?.flooringThicknessMm != null
+                  ? Number(productMeta.flooringThicknessMm)
+                  : null,
               flooringPlankLengthIn:
-                productMeta?.flooringPlankLengthIn != null ? Number(productMeta.flooringPlankLengthIn) : null,
+                productMeta?.flooringPlankLengthIn != null
+                  ? Number(productMeta.flooringPlankLengthIn)
+                  : null,
               flooringPlankWidthIn:
-                productMeta?.flooringPlankWidthIn != null ? Number(productMeta.flooringPlankWidthIn) : null,
+                productMeta?.flooringPlankWidthIn != null
+                  ? Number(productMeta.flooringPlankWidthIn)
+                  : null,
               flooringCoreThicknessMm:
                 productMeta?.flooringCoreThicknessMm != null
                   ? Number(productMeta.flooringCoreThicknessMm)
@@ -216,10 +240,15 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       const isFlooringProduct =
         String(productMeta?.category ?? "").toUpperCase() === "FLOOR" ||
         Number(productMeta?.flooringBoxCoverageSqft ?? 0) > 0;
-      const sellingUnit = resolveSellingUnit(isFlooringProduct ? "FLOOR" : null, selectedProductUnit);
+      const sellingUnit = resolveSellingUnit(
+        isFlooringProduct ? "FLOOR" : null,
+        selectedProductUnit,
+      );
       const incomingUnit =
         payload.uomSnapshot !== undefined
-          ? String(payload.uomSnapshot ?? "").trim().toUpperCase()
+          ? String(payload.uomSnapshot ?? "")
+              .trim()
+              .toUpperCase()
           : "";
       if (incomingUnit && incomingUnit !== sellingUnit) {
         throw new Error(`UNIT_MISMATCH:${sellingUnit}`);
@@ -228,13 +257,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         const sqftPerBox = Number(productMeta?.flooringBoxCoverageSqft ?? 0);
         const plan = getFlooringShipmentPlan(quantity * sqftPerBox, sqftPerBox);
         if (plan) {
-          const baseAvailable =
-            Number(variant?.inventoryStock?.onHand ?? 0) - Number(variant?.inventoryStock?.reserved ?? 0);
+          const baseAvailable = calculateAvailable(variant?.inventoryStock);
           const currentPlan =
             existing.variantId === nextVariantId
               ? getFlooringShipmentPlan(Number(existing.quantity), sqftPerBox)
               : null;
-          const effectiveAvailable = baseAvailable + Number(currentPlan?.requiredBoxes ?? 0);
+          const effectiveAvailable =
+            baseAvailable + Number(currentPlan?.requiredBoxes ?? 0);
           if (plan.requiredBoxes > effectiveAvailable) {
             throw new Error(
               `FLOORING_OVRSELL:${plan.requiredBoxes}:${Math.max(0, Math.floor(effectiveAvailable))}`,
@@ -259,12 +288,18 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       const lineItemTitle =
         payload.productId !== undefined || payload.variantId !== undefined
           ? productMeta?.category === "FLOOR"
-            ? String(variant?.displayName ?? variant?.description ?? variant?.product?.name ?? "").trim() || null
+            ? String(
+                variant?.displayName ??
+                  variant?.description ??
+                  variant?.product?.name ??
+                  "",
+              ).trim() || null
             : formatLineItemTitle({
                 productName: variant?.product?.name ?? null,
                 variant: {
                   width: variant?.width != null ? Number(variant.width) : null,
-                  height: variant?.height != null ? Number(variant.height) : null,
+                  height:
+                    variant?.height != null ? Number(variant.height) : null,
                   color: variant?.color,
                   title: variant?.description ?? null,
                   sku: variant?.sku ?? null,
@@ -277,7 +312,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         data: {
           productId:
             payload.productId !== undefined || payload.variantId !== undefined
-              ? variant?.productId ?? nextProductId
+              ? (variant?.productId ?? nextProductId)
               : undefined,
           variantId: nextVariantId,
           productSku:
@@ -285,32 +320,36 @@ export async function PATCH(request: NextRequest, { params }: Params) {
               ? payload.productSku
                 ? String(payload.productSku)
                 : null
-              : payload.productId !== undefined || payload.variantId !== undefined
-                ? variant?.sku ?? null
+              : payload.productId !== undefined ||
+                  payload.variantId !== undefined
+                ? (variant?.sku ?? null)
                 : undefined,
           productTitle:
             payload.productTitle !== undefined
               ? payload.productTitle
                 ? String(payload.productTitle)
                 : null
-              : payload.productId !== undefined || payload.variantId !== undefined
-                ? lineItemTitle ?? null
+              : payload.productId !== undefined ||
+                  payload.variantId !== undefined
+                ? (lineItemTitle ?? null)
                 : undefined,
           skuSnapshot:
             payload.skuSnapshot !== undefined
               ? payload.skuSnapshot
                 ? String(payload.skuSnapshot)
                 : null
-              : payload.productId !== undefined || payload.variantId !== undefined
-                ? variant?.sku ?? null
+              : payload.productId !== undefined ||
+                  payload.variantId !== undefined
+                ? (variant?.sku ?? null)
                 : undefined,
           titleSnapshot:
             payload.titleSnapshot !== undefined
               ? payload.titleSnapshot
                 ? String(payload.titleSnapshot)
                 : null
-              : payload.productId !== undefined || payload.variantId !== undefined
-                ? lineItemTitle ?? null
+              : payload.productId !== undefined ||
+                  payload.variantId !== undefined
+                ? (lineItemTitle ?? null)
                 : undefined,
           uomSnapshot:
             payload.productId !== undefined || payload.variantId !== undefined
@@ -322,8 +361,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
                 : undefined,
           costSnapshot:
             payload.costSnapshot !== undefined
-              ? toNumber(payload.costSnapshot, Number(existing.costSnapshot ?? 0))
-              : payload.productId !== undefined || payload.variantId !== undefined
+              ? toNumber(
+                  payload.costSnapshot,
+                  Number(existing.costSnapshot ?? 0),
+                )
+              : payload.productId !== undefined ||
+                  payload.variantId !== undefined
                 ? variant?.cost
                   ? Number(variant.cost)
                   : null
@@ -341,7 +384,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
           unitPrice:
             payload.unitPrice !== undefined
               ? unitPrice
-              : payload.productId !== undefined || payload.variantId !== undefined
+              : payload.productId !== undefined ||
+                  payload.variantId !== undefined
                 ? Number(variant?.price ?? 0)
                 : unitPrice,
           lineDiscount,
@@ -350,7 +394,8 @@ export async function PATCH(request: NextRequest, { params }: Params) {
             quantity,
             payload.unitPrice !== undefined
               ? unitPrice
-              : payload.productId !== undefined || payload.variantId !== undefined
+              : payload.productId !== undefined ||
+                  payload.variantId !== undefined
                 ? Number(variant?.price ?? 0)
                 : unitPrice,
             lineDiscount,
@@ -383,7 +428,9 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       });
       const allFulfilled =
         allItems.length > 0 &&
-        allItems.every((item) => Number(item.fulfillQty) >= Number(item.quantity));
+        allItems.every(
+          (item) => Number(item.fulfillQty) >= Number(item.quantity),
+        );
       const anyFulfilled = allItems.some((item) => Number(item.fulfillQty) > 0);
       const order = await tx.salesOrder.findUnique({
         where: { id },
@@ -397,7 +444,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         select: { id: true },
       }));
       if (allFulfilled) {
-        await tx.salesOrder.update({ where: { id }, data: { status: "FULFILLED" } });
+        await tx.salesOrder.update({
+          where: { id },
+          data: { status: "FULFILLED" },
+        });
       } else if (anyFulfilled) {
         await tx.salesOrder.update({
           where: { id },
@@ -435,15 +485,26 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Item not found." }, { status: 404 });
     }
     if (error instanceof Error && error.message === "VARIANT_REQUIRED") {
-      return NextResponse.json({ error: "Variant is required." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Variant is required." },
+        { status: 400 },
+      );
     }
     if (error instanceof Error && error.message === "INVALID_QUANTITY") {
-      return NextResponse.json({ error: "Quantity must be greater than 0." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Quantity must be greater than 0." },
+        { status: 400 },
+      );
     }
-    if (error instanceof Error && error.message.startsWith("FLOORING_OVRSELL:")) {
+    if (
+      error instanceof Error &&
+      error.message.startsWith("FLOORING_OVRSELL:")
+    ) {
       const [, need, available] = error.message.split(":");
       return NextResponse.json(
-        { error: `Insufficient stock: need ${need} boxes, available ${available} boxes.` },
+        {
+          error: `Insufficient stock: need ${need} boxes, available ${available} boxes.`,
+        },
         { status: 400 },
       );
     }
@@ -463,7 +524,10 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       );
     }
     console.error("PATCH /api/sales-orders/[id]/items/[itemId] error:", error);
-    return NextResponse.json({ error: "Failed to update item." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to update item." },
+      { status: 500 },
+    );
   }
 }
 
@@ -474,7 +538,9 @@ export async function DELETE(request: NextRequest, { params }: Params) {
     const { id, itemId } = await params;
 
     await prisma.$transaction(async (tx) => {
-      const existing = await tx.salesOrderItem.findUnique({ where: { id: itemId } });
+      const existing = await tx.salesOrderItem.findUnique({
+        where: { id: itemId },
+      });
       if (!existing || existing.salesOrderId !== id) {
         throw new Error("ITEM_NOT_FOUND");
       }
@@ -502,6 +568,9 @@ export async function DELETE(request: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Item not found." }, { status: 404 });
     }
     console.error("DELETE /api/sales-orders/[id]/items/[itemId] error:", error);
-    return NextResponse.json({ error: "Failed to delete item." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to delete item." },
+      { status: 500 },
+    );
   }
 }
