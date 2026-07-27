@@ -10,6 +10,9 @@ import { getPdfThemeColors } from "@/lib/pdf/theme";
 
 type PaymentPDFData = {
   receiptNumber: string;
+  paymentId: string;
+  invoiceId?: string | null;
+  orderId: string;
   orderNumber: string;
   customerName: string;
   customerPhone?: string | null;
@@ -24,8 +27,15 @@ type PaymentPDFData = {
   originalPaymentAmount?: number | null;
   originalPaymentId?: string | null;
   originalPaymentReference?: string | null;
+  approvedReturnId?: string | null;
+  approvalActor?: string | null;
+  accountingReviewActor?: string | null;
+  commercialReduction?: number | null;
+  commercialReductionSource?: string | null;
   refundedTotal?: number | null;
   remainingRefundable?: number | null;
+  priorBalance: number;
+  newBalance: number;
   subtotal: number;
   taxRate?: number | null;
   taxAmount: number;
@@ -46,7 +56,9 @@ function formatDateTime(value: string | Date | null | undefined) {
   return date.toLocaleString("en-US", { timeZone: "UTC" });
 }
 
-export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Array> {
+export async function generatePaymentPDF(
+  data: PaymentPDFData,
+): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -59,6 +71,7 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
   const allocationLabel = getPaymentAllocationLabel(data.invoiceNumber);
   const statusLabel = getPaymentStatusLabel(data.status);
   const hasRefundContext = Boolean(data.originalPaymentId);
+  const isRefund = String(data.paymentType).toUpperCase() === "REFUND";
 
   let y = pageHeight - margin;
 
@@ -73,7 +86,9 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
       y,
       size,
       font: opts?.bold ? fontBold : font,
-      color: opts?.color ? rgb(opts.color.r, opts.color.g, opts.color.b) : theme.rgbText,
+      color: opts?.color
+        ? rgb(opts.color.r, opts.color.g, opts.color.b)
+        : theme.rgbText,
     });
   };
 
@@ -97,13 +112,20 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
     color: theme.title,
   });
   y -= 18;
-  drawText(COMPANY_SETTINGS.address, margin, 10, { color: { r: 0.42, g: 0.45, b: 0.5 } });
-  y -= 13;
-  drawText(`${COMPANY_SETTINGS.phone} / ${COMPANY_SETTINGS.email}`, margin, 10, {
+  drawText(COMPANY_SETTINGS.address, margin, 10, {
     color: { r: 0.42, g: 0.45, b: 0.5 },
   });
+  y -= 13;
+  drawText(
+    `${COMPANY_SETTINGS.phone} / ${COMPANY_SETTINGS.email}`,
+    margin,
+    10,
+    {
+      color: { r: 0.42, g: 0.45, b: 0.5 },
+    },
+  );
 
-  const title = "PAYMENT RECEIPT";
+  const title = isRefund ? "REFUND RECEIPT" : "PAYMENT RECEIPT";
   const titleWidth = fontBold.widthOfTextAtSize(title, 28);
   page.drawText(title, {
     x: pageWidth - margin - titleWidth,
@@ -181,16 +203,19 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
     y: metaTop - 28,
     size: 10,
     font,
-    color: String(data.status).toUpperCase() === "VOIDED" ? rgb(0.7, 0.15, 0.15) : rgb(0.15, 0.16, 0.2),
+    color:
+      String(data.status).toUpperCase() === "VOIDED"
+        ? rgb(0.7, 0.15, 0.15)
+        : rgb(0.15, 0.16, 0.2),
   });
 
   y -= 28;
 
   page.drawRectangle({
     x: margin,
-    y: y - (hasRefundContext ? 176 : 112),
+    y: y - (hasRefundContext ? 320 : 176),
     width: contentWidth,
-    height: hasRefundContext ? 180 : 116,
+    height: hasRefundContext ? 324 : 180,
     borderWidth: 1,
     borderColor: rgb(0.88, 0.9, 0.94),
     color: rgb(0.99, 0.99, 0.995),
@@ -201,27 +226,89 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
   y -= 14;
   drawText(`Allocation: ${allocationLabel}`, margin + 12, 10);
   y -= 14;
+  drawText(`Payment ID: ${data.paymentId}`, margin + 12, 8);
+  y -= 12;
+  drawText(`Invoice ID: ${data.invoiceId || "-"}`, margin + 12, 8);
+  y -= 12;
+  drawText(`Order ID: ${data.orderId}`, margin + 12, 8);
+  y -= 12;
   drawText(`Method: ${data.method}`, margin + 12, 10);
   y -= 14;
   drawText(`Reference: ${data.referenceNumber || "-"}`, margin + 12, 10);
   y -= 14;
   drawText("Amount", margin + 12, 10, { bold: true });
   drawRight(formatMoney(data.amount), pageWidth - margin - 12, 12, true);
+  y -= 14;
+  drawText(`Prior Balance: ${formatMoney(data.priorBalance)}`, margin + 12, 10);
+  y -= 14;
+  drawText(`New Balance: ${formatMoney(data.newBalance)}`, margin + 12, 10);
   if (hasRefundContext) {
     y -= 18;
     drawText(
-      `${String(data.paymentType).toUpperCase() === "REFUND" ? "Original Payment" : "Refund Status"}: ${getOriginalPaymentLabel(data.originalPaymentId)}`,
+      `${isRefund ? "Original Payment Event ID" : "Refund Status"}: ${
+        isRefund
+          ? data.originalPaymentId || "-"
+          : getOriginalPaymentLabel(data.originalPaymentId)
+      }`,
       margin + 12,
       10,
     );
     y -= 14;
-    drawText(`Original Amount: ${formatMoney(data.originalPaymentAmount ?? 0)}`, margin + 12, 10);
+    drawText(
+      `Original Amount: ${formatMoney(data.originalPaymentAmount ?? 0)}`,
+      margin + 12,
+      10,
+    );
     y -= 14;
-    drawText(`Refunded Total: ${formatMoney(data.refundedTotal ?? 0)}`, margin + 12, 10);
+    drawText(
+      `Refunded Total: ${formatMoney(data.refundedTotal ?? 0)}`,
+      margin + 12,
+      10,
+    );
     y -= 14;
-    drawText(`Remaining Refundable: ${formatMoney(data.remainingRefundable ?? 0)}`, margin + 12, 10);
+    drawText(
+      `Remaining Refundable: ${formatMoney(data.remainingRefundable ?? 0)}`,
+      margin + 12,
+      10,
+    );
     y -= 14;
-    drawText(`Original Reference: ${data.originalPaymentReference || "-"}`, margin + 12, 10);
+    drawText(
+      `Original Reference: ${data.originalPaymentReference || "-"}`,
+      margin + 12,
+      10,
+    );
+    if (isRefund) {
+      y -= 14;
+      drawText(`Refund Event ID: ${data.paymentId}`, margin + 12, 8);
+      y -= 12;
+      drawText(
+        `Approved Return ID: ${data.approvedReturnId || "-"}`,
+        margin + 12,
+        8,
+      );
+      y -= 12;
+      drawText(`Approval Actor: ${data.approvalActor || "-"}`, margin + 12, 9);
+      y -= 13;
+      drawText(
+        `Accounting Review: ${data.accountingReviewActor || "-"}`,
+        margin + 12,
+        9,
+      );
+      y -= 13;
+      drawText(
+        `Commercial Reduction Source: ${data.commercialReductionSource || "-"} / ${formatMoney(data.commercialReduction ?? 0)}`,
+        margin + 12,
+        9,
+      );
+      y -= 13;
+      drawText(`Refund Method: ${data.method}`, margin + 12, 9);
+      y -= 13;
+      drawText(
+        `Resulting Financial Position: ${formatMoney(data.newBalance)} balance due`,
+        margin + 12,
+        9,
+      );
+    }
   }
   y -= 30;
 
@@ -236,17 +323,25 @@ export async function generatePaymentPDF(data: PaymentPDFData): Promise<Uint8Arr
   drawText("Order Total", totalsLeft, 10);
   drawRight(formatMoney(data.total), totalsRight, 10);
   y -= 14;
-  drawText("Paid (Current)", totalsLeft, 10, { color: { r: 0.12, g: 0.5, b: 0.23 } });
+  drawText("Paid (Current)", totalsLeft, 10, {
+    color: { r: 0.12, g: 0.5, b: 0.23 },
+  });
   drawRight(formatMoney(data.paidAmount), totalsRight, 10);
   y -= 14;
-  drawText("Balance Due", totalsLeft, 10, { color: { r: 0.7, g: 0.15, b: 0.15 } });
+  drawText("Balance Due", totalsLeft, 10, {
+    color: { r: 0.7, g: 0.15, b: 0.15 },
+  });
   drawRight(formatMoney(data.balanceDue), totalsRight, 10, true);
   y -= 20;
 
   if (data.notes) {
-    drawText("Notes", margin, 10, { bold: true, color: { r: 0.3, g: 0.33, b: 0.38 } });
+    drawText("Notes", margin, 10, {
+      bold: true,
+      color: { r: 0.3, g: 0.33, b: 0.38 },
+    });
     y -= 14;
-    const note = data.notes.length > 180 ? `${data.notes.slice(0, 177)}...` : data.notes;
+    const note =
+      data.notes.length > 180 ? `${data.notes.slice(0, 177)}...` : data.notes;
     drawText(note, margin, 9, { color: { r: 0.42, g: 0.45, b: 0.5 } });
     y -= 20;
   }

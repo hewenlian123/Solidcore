@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma, SalesPaymentMethod, SalesPaymentType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { computeInvoicePaidAndBalance, deriveInvoiceStatus } from "@/lib/invoices";
+import {
+  computeInvoicePaidAndBalance,
+  deriveInvoiceStatus,
+} from "@/lib/invoices";
 import {
   buildPaymentIdempotencyFingerprint,
   getInvoiceRemainingCents,
@@ -26,7 +29,8 @@ type Params = {
 };
 
 const SALES_PAYMENT_TYPE_VALUES = ["DEPOSIT", "FINAL"] as const;
-const REFUND_WORKFLOW_REQUIRED = "Refunds require the dedicated refund workflow and an original payment reference.";
+const REFUND_WORKFLOW_REQUIRED =
+  "Refunds require the dedicated refund workflow and an original payment reference.";
 
 export async function POST(request: NextRequest, { params }: Params) {
   let idempotencyKey: string | null = null;
@@ -39,28 +43,54 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     const { id } = await params;
     invoiceId = id;
-    if (!id) return NextResponse.json({ error: "Missing invoice id." }, { status: 400 });
+    if (!id)
+      return NextResponse.json(
+        { error: "Missing invoice id." },
+        { status: 400 },
+      );
 
     const payload = await request.json();
     const amount = parsePositivePaymentAmount(payload?.amount);
-    const method = String(payload?.method ?? "").toUpperCase() as SalesPaymentMethod;
-    const paymentType = String(payload?.type ?? "FINAL").toUpperCase() as SalesPaymentType;
+    const method = String(
+      payload?.method ?? "",
+    ).toUpperCase() as SalesPaymentMethod;
+    const paymentType = String(
+      payload?.type ?? "FINAL",
+    ).toUpperCase() as SalesPaymentType;
     const referenceNumber = normalizeOptionalText(payload?.referenceNumber);
     const notes = normalizeOptionalText(payload?.notes);
     const receivedAt = parseOptionalReceivedAt(payload?.receivedAt);
-    const parsedKey = parseIdempotencyKey(request.headers.get("idempotency-key"));
+    const parsedKey = parseIdempotencyKey(
+      request.headers.get("idempotency-key"),
+    );
 
     if (!amount) {
-      return NextResponse.json({ error: "Payment amount must be greater than 0." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Payment amount must be greater than 0." },
+        { status: 400 },
+      );
     }
     if (!Object.values(SalesPaymentMethod).includes(method)) {
-      return NextResponse.json({ error: "Invalid payment method." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid payment method." },
+        { status: 400 },
+      );
     }
     if (paymentType === "REFUND") {
-      return NextResponse.json({ error: REFUND_WORKFLOW_REQUIRED }, { status: 400 });
+      return NextResponse.json(
+        { error: REFUND_WORKFLOW_REQUIRED },
+        { status: 400 },
+      );
     }
-    if (!SALES_PAYMENT_TYPE_VALUES.includes(paymentType as (typeof SALES_PAYMENT_TYPE_VALUES)[number])) {
-      return NextResponse.json({ error: "Invalid payment type." }, { status: 400 });
+    if (
+      !SALES_PAYMENT_TYPE_VALUES.includes(
+        paymentType as (typeof SALES_PAYMENT_TYPE_VALUES)[number],
+      )
+    ) {
+      return NextResponse.json(
+        { error: "Invalid payment type." },
+        { status: 400 },
+      );
     }
     if (!receivedAt.ok) {
       return NextResponse.json({ error: receivedAt.error }, { status: 400 });
@@ -96,7 +126,10 @@ export async function POST(request: NextRequest, { params }: Params) {
         if (!initialInvoice) throw new Error("NOT_FOUND");
         if (!initialInvoice.salesOrderId) throw new Error("NO_SALES_ORDER");
 
-        const orderLocked = await lockSalesOrderForPayment(tx, initialInvoice.salesOrderId);
+        const orderLocked = await lockSalesOrderForPayment(
+          tx,
+          initialInvoice.salesOrderId,
+        );
         if (!orderLocked) throw new Error("NO_SALES_ORDER");
         const invoiceLocked = await lockInvoiceForPayment(tx, id);
         if (!invoiceLocked) throw new Error("NOT_FOUND");
@@ -121,19 +154,36 @@ export async function POST(request: NextRequest, { params }: Params) {
             ) {
               throw new Error("IDEMPOTENCY_CONFLICT");
             }
-            const totals = await computeInvoicePaidAndBalance(tx, invoice.id, Number(invoice.total));
-            return { ...totals, idempotent: true };
+            const totals = await computeInvoicePaidAndBalance(
+              tx,
+              invoice.id,
+              Number(invoice.total),
+            );
+            return {
+              ...totals,
+              paymentId: existingPayment.id,
+              idempotent: true,
+            };
           }
         }
 
-        const invoiceBalanceCents = Math.max(await getInvoiceRemainingCents(tx, invoice.id), 0);
-        const orderRemainingCents = await getSalesOrderRemainingCents(tx, invoice.salesOrderId);
-        const maxReceivableCents = Math.min(invoiceBalanceCents, Math.max(orderRemainingCents, 0));
+        const invoiceBalanceCents = Math.max(
+          await getInvoiceRemainingCents(tx, invoice.id),
+          0,
+        );
+        const orderRemainingCents = await getSalesOrderRemainingCents(
+          tx,
+          invoice.salesOrderId,
+        );
+        const maxReceivableCents = Math.min(
+          invoiceBalanceCents,
+          Math.max(orderRemainingCents, 0),
+        );
         if (isPaymentOverBalance(amount.cents, maxReceivableCents)) {
           throw new Error("OVERPAYMENT");
         }
 
-        await tx.salesOrderPayment.create({
+        const payment = await tx.salesOrderPayment.create({
           data: {
             salesOrderId: invoice.salesOrderId,
             invoiceId: invoice.id,
@@ -149,20 +199,31 @@ export async function POST(request: NextRequest, { params }: Params) {
           },
         });
 
-        const totals = await computeInvoicePaidAndBalance(tx, invoice.id, Number(invoice.total));
-        const nextStatus = deriveInvoiceStatus(invoice.status, totals.paidTotal, Number(invoice.total));
+        const totals = await computeInvoicePaidAndBalance(
+          tx,
+          invoice.id,
+          Number(invoice.total),
+        );
+        const nextStatus = deriveInvoiceStatus(
+          invoice.status,
+          totals.paidTotal,
+          Number(invoice.total),
+        );
         await tx.invoice.update({
           where: { id: invoice.id },
           data: { status: nextStatus },
         });
         await recalculateSalesOrder(tx, invoice.salesOrderId);
 
-        return { ...totals, idempotent: false };
+        return { ...totals, paymentId: payment.id, idempotent: false };
       },
       { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
     );
 
-    return NextResponse.json({ data: result }, { status: result.idempotent ? 200 : 201 });
+    return NextResponse.json(
+      { data: result },
+      { status: result.idempotent ? 200 : 201 },
+    );
   } catch (error) {
     if (
       idempotencyKey &&
@@ -172,7 +233,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     ) {
       const existingPayment = await prisma.salesOrderPayment.findUnique({
         where: { idempotencyKey },
-        select: { invoiceId: true, idempotencyFingerprint: true },
+        select: { id: true, invoiceId: true, idempotencyFingerprint: true },
       });
       if (
         existingPayment?.invoiceId === invoiceId &&
@@ -193,43 +254,71 @@ export async function POST(request: NextRequest, { params }: Params) {
           const result = {
             paidTotal: centsToNumber(paidCents),
             balanceDue: centsToNumber(balanceCents),
+            paymentId: existingPayment.id,
           };
-          return NextResponse.json({ data: { ...result, idempotent: true } }, { status: 200 });
+          return NextResponse.json(
+            { data: { ...result, idempotent: true } },
+            { status: 200 },
+          );
         }
       }
       return NextResponse.json(
-        { error: "Idempotency key was already used for a different payment request." },
+        {
+          error:
+            "Idempotency key was already used for a different payment request.",
+        },
         { status: 409 },
       );
     }
     if (error instanceof Error && error.message === "NOT_FOUND") {
-      return NextResponse.json({ error: "Invoice not found." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Invoice not found." },
+        { status: 404 },
+      );
     }
     if (error instanceof Error && error.message === "VOIDED") {
-      return NextResponse.json({ error: "Cannot add payment to a void invoice." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Cannot add payment to a void invoice." },
+        { status: 400 },
+      );
     }
     if (error instanceof Error && error.message === "NO_SALES_ORDER") {
       return NextResponse.json(
-        { error: "Invoice is not linked to a sales order, cannot use shared payment table." },
+        {
+          error:
+            "Invoice is not linked to a sales order, cannot use shared payment table.",
+        },
         { status: 400 },
       );
     }
     if (error instanceof Error && error.message === "OVERPAYMENT") {
       return NextResponse.json(
-        { error: "Payment exceeds current invoice or order balance. Please adjust amount." },
+        {
+          error:
+            "Payment exceeds current invoice or order balance. Please adjust amount.",
+        },
         { status: 400 },
       );
     }
     if (error instanceof Error && error.message === "IDEMPOTENCY_CONFLICT") {
       return NextResponse.json(
-        { error: "Idempotency key was already used for a different payment request." },
+        {
+          error:
+            "Idempotency key was already used for a different payment request.",
+        },
         { status: 409 },
       );
     }
     if (error instanceof Error && error.message === "MONEY_VALUE_INVALID") {
-      return NextResponse.json({ error: "Payment amount could not be validated." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Payment amount could not be validated." },
+        { status: 400 },
+      );
     }
     console.error("POST /api/invoices/[id]/payments error:", error);
-    return NextResponse.json({ error: "Failed to add invoice payment." }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to add invoice payment." },
+      { status: 500 },
+    );
   }
 }
