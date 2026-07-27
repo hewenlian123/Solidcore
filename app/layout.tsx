@@ -8,16 +8,19 @@ import NextTopLoader from "nextjs-toploader";
 import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
-  title: "Solidcore Webapp",
-  description: "Integrated management for windows, flooring, mirrors, doors, and warehouse operations",
+  title: "SolidCore",
+  description: "SolidCore Building Supply operations",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icons/icon-192.svg",
+    apple: "/icons/icon-192.svg",
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0B0F19",
+  themeColor: "#F6F4EF",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
 };
 
 export default function RootLayout({
@@ -26,31 +29,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en-US" className="text-sm">
-      <body className="min-h-screen bg-[#0B0F19] text-[var(--text)] antialiased [font-family:-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif]">
-        <div className="app-safe-area relative min-h-screen overflow-hidden">
-          {/* Minimal premium SaaS background — subtle vertical gradient only */}
-          <div
-            aria-hidden="true"
-            className="pointer-events-none fixed inset-0 z-0"
-            style={{
-              background: "linear-gradient(180deg, #0B0F19 0%, #0F172A 100%)",
-            }}
-          />
-
-          <div className="relative z-10">
+    <html lang="en-US">
+      <body className="min-h-screen bg-canvas text-foreground antialiased">
+        <div className="app-safe-area min-h-screen">
+          <div>
             <AppQueryProvider>
               <RoleProvider>
                 <NextTopLoader
-                  color="#0F172A"
+                  color="#292A26"
                   height={2}
                   showSpinner={false}
                   crawl={true}
                   crawlSpeed={220}
                   speed={280}
-                  shadow="0 0 10px rgba(15, 23, 42, 0.3)"
+                  shadow={false}
                 />
-                <Toaster theme="dark" richColors closeButton />
+                <Toaster theme="light" richColors closeButton />
                 <PWARegister />
                 <AppShell>{children}</AppShell>
               </RoleProvider>

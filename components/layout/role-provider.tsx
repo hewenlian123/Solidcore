@@ -9,7 +9,6 @@ type RoleContextValue = {
   userName: string;
   authenticated: boolean;
   loading: boolean;
-  setRole: (role: Role) => void | Promise<void>;
 };
 
 const RoleContext = createContext<RoleContextValue>({
@@ -17,7 +16,6 @@ const RoleContext = createContext<RoleContextValue>({
   userName: "",
   authenticated: false,
   loading: true,
-  setRole: () => {},
 });
 
 // Module-level cache: persists across React remounts within the same browser session.
@@ -51,9 +49,13 @@ async function fetchSession(): Promise<SessionCache> {
 
 export function RoleProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [role, setRoleState] = useState<Role>(() => _sessionCache?.role ?? "ADMIN");
+  const [role, setRoleState] = useState<Role>(
+    () => _sessionCache?.role ?? "ADMIN",
+  );
   const [userName, setUserName] = useState(() => _sessionCache?.userName ?? "");
-  const [authenticated, setAuthenticated] = useState(() => _sessionCache !== null);
+  const [authenticated, setAuthenticated] = useState(
+    () => _sessionCache !== null,
+  );
   const [loading, setLoading] = useState(() => _sessionCache === null);
 
   useEffect(() => {
@@ -73,9 +75,14 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
       if (!session) {
         setAuthenticated(false);
         setLoading(false);
-        const currentPath = typeof window !== "undefined" ? window.location.pathname : "/dashboard";
+        const currentPath =
+          typeof window !== "undefined"
+            ? window.location.pathname
+            : "/dashboard";
         if (currentPath !== "/login") {
-          router.replace(`/login?next=${encodeURIComponent(currentPath || "/dashboard")}`);
+          router.replace(
+            `/login?next=${encodeURIComponent(currentPath || "/dashboard")}`,
+          );
         }
         return;
       }
@@ -89,31 +96,10 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const setRole = async (nextRole: Role) => {
-    try {
-      const res = await fetch("/api/auth/session", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: nextRole }),
-      });
-      const payload = await res.json().catch(() => ({}));
-      if (!res.ok) return;
-      const resolvedRole = payload?.data?.role ?? nextRole;
-      // Update module-level cache so subsequent remounts use the new role
-      if (_sessionCache) {
-        _sessionCache = { ..._sessionCache, role: resolvedRole };
-      }
-      setRoleState(resolvedRole);
-    } catch {
-      // keep UI resilient when session update fails
-    }
-  };
-
   const value = useMemo(
-    () => ({ role, userName, authenticated, loading, setRole }),
+    () => ({ role, userName, authenticated, loading }),
     [authenticated, loading, role, userName],
   );
 

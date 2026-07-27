@@ -1,21 +1,82 @@
 import * as React from "react";
+import { LoaderCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 
-type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "default" | "outline" | "secondary" | "ghost";
-  size?: "default" | "icon";
+export type ButtonVariant =
+  | "default"
+  | "primary"
+  | "outline"
+  | "secondary"
+  | "ghost"
+  | "quiet"
+  | "destructive"
+  | "link";
+
+export type ButtonSize = "sm" | "default" | "lg" | "icon" | "icon-sm";
+
+export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ButtonVariant;
+  size?: ButtonSize;
+  loading?: boolean;
 };
 
-export function Button({ className = "", variant = "default", size = "default", type = "button", ...props }: ButtonProps) {
-  const base =
-    "inline-flex items-center justify-center rounded-md text-sm font-medium transition-all duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50";
-  const variantClass =
-    variant === "outline"
-      ? "border border-white/[0.10] bg-white/[0.05] text-white backdrop-blur-xl hover:brightness-110"
-      : variant === "secondary"
-        ? "border border-white/[0.10] bg-white/[0.05] text-white backdrop-blur-xl hover:brightness-110"
-        : variant === "ghost"
-          ? "text-slate-200 hover:bg-white/[0.06]"
-          : "bg-gradient-to-r from-indigo-500 to-cyan-500 text-white shadow-lg hover:brightness-110";
-  const sizeClass = size === "icon" ? "h-9 w-9" : "h-9 px-4";
-  return <button type={type} className={`${base} ${variantClass} ${sizeClass} ${className}`.trim()} {...props} />;
-}
+const variantClasses: Record<ButtonVariant, string> = {
+  default:
+    "border-action bg-action text-action-foreground hover:border-action-hover hover:bg-action-hover active:border-action-pressed active:bg-action-pressed",
+  primary:
+    "border-action bg-action text-action-foreground hover:border-action-hover hover:bg-action-hover active:border-action-pressed active:bg-action-pressed",
+  outline:
+    "border-border-strong bg-surface text-foreground hover:bg-hover active:bg-selected",
+  secondary:
+    "border-border bg-surface-secondary text-foreground hover:border-border-strong hover:bg-hover active:bg-selected",
+  ghost:
+    "border-transparent bg-transparent text-foreground-secondary hover:bg-hover hover:text-foreground active:bg-selected",
+  quiet:
+    "border-transparent bg-transparent text-foreground-secondary hover:bg-hover hover:text-foreground active:bg-selected",
+  destructive:
+    "border-critical bg-critical text-action-foreground hover:brightness-95 active:brightness-90",
+  link:
+    "h-auto min-h-0 border-transparent bg-transparent px-0 text-accent underline-offset-4 hover:text-accent-hover hover:underline",
+};
+
+const sizeClasses: Record<ButtonSize, string> = {
+  sm: "h-9 min-h-9 px-3 text-[13px]",
+  default: "h-11 min-h-11 px-4 text-sm",
+  lg: "h-12 min-h-12 px-5 text-[15px]",
+  icon: "h-11 w-11 min-h-11 min-w-11 p-0",
+  "icon-sm": "h-9 w-9 min-h-9 min-w-9 p-0",
+};
+
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    {
+      className,
+      variant = "default",
+      size = "default",
+      type = "button",
+      loading = false,
+      disabled,
+      children,
+      ...props
+    },
+    ref,
+  ) => (
+    <button
+      ref={ref}
+      type={type}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center gap-2 rounded-sc border font-semibold transition-colors duration-fast disabled:cursor-not-allowed disabled:border-disabled-border disabled:bg-disabled-surface disabled:text-disabled-foreground",
+        variantClasses[variant],
+        sizeClasses[size],
+        className,
+      )}
+      {...props}
+    >
+      {loading ? <LoaderCircle aria-hidden="true" className="h-4 w-4 animate-spin" /> : null}
+      {children}
+    </button>
+  ),
+);
+Button.displayName = "Button";

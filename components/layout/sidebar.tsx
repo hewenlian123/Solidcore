@@ -11,13 +11,10 @@ import {
   Factory,
   FileBarChart2,
   FileText,
-  FlaskConical,
-  Heart,
   LayoutDashboard,
   MapPin,
   Package,
   PackageCheck,
-  ScrollText,
   Settings,
   ShieldCheck,
   ShoppingCart,
@@ -50,7 +47,17 @@ type NavItem = {
 };
 
 type NavGroup = {
-  key: "overview" | "sales" | "fulfillment" | "inventory" | "purchasing" | "priceManagement" | "afterSales" | "finance" | "analytics" | "system" | "settings";
+  key:
+    | "overview"
+    | "sales"
+    | "fulfillment"
+    | "inventory"
+    | "purchasing"
+    | "priceManagement"
+    | "afterSales"
+    | "finance"
+    | "analytics"
+    | "settings";
   label: string;
   roles: Role[];
   items: NavItem[];
@@ -61,7 +68,14 @@ const navGroups: NavGroup[] = [
     key: "overview",
     label: "Overview",
     roles: ["ADMIN", "SALES", "WAREHOUSE"],
-    items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN"] }],
+    items: [
+      {
+        label: "Dashboard",
+        href: "/dashboard",
+        icon: LayoutDashboard,
+        roles: ["ADMIN"],
+      },
+    ],
   },
   {
     key: "sales",
@@ -75,11 +89,36 @@ const navGroups: NavGroup[] = [
         roles: ["ADMIN", "SALES"],
         matchStartsWith: ["/orders"],
       },
-      { label: "Quotes", href: "/orders?docType=QUOTE", icon: FileText, roles: ["ADMIN", "SALES"] },
-      { label: "Invoices", href: "/invoices", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
-      { label: "Payments", href: "/finance/payments", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
-      { label: "Returns", href: "/after-sales/returns", icon: ShieldCheck, roles: ["ADMIN", "SALES"] },
-      { label: "Customers", href: "/customers", icon: Users, roles: ["ADMIN", "SALES"] },
+      {
+        label: "Quotes",
+        href: "/orders?docType=QUOTE",
+        icon: FileText,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Invoices",
+        href: "/invoices",
+        icon: FileBarChart2,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Payments",
+        href: "/finance/payments",
+        icon: FileBarChart2,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Returns",
+        href: "/after-sales/returns",
+        icon: ShieldCheck,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Customers",
+        href: "/customers",
+        icon: Users,
+        roles: ["ADMIN", "SALES"],
+      },
     ],
   },
   {
@@ -87,9 +126,26 @@ const navGroups: NavGroup[] = [
     label: "Fulfillment",
     roles: ["ADMIN", "WAREHOUSE"],
     items: [
-      { label: "Warehouse", href: "/warehouse", icon: ClipboardList, roles: ["ADMIN", "WAREHOUSE"], matchStartsWith: ["/warehouse"] },
-      { label: "Pickup", href: "/fulfillment", icon: Package, roles: ["ADMIN", "WAREHOUSE"], matchStartsWith: ["/fulfillment"] },
-      { label: "Delivery", href: "/delivery", icon: Truck, roles: ["ADMIN", "WAREHOUSE"] },
+      {
+        label: "Warehouse",
+        href: "/warehouse",
+        icon: ClipboardList,
+        roles: ["ADMIN", "WAREHOUSE"],
+        matchStartsWith: ["/warehouse"],
+      },
+      {
+        label: "Pickup",
+        href: "/fulfillment",
+        icon: Package,
+        roles: ["ADMIN", "WAREHOUSE"],
+        matchStartsWith: ["/fulfillment"],
+      },
+      {
+        label: "Delivery",
+        href: "/delivery",
+        icon: Truck,
+        roles: ["ADMIN", "WAREHOUSE"],
+      },
     ],
   },
   {
@@ -97,23 +153,73 @@ const navGroups: NavGroup[] = [
     label: "Inventory",
     roles: ["ADMIN", "WAREHOUSE", "SALES"],
     items: [
-      { label: "Overview", href: "/inventory", icon: LayoutDashboard, roles: ["ADMIN", "WAREHOUSE", "SALES"] },
-      { label: "Products", href: "/products", icon: Package, roles: ["ADMIN", "WAREHOUSE"] },
-      { label: "Stock Levels", href: "/inventory/stock", icon: MapPin, roles: ["ADMIN", "WAREHOUSE"] },
-      { label: "Reorder List", href: "/inventory/reorder", icon: ClipboardList, roles: ["ADMIN", "WAREHOUSE"] },
-      { label: "Movements", href: "/inventory/movements", icon: ClipboardList, roles: ["ADMIN", "WAREHOUSE", "SALES"] },
-      { label: "Warehouses", href: "/warehouses", icon: MapPin, roles: ["ADMIN", "WAREHOUSE"] },
+      {
+        label: "Overview",
+        href: "/inventory",
+        icon: LayoutDashboard,
+        roles: ["ADMIN", "WAREHOUSE", "SALES"],
+      },
+      {
+        label: "Products",
+        href: "/products",
+        icon: Package,
+        roles: ["ADMIN", "WAREHOUSE"],
+      },
+      {
+        label: "Stock Levels",
+        href: "/inventory/stock",
+        icon: MapPin,
+        roles: ["ADMIN", "WAREHOUSE"],
+      },
+      {
+        label: "Reorder List",
+        href: "/inventory/reorder",
+        icon: ClipboardList,
+        roles: ["ADMIN", "WAREHOUSE"],
+      },
+      {
+        label: "Movements",
+        href: "/inventory/movements",
+        icon: ClipboardList,
+        roles: ["ADMIN", "WAREHOUSE", "SALES"],
+      },
+      {
+        label: "Warehouses",
+        href: "/warehouses",
+        icon: MapPin,
+        roles: ["ADMIN", "WAREHOUSE"],
+      },
     ],
   },
   {
     key: "purchasing",
     label: "Purchasing",
-    roles: ["ADMIN", "SALES"],
+    roles: ["ADMIN", "SALES", "WAREHOUSE"],
     items: [
-      { label: "Purchase Orders", href: "/purchasing/orders", icon: FileText, roles: ["ADMIN", "SALES"] },
-      { label: "Suppliers", href: "/suppliers", icon: Factory, roles: ["ADMIN", "SALES"] },
-      { label: "Receiving", href: "/purchasing/receiving", icon: PackageCheck, roles: ["ADMIN", "SALES"] },
-      { label: "Vendor Bills", href: "/purchasing/bills", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
+      {
+        label: "Purchase Orders",
+        href: "/purchasing/orders",
+        icon: FileText,
+        roles: ["ADMIN", "SALES", "WAREHOUSE"],
+      },
+      {
+        label: "Suppliers",
+        href: "/suppliers",
+        icon: Factory,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Receiving",
+        href: "/purchasing/receiving",
+        icon: PackageCheck,
+        roles: ["ADMIN", "SALES", "WAREHOUSE"],
+      },
+      {
+        label: "Vendor Bills",
+        href: "/purchasing/bills",
+        icon: FileBarChart2,
+        roles: ["ADMIN", "SALES"],
+      },
     ],
   },
   {
@@ -121,9 +227,24 @@ const navGroups: NavGroup[] = [
     label: "Price Management",
     roles: ["ADMIN", "SALES"],
     items: [
-      { label: "Price List", href: "/price-list", icon: Tag, roles: ["ADMIN", "SALES"] },
-      { label: "Margin Control", href: "/price-management/margin", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
-      { label: "Promotions", href: "/price-management/promotions", icon: Tag, roles: ["ADMIN", "SALES"] },
+      {
+        label: "Price List",
+        href: "/price-list",
+        icon: Tag,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Margin Control",
+        href: "/price-management/margin",
+        icon: FileBarChart2,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Promotions",
+        href: "/price-management/promotions",
+        icon: Tag,
+        roles: ["ADMIN", "SALES"],
+      },
     ],
   },
   {
@@ -131,7 +252,12 @@ const navGroups: NavGroup[] = [
     label: "After-Sales",
     roles: ["ADMIN", "SALES"],
     items: [
-      { label: "Tickets", href: "/after-sales", icon: Ticket, roles: ["ADMIN", "SALES"] },
+      {
+        label: "Tickets",
+        href: "/after-sales",
+        icon: Ticket,
+        roles: ["ADMIN", "SALES"],
+      },
     ],
   },
   {
@@ -139,10 +265,30 @@ const navGroups: NavGroup[] = [
     label: "Finance",
     roles: ["ADMIN", "SALES"],
     items: [
-      { label: "Revenue", href: "/finance/revenue", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
-      { label: "Expenses", href: "/finance/expenses", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
-      { label: "Profit", href: "/finance/profit", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
-      { label: "Reports", href: "/reports", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
+      {
+        label: "Revenue",
+        href: "/finance/revenue",
+        icon: FileBarChart2,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Expenses",
+        href: "/finance/expenses",
+        icon: FileBarChart2,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Profit",
+        href: "/finance/profit",
+        icon: FileBarChart2,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Reports",
+        href: "/reports",
+        icon: FileBarChart2,
+        roles: ["ADMIN", "SALES"],
+      },
     ],
   },
   {
@@ -150,29 +296,38 @@ const navGroups: NavGroup[] = [
     label: "Analytics",
     roles: ["ADMIN", "SALES"],
     items: [
-      { label: "Sales Analytics", href: "/analytics/sales", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
-      { label: "Inventory Analytics", href: "/analytics/inventory", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
-      { label: "Customer Analytics", href: "/analytics/customers", icon: FileBarChart2, roles: ["ADMIN", "SALES"] },
-    ],
-  },
-  {
-    key: "system",
-    label: "System",
-    roles: ["ADMIN"],
-    items: [
-      { label: "System Health", href: "/system/health", icon: Heart, roles: ["ADMIN"] },
-      { label: "Run All Tests", href: "/system/tests", icon: FlaskConical, roles: ["ADMIN"] },
-      { label: "Feature Tests", href: "/system/feature-tests", icon: Package, roles: ["ADMIN"] },
-      { label: "UI Tests", href: "/system/ui-tests", icon: LayoutDashboard, roles: ["ADMIN"] },
-      { label: "System Metrics", href: "/system/metrics", icon: BarChart3, roles: ["ADMIN"] },
-      { label: "System Logs", href: "/system/logs", icon: ScrollText, roles: ["ADMIN"] },
+      {
+        label: "Sales Analytics",
+        href: "/analytics/sales",
+        icon: FileBarChart2,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Inventory Analytics",
+        href: "/analytics/inventory",
+        icon: FileBarChart2,
+        roles: ["ADMIN", "SALES"],
+      },
+      {
+        label: "Customer Analytics",
+        href: "/analytics/customers",
+        icon: FileBarChart2,
+        roles: ["ADMIN", "SALES"],
+      },
     ],
   },
   {
     key: "settings",
     label: "Settings",
     roles: ["ADMIN"],
-    items: [{ label: "Settings", href: "/settings", icon: Settings, roles: ["ADMIN"] }],
+    items: [
+      {
+        label: "Settings",
+        href: "/settings",
+        icon: Settings,
+        roles: ["ADMIN"],
+      },
+    ],
   },
 ];
 
@@ -180,8 +335,12 @@ export function Sidebar({ open, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { role } = useRole();
-  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
-  const [collapsedItems, setCollapsedItems] = useState<Record<string, boolean>>({});
+  const [collapsedGroups, setCollapsedGroups] = useState<
+    Record<string, boolean>
+  >({});
+  const [collapsedItems, setCollapsedItems] = useState<Record<string, boolean>>(
+    {},
+  );
   const fastPrefetchRoutes = useMemo(
     () =>
       new Set([
@@ -205,12 +364,18 @@ export function Sidebar({ open, onClose }: SidebarProps) {
             .map((item) => ({
               ...item,
               children: item.children
-                ? item.children.filter((child) => child.roles.includes(role) && canViewPath(role, child.href))
+                ? item.children.filter(
+                    (child) =>
+                      child.roles.includes(role) &&
+                      canViewPath(role, child.href),
+                  )
                 : undefined,
             }))
             .filter((item) => {
               const itemAllowed = canViewPath(role, item.href);
-              const hasVisibleChildren = Boolean(item.children && item.children.length > 0);
+              const hasVisibleChildren = Boolean(
+                item.children && item.children.length > 0,
+              );
               return itemAllowed || hasVisibleChildren;
             }),
         }))
@@ -218,20 +383,26 @@ export function Sidebar({ open, onClose }: SidebarProps) {
     [role],
   );
 
-  const isChildActive = (item: { href: string; matchStartsWith?: string[] }) => {
+  const isChildActive = (item: {
+    href: string;
+    matchStartsWith?: string[];
+  }) => {
     if (pathname === item.href) return true;
-    if (!item.matchStartsWith || item.matchStartsWith.length === 0) return false;
+    if (!item.matchStartsWith || item.matchStartsWith.length === 0)
+      return false;
     return item.matchStartsWith.some((prefix) => pathname.startsWith(prefix));
   };
 
   const isItemActive = (item: NavItem) => {
     if (item.children?.some((child) => isChildActive(child))) return true;
     if (pathname === item.href) return true;
-    if (!item.matchStartsWith || item.matchStartsWith.length === 0) return pathname.startsWith(item.href);
+    if (!item.matchStartsWith || item.matchStartsWith.length === 0)
+      return pathname.startsWith(item.href);
     return item.matchStartsWith.some((prefix) => pathname.startsWith(prefix));
   };
 
-  const isGroupActive = (group: NavGroup) => group.items.some((item) => isItemActive(item));
+  const isGroupActive = (group: NavGroup) =>
+    group.items.some((item) => isItemActive(item));
 
   const prefetchFastRoute = (href: string) => {
     if (!fastPrefetchRoutes.has(href)) return;
@@ -258,7 +429,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         <div className="flex h-16 items-center justify-between border-b border-white/[0.08] px-6">
           <div className="flex items-center gap-2">
             <Boxes className="h-4 w-4 text-white/80" />
-            <span className="text-sm font-semibold tracking-tight text-white">Solidcore Webapp</span>
+            <span className="text-sm font-semibold tracking-tight text-white">
+              Solidcore Webapp
+            </span>
           </div>
 
           <button
@@ -290,7 +463,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                       }))
                     }
                     className={`flex w-full items-center justify-between rounded-xl px-2 py-2 text-left text-xs font-semibold uppercase tracking-wide transition ${
-                      groupActive ? "text-white" : "text-white/50 hover:text-white/80"
+                      groupActive
+                        ? "text-white"
+                        : "text-white/50 hover:text-white/80"
                     }`}
                   >
                     <span>{group.label}</span>
@@ -304,10 +479,15 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                       {group.items.map((item) => {
                         const Icon = item.icon;
                         const active = isItemActive(item);
-                        const hasChildren = Array.isArray(item.children) && item.children.length > 0;
-                        const itemCollapsed = collapsedItems[item.href] ?? false;
+                        const hasChildren =
+                          Array.isArray(item.children) &&
+                          item.children.length > 0;
+                        const itemCollapsed =
+                          collapsedItems[item.href] ?? false;
                         const visibleChildren = hasChildren
-                          ? item.children!.filter((child) => child.roles.includes(role))
+                          ? item.children!.filter((child) =>
+                              child.roles.includes(role),
+                            )
                           : [];
                         return (
                           <li key={item.href}>
@@ -320,16 +500,22 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                                     : "font-normal text-white/70 hover:bg-white/[0.04] hover:text-white"
                                 }`}
                                 prefetch={true}
-                                onMouseEnter={() => prefetchFastRoute(item.href)}
+                                onMouseEnter={() =>
+                                  prefetchFastRoute(item.href)
+                                }
                                 onClick={onClose}
                               >
-                                <Icon className={`h-4 w-4 ${active ? "text-white" : "text-white/60"}`} />
+                                <Icon
+                                  className={`h-4 w-4 ${active ? "text-white" : "text-white/60"}`}
+                                />
                                 <span>{item.label}</span>
                               </Link>
                             ) : (
                               <div
                                 className={`rounded-xl ${
-                                  active ? "bg-white/[0.06]" : "hover:bg-white/[0.04]"
+                                  active
+                                    ? "bg-white/[0.06]"
+                                    : "hover:bg-white/[0.04]"
                                 }`}
                               >
                                 <div className="flex items-center justify-between gap-2 px-3 py-2.5">
@@ -341,10 +527,14 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                                         : "font-normal text-white/70 hover:text-white"
                                     }`}
                                     prefetch={true}
-                                    onMouseEnter={() => prefetchFastRoute(item.href)}
+                                    onMouseEnter={() =>
+                                      prefetchFastRoute(item.href)
+                                    }
                                     onClick={onClose}
                                   >
-                                    <Icon className={`h-4 w-4 ${active ? "text-white" : "text-white/60"}`} />
+                                    <Icon
+                                      className={`h-4 w-4 ${active ? "text-white" : "text-white/60"}`}
+                                    />
                                     <span>{item.label}</span>
                                   </Link>
                                   <button
@@ -358,7 +548,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                                     className={`rounded-md p-1 ${active ? "text-white/80 hover:bg-white/[0.06]" : "text-white/60 hover:bg-white/[0.06]"}`}
                                     aria-label={`Toggle ${item.label}`}
                                   >
-                                    <ChevronDown className={`h-4 w-4 transition-transform ${itemCollapsed ? "-rotate-90" : "rotate-0"}`} />
+                                    <ChevronDown
+                                      className={`h-4 w-4 transition-transform ${itemCollapsed ? "-rotate-90" : "rotate-0"}`}
+                                    />
                                   </button>
                                 </div>
                                 {!itemCollapsed ? (
@@ -377,7 +569,9 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                                                   : "text-white/60 hover:bg-white/[0.06] hover:text-white"
                                             }`}
                                             prefetch={true}
-                                            onMouseEnter={() => prefetchFastRoute(child.href)}
+                                            onMouseEnter={() =>
+                                              prefetchFastRoute(child.href)
+                                            }
                                             onClick={onClose}
                                           >
                                             {child.label}

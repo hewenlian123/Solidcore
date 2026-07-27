@@ -6,33 +6,23 @@ import { cn } from "@/lib/utils";
 export interface PageHeaderProps extends React.HTMLAttributes<HTMLElement> {
   title: string;
   subtitle?: string;
-  /** Actions (e.g. primary/secondary buttons) – aligned right on desktop */
   actions?: React.ReactNode;
-  /** Optional class for the wrapper (e.g. to add padding) */
-  className?: string;
 }
 
 export const PageHeader = React.forwardRef<HTMLElement, PageHeaderProps>(
   ({ className, title, subtitle, actions, ...props }, ref) => (
     <header
       ref={ref}
-      className={cn(
-        "flex flex-col gap-3 md:flex-row md:items-center md:justify-between",
-        className,
-      )}
+      className={cn("flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between", className)}
       {...props}
     >
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-white">
-          {title}
-        </h1>
+      <div className="min-w-0">
+        <h1 className="sc-page-title break-words">{title}</h1>
         {subtitle ? (
-          <p className="mt-2 text-sm text-slate-400">{subtitle}</p>
+          <p className="mt-1 text-sm leading-[22px] text-foreground-secondary">{subtitle}</p>
         ) : null}
       </div>
-      {actions ? (
-        <div className="flex flex-shrink-0 items-center gap-2">{actions}</div>
-      ) : null}
+      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
     </header>
   ),
 );

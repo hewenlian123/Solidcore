@@ -37,13 +37,11 @@ export function TableSkeletonRows({
     <>
       {Array.from({ length: safeRows }).map((_, rowIndex) => (
         <TableRow
-          // eslint-disable-next-line react/no-array-index-key
           key={`sk-${rowIndex}`}
           className={cn("h-14 border-white/10", rowClassName)}
         >
           {Array.from({ length: safeCols }).map((__, colIndex) => (
             <TableCell
-              // eslint-disable-next-line react/no-array-index-key
               key={`sk-${rowIndex}-${colIndex}`}
               className={cn("px-4 py-2", cellClassName)}
             >
@@ -63,4 +61,3 @@ export function TableSkeletonRows({
     </>
   );
 }
-
