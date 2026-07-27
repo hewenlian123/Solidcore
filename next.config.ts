@@ -5,6 +5,15 @@ const nextConfig: NextConfig = {
   experimental: {
     externalDir: true,
   },
+  async redirects() {
+    return [
+      {
+        source: "/",
+        destination: "/dashboard",
+        permanent: false,
+      },
+    ];
+  },
   webpack: (config) => {
     config.resolve = config.resolve ?? {};
     config.resolve.modules = [
